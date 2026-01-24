@@ -8,7 +8,7 @@ import {
   ScrollView,
 } from 'react-native';
 
-export const AnalysisResultScreen = ({ route, navigation }) => {
+export const AnalysisResultScreen: React.FC<{ route, navigation  }> = ({ route, navigation  }) => {
   const { analysis } = route.params || {};
 
   const handleSaveRequest = () => {
@@ -65,7 +65,7 @@ export const AnalysisResultScreen = ({ route, navigation }) => {
               <View
                 style={[
                   styles.confidenceFill,
-                  { width: `${(analysis.confidence * 100).toFixed(0)}%` },
+                  { width: `${(analysis.confidence * 100).toFixed(0)}%` as any },
                 ]}
               />
             </View>

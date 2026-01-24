@@ -43,8 +43,8 @@ export const pickImageFromLibrary = async () => {
       quality: 0.8,
     });
 
-    if (!result.cancelled) {
-      return result.uri;
+    if (!result.canceled && 'assets' in result && result.assets && result.assets[0]) {
+      return result.assets[0].uri;
     }
     return null;
   } catch (error) {

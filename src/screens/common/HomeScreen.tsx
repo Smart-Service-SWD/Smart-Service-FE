@@ -238,7 +238,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     setTimeout(() => setRefreshing(false), 1000);
   };
 
-  const renderBanner = (): JSX.Element => {
+  const renderBanner = (): React.ReactElement => {
     const banner = banners[currentBannerIndex];
     return (
       <View style={[styles.banner, { backgroundColor: banner.color }]}>
@@ -267,7 +267,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     );
   };
 
-  const renderCategoryItem = ({ item }: { item: ServiceCategory }): JSX.Element => (
+  const renderCategoryItem = ({ item }: { item: ServiceCategory }): React.ReactElement => (
     <TouchableOpacity
       style={styles.categoryItem}
       onPress={() => navigation.navigate('ServiceList', { category: item.name })}
@@ -280,7 +280,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     </TouchableOpacity>
   );
 
-  const renderFeaturedService = ({ item }: { item: FeaturedService }): JSX.Element => {
+  const renderFeaturedService = ({ item }: { item: FeaturedService }): React.ReactElement => {
     const serviceColor = item.image.includes('007AFF') ? '#007AFF' : 
                          item.image.includes('FF9500') ? '#FF9500' : '#FF3B30';
     

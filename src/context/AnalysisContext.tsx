@@ -1,15 +1,16 @@
 import React, { createContext, useState, useCallback } from 'react';
 import { analysisService } from '../services/analysisService';
+import type { AnalysisContextType, AnalysisResult } from '../types';
 
-export const AnalysisContext = createContext();
+export const AnalysisContext = createContext<AnalysisContextType | undefined>(undefined);
 
-export const AnalysisProvider = ({ children }) => {
-  const [analysisHistory, setAnalysisHistory] = useState([]);
-  const [currentAnalysis, setCurrentAnalysis] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+export const AnalysisProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [analysisHistory, setAnalysisHistory] = useState<AnalysisResult[]>([]);
+  const [currentAnalysis, setCurrentAnalysis] = useState<AnalysisResult | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const analyze = useCallback(async (imageUri, metadata = {}) => {
+  const analyze = useCallback(async (imageUri: string, metadata: Record<string, any> = {}): Promise<AnalysisResult> => {
     setLoading(true);
     setError(null);
     try {
@@ -20,44 +21,45 @@ export const AnalysisProvider = ({ children }) => {
       setCurrentAnalysis(result);
       return result;
     } catch (err) {
-      setError(err.message || 'Analysis failed');
+      const errorMessage = err instanceof Error ? err.message : 'Analysis failed';
+      setError(errorMessage);
       throw err;
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const fetchHistory = useCallback(async (page = 1) => {
+  const fetchHistory = useCallback(async (page: number = 1): Promise<void> => {
     setLoading(true);
     setError(null);
     try {
       const result = await analysisService.getAnalysisHistory(page, 10);
       setAnalysisHistory(result.items || []);
-      return result;
     } catch (err) {
-      setError(err.message || 'Failed to fetch history');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch history';
+      setError(errorMessage);
       throw err;
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const getDetail = useCallback(async (analysisId) => {
+  const getDetail = useCallback(async (analysisId: string): Promise<void> => {
     setLoading(true);
     setError(null);
     try {
       const result = await analysisService.getAnalysisDetail(analysisId);
       setCurrentAnalysis(result);
-      return result;
     } catch (err) {
-      setError(err.message || 'Failed to fetch detail');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch detail';
+      setError(errorMessage);
       throw err;
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const value = {
+  const value: AnalysisContextType = {
     analysisHistory,
     currentAnalysis,
     loading,
@@ -74,7 +76,7 @@ export const AnalysisProvider = ({ children }) => {
   );
 };
 
-export const useAnalysis = () => {
+export const useAnalysis = (): AnalysisContextType => {
   const context = React.useContext(AnalysisContext);
   if (!context) {
     throw new Error('useAnalysis must be used within AnalysisProvider');

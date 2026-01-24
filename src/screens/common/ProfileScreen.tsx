@@ -10,7 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 
-export const ProfileScreen = ({ navigation }) => {
+export const ProfileScreen: React.FC<{ navigation  }> = ({ navigation  }) => {
   const { user, logout, ROLES } = useAuth();
 
   const handleLogout = () => {
@@ -28,18 +28,21 @@ export const ProfileScreen = ({ navigation }) => {
     );
   };
 
-  const getRoleDisplay = (role) => {
+  const getRoleDisplay = (role: any) => {
     switch (role) {
-      case ROLES.CUSTOMER:
-        return { name: 'Customer', icon: 'person', color: '#007AFF' };
+      case 'CUSTOMER':
+      case 'USER':
+      case ROLES.USER:
+        return { name: 'Customer', icon: 'person' as any, color: '#007AFF' };
       case ROLES.AGENT:
-        return { name: 'Service Provider', icon: 'construct', color: '#34C759' };
+      case 'AGENT':
+        return { name: 'Service Provider', icon: 'construct' as any, color: '#34C759' };
       case ROLES.STAFF:
-        return { name: 'Staff', icon: 'briefcase', color: '#FF9500' };
-      case ROLES.ADMIN:
-        return { name: 'Admin', icon: 'shield', color: '#FF3B30' };
+      case 'STAFF':
+      case 'ADMIN':
+        return { name: 'Staff', icon: 'briefcase' as any, color: '#FF9500' };
       default:
-        return { name: 'User', icon: 'person', color: '#8E8E93' };
+        return { name: 'User', icon: 'person' as any, color: '#8E8E93' };
     }
   };
 

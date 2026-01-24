@@ -1,10 +1,11 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authService } from '../services/authService';
+import type { AuthContextType, User, RegisterData } from '../types';
 
-const AuthContext = createContext();
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const useAuth = () => {
+export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (!context) {
     throw new Error('useAuth must be used within AuthProvider');
@@ -12,16 +13,16 @@ export const useAuth = () => {
   return context;
 };
 
-export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(null);
-  const [loading, setLoading] = useState(true);
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
     loadStoredAuth();
   }, []);
 
-  const loadStoredAuth = async () => {
+  const loadStoredAuth = async (): Promise<void> => {
     try {
       const storedToken = await AsyncStorage.getItem('authToken');
       const storedUser = await AsyncStorage.getItem('user');
@@ -37,7 +38,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const login = async (email, password) => {
+  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
       setLoading(true);
       const response = await authService.login(email, password);
@@ -49,19 +50,17 @@ export const AuthProvider = ({ children }) => {
       
       setToken(authToken);
       setUser(userData);
-      
       return { success: true };
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.message || 'Login failed' 
-      };
+      const err = error as Error;
+      console.error('Login error:', err);
+      return { success: false, error: err.message || 'Login failed' };
     } finally {
       setLoading(false);
     }
   };
 
-  const register = async (userData) => {
+  const register = async (userData: RegisterData): Promise<{ success: boolean; error?: string }> => {
     try {
       setLoading(true);
       const response = await authService.register(userData);
@@ -73,19 +72,17 @@ export const AuthProvider = ({ children }) => {
       
       setToken(authToken);
       setUser(newUser);
-      
       return { success: true };
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.message || 'Registration failed' 
-      };
+      const err = error as Error;
+      console.error('Registration error:', err);
+      return { success: false, error: err.message || 'Registration failed' };
     } finally {
       setLoading(false);
     }
   };
 
-  const logout = async () => {
+  const logout = async (): Promise<void> => {
     try {
       await AsyncStorage.removeItem('authToken');
       await AsyncStorage.removeItem('user');
@@ -96,43 +93,42 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const updateUser = async (updatedData) => {
+  const updateProfile = async (updatedData: Partial<User>): Promise<void> => {
     try {
-      const updatedUser = { ...user, ...updatedData };
+      const updatedUser = { ...user, ...updatedData } as User;
       await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
       setUser(updatedUser);
-      return { success: true };
     } catch (error) {
-      return { success: false, error: error.message };
+      const err = error as Error;
+      console.error('Update profile error:', err);
+      throw err;
     }
   };
 
-  const isAuthenticated = () => !!token && !!user;
-  
-  const hasRole = (role) => {
+  const hasRole = (role: string): boolean => {
     if (!user) return false;
     return user.role === role;
   };
 
   // Role constants
   const ROLES = {
-    CUSTOMER: 'Customer',
-    STAFF: 'Staff',
-    AGENT: 'Agent',
-    ADMIN: 'Admin'
+    USER: 'USER' as const,
+    CUSTOMER: 'USER' as const,
+    STAFF: 'STAFF' as const,
+    AGENT: 'AGENT' as const,
+    ADMIN: 'STAFF' as const,
   };
 
-  const value = {
+  const value: AuthContextType = {
     user,
     token,
     loading,
     login,
     register,
     logout,
-    updateUser,
-    isAuthenticated,
+    updateProfile,
     hasRole,
-    ROLES
+    ROLES,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

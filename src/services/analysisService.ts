@@ -3,9 +3,9 @@ import { API_CONFIG } from '../config/api.config';
 
 export const analysisService = {
   // Gửi ảnh để phân tích
-  analyzeImage: async (imageData, metadata = {}) => {
+  analyzeImage: async (imageData: any, metadata: Record<string, any> = {}) => {
     try {
-      const formData = new FormData();
+      const formData: any = new FormData();
       
       // Thêm file ảnh
       formData.append('image', {
@@ -15,10 +15,10 @@ export const analysisService = {
       });
       
       // Thêm metadata nếu có
-      if (metadata.description) {
+      if (metadata && metadata.description) {
         formData.append('description', metadata.description);
       }
-      if (metadata.category) {
+      if (metadata && metadata.category) {
         formData.append('category', metadata.category);
       }
 

@@ -11,9 +11,9 @@ import {
 } from 'react-native';
 import { useAnalysis } from '../context/AnalysisContext';
 
-export const HistoryScreen = ({ navigation }) => {
+export const HistoryScreen: React.FC<{ navigation  }> = ({ navigation  }) => {
   const { analysisHistory, loading, fetchHistory } = useAnalysis();
-  const [refreshing, setRefreshing] = useState(false);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
 
   useEffect(() => {
     loadHistory();

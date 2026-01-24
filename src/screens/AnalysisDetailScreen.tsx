@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useAnalysis } from '../context/AnalysisContext';
 
-export const AnalysisDetailScreen = ({ route, navigation }) => {
+export const AnalysisDetailScreen: React.FC<{ route, navigation  }> = ({ route, navigation  }) => {
   const { analysisId } = route.params;
   const { currentAnalysis, loading, getDetail } = useAnalysis();
 

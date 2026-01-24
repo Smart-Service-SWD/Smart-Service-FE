@@ -35,6 +35,7 @@ const AuthStack = createNativeStackNavigator();
 const AuthNavigator = () => {
   return (
     <AuthStack.Navigator
+      id="AuthStack"
       screenOptions={{
         headerShown: false,
       }}
@@ -50,6 +51,7 @@ const AuthNavigator = () => {
 const CameraStackNavigator = () => {
   return (
     <Stack.Navigator
+      id="CameraStack"
       screenOptions={{
         headerShown: true,
         headerStyle: {
@@ -83,6 +85,7 @@ const CameraStackNavigator = () => {
 const HistoryStackNavigator = () => {
   return (
     <Stack.Navigator
+      id="HistoryStack"
       screenOptions={{
         headerShown: true,
         headerStyle: {
@@ -115,10 +118,12 @@ const HistoryStackNavigator = () => {
 
 // Profile Stack Navigator (includes Login/Register)
 const ProfileStackNavigator = () => {
-  const { isAuthenticated } = useAuth();
+  const { user, token } = useAuth();
+  const isAuthenticated = !!user && !!token;
   
   return (
     <Stack.Navigator
+      id="ProfileStack"
       screenOptions={{
         headerShown: true,
         headerStyle: {
@@ -130,7 +135,7 @@ const ProfileStackNavigator = () => {
         },
       }}
     >
-      {isAuthenticated() ? (
+      {isAuthenticated ? (
         <Stack.Screen
           name="ProfileMain"
           component={ProfileScreen}
@@ -163,10 +168,11 @@ const ProfileStackNavigator = () => {
 const AppNavigator = () => {
   return (
     <Tab.Navigator
+      id="AppTabs"
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarIcon: ({ focused, color, size }) => {
-          let iconName;
+          let iconName: any;
 
           if (route.name === 'Home') {
             iconName = focused ? 'home' : 'home-outline';

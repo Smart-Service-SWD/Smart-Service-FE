@@ -15,7 +15,9 @@
     "convert:ts:dry": "node scripts/convert-to-typescript.js --dry-run",
     "convert:ts:backup": "node scripts/convert-to-typescript.js --backup",
     "update:imports": "node scripts/update-imports.js",
-    "type-check": "tsc --noEmit"
+    "fix:ts": "node scripts/fix-ts-errors.js",
+    "type-check": "tsc --noEmit",
+    "type-check:watch": "tsc --noEmit --watch"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

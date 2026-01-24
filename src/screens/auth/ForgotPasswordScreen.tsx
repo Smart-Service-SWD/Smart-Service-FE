@@ -13,11 +13,11 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-export const ForgotPasswordScreen = ({ navigation }) => {
-  const [email, setEmail] = useState('');
-  const [emailError, setEmailError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [emailSent, setEmailSent] = useState(false);
+export const ForgotPasswordScreen: React.FC<{ navigation  }> = ({ navigation  }) => {
+  const [email, setEmail] = useState<string>('');
+  const [emailError, setEmailError] = useState<string>('');
+  const [loading, setLoading] = useState<boolean>(false);
+  const [emailSent, setEmailSent] = useState<boolean>(false);
 
   const validateEmail = (text) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
