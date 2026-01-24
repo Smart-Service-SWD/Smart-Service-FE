@@ -12,6 +12,7 @@ import { ForgotPasswordScreen } from '../screens/auth/ForgotPasswordScreen';
 
 // Common Screens
 import { ProfileScreen } from '../screens/common/ProfileScreen';
+import { HomeScreen } from '../screens/common/HomeScreen';
 
 // Customer Screens
 import { CameraScreen } from '../screens/CameraScreen';
@@ -112,7 +113,53 @@ const HistoryStackNavigator = () => {
   );
 };
 
-// App Stack Navigator (After Login)
+// Profile Stack Navigator (includes Login/Register)
+const ProfileStackNavigator = () => {
+  const { isAuthenticated } = useAuth();
+  
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: true,
+        headerStyle: {
+          backgroundColor: '#007AFF',
+        },
+        headerTintColor: '#fff',
+        headerTitleStyle: {
+          fontWeight: '600',
+        },
+      }}
+    >
+      {isAuthenticated() ? (
+        <Stack.Screen
+          name="ProfileMain"
+          component={ProfileScreen}
+          options={{ title: 'Profile' }}
+        />
+      ) : (
+        <>
+          <Stack.Screen
+            name="ProfileLogin"
+            component={LoginScreen}
+            options={{ title: 'Login' }}
+          />
+          <Stack.Screen
+            name="Register"
+            component={RegisterScreen}
+            options={{ title: 'Sign Up' }}
+          />
+          <Stack.Screen
+            name="ForgotPassword"
+            component={ForgotPasswordScreen}
+            options={{ title: 'Reset Password' }}
+          />
+        </>
+      )}
+    </Stack.Navigator>
+  );
+};
+
+// App Navigator (Always available - no login required to browse)
 const AppNavigator = () => {
   return (
     <Tab.Navigator
@@ -121,7 +168,9 @@ const AppNavigator = () => {
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
 
-          if (route.name === 'Camera') {
+          if (route.name === 'Home') {
+            iconName = focused ? 'home' : 'home-outline';
+          } else if (route.name === 'Camera') {
             iconName = focused ? 'camera' : 'camera-outline';
           } else if (route.name === 'History') {
             iconName = focused ? 'list' : 'list-outline';
@@ -146,6 +195,11 @@ const AppNavigator = () => {
       })}
     >
       <Tab.Screen
+        name="Home"
+        component={HomeScreen}
+        options={{ title: 'Home' }}
+      />
+      <Tab.Screen
         name="Camera"
         component={CameraStackNavigator}
         options={{ title: 'Analyze' }}
@@ -157,15 +211,15 @@ const AppNavigator = () => {
       />
       <Tab.Screen
         name="Profile"
-        component={ProfileScreen}
-        options={{ title: 'Profile' }}
+        component={ProfileStackNavigator}
+        options={{ title: 'Account' }}
       />
     </Tab.Navigator>
   );
 };
 
 export const RootNavigator = () => {
-  const { isAuthenticated, loading } = useAuth();
+  const { loading } = useAuth();
 
   if (loading) {
     return null; // Or a loading screen
@@ -173,7 +227,7 @@ export const RootNavigator = () => {
 
   return (
     <NavigationContainer>
-      {isAuthenticated() ? <AppNavigator /> : <AuthNavigator />}
+      <AppNavigator />
     </NavigationContainer>
   );
 };
