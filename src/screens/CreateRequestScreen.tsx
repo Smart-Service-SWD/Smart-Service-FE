@@ -11,11 +11,11 @@ import {
 } from 'react-native';
 import { analysisService } from '../services/analysisService';
 
-export const CreateRequestScreen = ({ route, navigation }) => {
+export const CreateRequestScreen: React.FC<{ route, navigation  }> = ({ route, navigation  }) => {
   const { analysisId } = route.params || {};
-  const [description, setDescription] = useState('');
-  const [urgency, setUrgency] = useState('Medium');
-  const [loading, setLoading] = useState(false);
+  const [description, setDescription] = useState<string>('');
+  const [urgency, setUrgency] = useState<string>('Medium');
+  const [loading, setLoading] = useState<boolean>(false);
 
   const urgencyLevels = ['Low', 'Medium', 'High'];
 

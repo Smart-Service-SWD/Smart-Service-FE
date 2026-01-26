@@ -6,22 +6,20 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  RefreshControl,
-  Switch
+  RefreshControl
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 
-export const AgentDashboardScreen = ({ navigation }) => {
+export const StaffDashboardScreen: React.FC<{ navigation  }> = ({ navigation  }) => {
   const { user } = useAuth();
-  const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [isAvailable, setIsAvailable] = useState(true);
-  const [stats, setStats] = useState({
-    pendingAssignments: 0,
-    activeJobs: 0,
+  const [loading, setLoading] = useState<boolean>(false);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [stats, setStats] = useState<any>({
+    pendingRequests: 0,
+    activeRequests: 0,
     completedToday: 0,
-    earnings: 0
+    availableAgents: 0
   });
 
   useEffect(() => {
@@ -31,17 +29,17 @@ export const AgentDashboardScreen = ({ navigation }) => {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      // TODO: Call API to get agent dashboard stats
-      // const data = await agentService.getDashboardStats();
+      // TODO: Call API to get staff dashboard stats
+      // const data = await staffService.getDashboardStats();
       // setStats(data);
       
       // Mock data for now
       setTimeout(() => {
         setStats({
-          pendingAssignments: 3,
-          activeJobs: 2,
-          completedToday: 5,
-          earnings: 1250000
+          pendingRequests: 12,
+          activeRequests: 8,
+          completedToday: 15,
+          availableAgents: 23
         });
         setLoading(false);
         setRefreshing(false);
@@ -58,29 +56,24 @@ export const AgentDashboardScreen = ({ navigation }) => {
     loadDashboardData();
   };
 
-  const toggleAvailability = async () => {
-    setIsAvailable(!isAvailable);
-    // TODO: Call API to update availability status
-    // await agentService.updateAvailability(!isAvailable);
-  };
-
-  const StatCard = ({ icon, title, value, color, suffix = '', onPress }) => (
+  const StatCard = ({ icon, title, value, color, onPress }) => (
     <TouchableOpacity 
       style={[styles.statCard, { borderLeftColor: color }]}
       onPress={onPress}
     >
-      <Ionicons name={icon} size={28} color={color} />
+      <Ionicons name={icon} size={32} color={color} />
       <View style={styles.statContent}>
-        <Text style={styles.statValue}>{value}{suffix}</Text>
+        <Text style={styles.statValue}>{value}</Text>
         <Text style={styles.statTitle}>{title}</Text>
       </View>
+      <Ionicons name="chevron-forward" size={20} color="#ccc" />
     </TouchableOpacity>
   );
 
   if (loading && !refreshing) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#34C759" />
+        <ActivityIndicator size="large" color="#007AFF" />
       </View>
     );
   }
@@ -93,57 +86,41 @@ export const AgentDashboardScreen = ({ navigation }) => {
       }
     >
       <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>Hello, {user?.fullName}!</Text>
-          <Text style={styles.role}>Service Provider</Text>
-        </View>
-        <View style={styles.availabilityContainer}>
-          <Text style={styles.availabilityLabel}>
-            {isAvailable ? 'Available' : 'Offline'}
-          </Text>
-          <Switch
-            value={isAvailable}
-            onValueChange={toggleAvailability}
-            trackColor={{ false: '#767577', true: '#34C759' }}
-            thumbColor={isAvailable ? '#fff' : '#f4f3f4'}
-          />
-        </View>
+        <Text style={styles.greeting}>Hello, {user?.fullName}!</Text>
+        <Text style={styles.role}>Staff Dashboard</Text>
       </View>
 
-      <View style={styles.statsGrid}>
+      <View style={styles.statsContainer}>
         <StatCard
-          icon="notifications-outline"
-          title="New Assignments"
-          value={stats.pendingAssignments}
+          icon="time-outline"
+          title="Pending Requests"
+          value={stats.pendingRequests}
           color="#FF9500"
-          onPress={() => navigation.navigate('MyAssignments', { filter: 'pending' })}
+          onPress={() => navigation.navigate('RequestManagement', { status: 'pending' })}
         />
         
         <StatCard
-          icon="construct-outline"
-          title="Active Jobs"
-          value={stats.activeJobs}
+          icon="flash-outline"
+          title="Active Requests"
+          value={stats.activeRequests}
           color="#007AFF"
-          onPress={() => navigation.navigate('MyAssignments', { filter: 'active' })}
+          onPress={() => navigation.navigate('RequestManagement', { status: 'active' })}
         />
-      </View>
-
-      <View style={styles.statsGrid}>
+        
         <StatCard
-          icon="checkmark-done-outline"
+          icon="checkmark-circle-outline"
           title="Completed Today"
           value={stats.completedToday}
           color="#34C759"
-          onPress={() => navigation.navigate('MyAssignments', { filter: 'completed' })}
+          onPress={() => navigation.navigate('RequestManagement', { status: 'completed' })}
         />
         
         <StatCard
-          icon="cash-outline"
-          title="Today's Earnings"
-          value={stats.earnings.toLocaleString()}
-          suffix="đ"
+          icon="people-outline"
+          title="Available Agents"
+          value={stats.availableAgents}
           color="#5856D6"
-          onPress={() => navigation.navigate('Earnings')}
+          onPress={() => navigation.navigate('AgentManagement')}
         />
       </View>
 
@@ -152,37 +129,37 @@ export const AgentDashboardScreen = ({ navigation }) => {
         
         <TouchableOpacity 
           style={styles.actionButton}
-          onPress={() => navigation.navigate('MyAssignments')}
+          onPress={() => navigation.navigate('RequestManagement')}
         >
-          <Ionicons name="list-outline" size={24} color="#34C759" />
-          <Text style={styles.actionButtonText}>View My Assignments</Text>
+          <Ionicons name="list-outline" size={24} color="#007AFF" />
+          <Text style={styles.actionButtonText}>Manage Service Requests</Text>
           <Ionicons name="chevron-forward" size={20} color="#ccc" />
         </TouchableOpacity>
 
         <TouchableOpacity 
           style={styles.actionButton}
-          onPress={() => navigation.navigate('ServiceHistory')}
+          onPress={() => navigation.navigate('AgentManagement')}
         >
-          <Ionicons name="time-outline" size={24} color="#34C759" />
-          <Text style={styles.actionButtonText}>Service History</Text>
+          <Ionicons name="people-outline" size={24} color="#007AFF" />
+          <Text style={styles.actionButtonText}>Manage Service Providers</Text>
           <Ionicons name="chevron-forward" size={20} color="#ccc" />
         </TouchableOpacity>
 
         <TouchableOpacity 
           style={styles.actionButton}
-          onPress={() => navigation.navigate('Earnings')}
+          onPress={() => navigation.navigate('AssignmentManagement')}
         >
-          <Ionicons name="wallet-outline" size={24} color="#34C759" />
-          <Text style={styles.actionButtonText}>Earnings & Payments</Text>
+          <Ionicons name="git-merge-outline" size={24} color="#007AFF" />
+          <Text style={styles.actionButtonText}>Assignment Management</Text>
           <Ionicons name="chevron-forward" size={20} color="#ccc" />
         </TouchableOpacity>
 
         <TouchableOpacity 
           style={styles.actionButton}
-          onPress={() => navigation.navigate('MyCapabilities')}
+          onPress={() => navigation.navigate('Reports')}
         >
-          <Ionicons name="build-outline" size={24} color="#34C759" />
-          <Text style={styles.actionButtonText}>My Capabilities</Text>
+          <Ionicons name="analytics-outline" size={24} color="#007AFF" />
+          <Text style={styles.actionButtonText}>View Reports</Text>
           <Ionicons name="chevron-forward" size={20} color="#ccc" />
         </TouchableOpacity>
       </View>
@@ -203,9 +180,6 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: '#fff',
     padding: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
@@ -219,26 +193,16 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 4,
   },
-  availabilityContainer: {
-    alignItems: 'flex-end',
-  },
-  availabilityLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#34C759',
-    marginBottom: 4,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    padding: 8,
-    paddingTop: 16,
+  statsContainer: {
+    padding: 16,
   },
   statCard: {
-    flex: 1,
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
-    marginHorizontal: 8,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
     borderLeftWidth: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -247,15 +211,16 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   statContent: {
-    marginTop: 12,
+    flex: 1,
+    marginLeft: 16,
   },
   statValue: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
     color: '#333',
   },
   statTitle: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#666',
     marginTop: 4,
   },

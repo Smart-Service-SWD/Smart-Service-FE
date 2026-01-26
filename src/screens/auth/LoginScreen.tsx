@@ -18,14 +18,14 @@ import { useAuth } from '../../context/AuthContext';
 
 const { width } = Dimensions.get('window');
 
-export const LoginScreen = ({ navigation }) => {
+export const LoginScreen: React.FC<{ navigation  }> = ({ navigation  }) => {
   const { login, loading } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
-  const [emailError, setEmailError] = useState('');
-  const [passwordError, setPasswordError] = useState('');
+  const [email, setEmail] = useState<string>('');
+  const [password, setPassword] = useState<string>('');
+  const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [rememberMe, setRememberMe] = useState<boolean>(false);
+  const [emailError, setEmailError] = useState<string>('');
+  const [passwordError, setPasswordError] = useState<string>('');
 
   const validateEmail = (text) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

@@ -3,10 +3,10 @@ import { StyleSheet, View, TouchableOpacity, Text, Alert, ActivityIndicator } fr
 import { CameraView } from 'expo-camera';
 import { useAnalysis } from '../context/AnalysisContext';
 
-export const CameraScreen = ({ navigation }) => {
+export const CameraScreen: React.FC<{ navigation  }> = ({ navigation  }) => {
   const cameraRef = useRef(null);
   const { analyze, loading } = useAnalysis();
-  const [facing, setFacing] = useState('back');
+  const [facing, setFacing] = useState<string>('back');
 
   const toggleCameraFacing = () => {
     setFacing(current => (current === 'back' ? 'front' : 'back'));
@@ -49,7 +49,7 @@ export const CameraScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <CameraView style={styles.camera} facing={facing} ref={cameraRef}>
+      <CameraView style={styles.camera} facing={facing as any} ref={cameraRef}>
         <View style={styles.controlsContainer}>
           <TouchableOpacity 
             style={styles.button} 

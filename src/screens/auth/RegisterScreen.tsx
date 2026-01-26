@@ -14,15 +14,15 @@ import {
 import { Picker } from '@react-native-picker/picker';
 import { useAuth } from '../../context/AuthContext';
 
-export const RegisterScreen = ({ navigation }) => {
+export const RegisterScreen: React.FC<{ navigation  }> = ({ navigation  }) => {
   const { register, loading, ROLES } = useAuth();
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<any>({
     fullName: '',
     email: '',
     phoneNumber: '',
     password: '',
     confirmPassword: '',
-    role: ROLES.CUSTOMER
+    role: ROLES.USER
   });
 
   const handleRegister = async () => {
@@ -47,6 +47,7 @@ export const RegisterScreen = ({ navigation }) => {
     const result = await register({
       fullName,
       email,
+      phone: phoneNumber,
       phoneNumber,
       password,
       role
@@ -115,7 +116,7 @@ export const RegisterScreen = ({ navigation }) => {
                 onValueChange={(value) => updateFormData('role', value)}
                 style={styles.picker}
               >
-                <Picker.Item label="Customer" value={ROLES.CUSTOMER} />
+                <Picker.Item label="Customer" value={ROLES.USER || 'USER'} />
                 <Picker.Item label="Service Provider" value={ROLES.AGENT} />
                 <Picker.Item label="Staff" value={ROLES.STAFF} />
               </Picker>
