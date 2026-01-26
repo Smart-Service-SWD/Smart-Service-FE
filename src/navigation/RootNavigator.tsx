@@ -13,8 +13,8 @@ import { RegisterScreen } from '../screens/auth/RegisterScreen';
 // Common Screens
 import { HomeScreen } from '../screens/common/HomeScreen';
 import { ProfileScreen } from '../screens/common/ProfileScreen';
-import { ServiceListScreen } from '../screens/common/ServiceListScreen';
 import { ServiceDetailScreen } from '../screens/common/ServiceDetailScreen';
+import { ServiceListScreen } from '../screens/common/ServiceListScreen';
 
 // Customer Screens
 import { AnalysisDetailScreen } from '../screens/AnalysisDetailScreen';
