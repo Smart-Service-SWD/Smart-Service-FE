@@ -1,35 +1,75 @@
-import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import React from 'react';
 import { useAuth } from '../context/AuthContext';
 
 // Auth Screens
+import { ForgotPasswordScreen } from '../screens/auth/ForgotPasswordScreen';
 import { LoginScreen } from '../screens/auth/LoginScreen';
 import { RegisterScreen } from '../screens/auth/RegisterScreen';
-import { ForgotPasswordScreen } from '../screens/auth/ForgotPasswordScreen';
 
 // Common Screens
-import { ProfileScreen } from '../screens/common/ProfileScreen';
 import { HomeScreen } from '../screens/common/HomeScreen';
+import { ProfileScreen } from '../screens/common/ProfileScreen';
+import { ServiceListScreen } from '../screens/common/ServiceListScreen';
+import { ServiceDetailScreen } from '../screens/common/ServiceDetailScreen';
 
 // Customer Screens
-import { CameraScreen } from '../screens/CameraScreen';
-import { HistoryScreen } from '../screens/HistoryScreen';
 import { AnalysisDetailScreen } from '../screens/AnalysisDetailScreen';
 import { AnalysisResultScreen } from '../screens/AnalysisResultScreen';
+import { CameraScreen } from '../screens/CameraScreen';
 import { CreateRequestScreen } from '../screens/CreateRequestScreen';
+import { HistoryScreen } from '../screens/HistoryScreen';
 
 // Staff Screens
-import { StaffDashboardScreen } from '../screens/staff/StaffDashboardScreen';
 
 // Agent Screens
-import { AgentDashboardScreen } from '../screens/agent/AgentDashboardScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 const AuthStack = createNativeStackNavigator();
+
+// Home Stack Navigator (for service browsing)
+const HomeStackNavigator = () => {
+  return (
+    <Stack.Navigator
+      id="HomeStack"
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
+      <Stack.Screen
+        name="HomeMain"
+        component={HomeScreen}
+        options={{ title: 'Home' }}
+      />
+      <Stack.Screen
+        name="ServiceList"
+        component={ServiceListScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="ServiceDetail"
+        component={ServiceDetailScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="CreateRequest"
+        component={CreateRequestScreen}
+        options={{ 
+          headerShown: true,
+          title: 'Book Service',
+          headerStyle: {
+            backgroundColor: '#007AFF',
+          },
+          headerTintColor: '#fff',
+        }}
+      />
+    </Stack.Navigator>
+  );
+};
 
 // Auth Navigator
 const AuthNavigator = () => {
@@ -202,7 +242,7 @@ const AppNavigator = () => {
     >
       <Tab.Screen
         name="Home"
-        component={HomeScreen}
+        component={HomeStackNavigator}
         options={{ title: 'Home' }}
       />
       <Tab.Screen

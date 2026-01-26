@@ -11,22 +11,20 @@ import {
   Platform,
   ScrollView
 } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
 import { useAuth } from '../../context/AuthContext';
 
 export const RegisterScreen: React.FC<{ navigation  }> = ({ navigation  }) => {
-  const { register, loading, ROLES } = useAuth();
+  const { register, loading } = useAuth();
   const [formData, setFormData] = useState<any>({
     fullName: '',
     email: '',
     phoneNumber: '',
     password: '',
-    confirmPassword: '',
-    role: ROLES.USER
+    confirmPassword: ''
   });
 
   const handleRegister = async () => {
-    const { fullName, email, phoneNumber, password, confirmPassword, role } = formData;
+    const { fullName, email, phoneNumber, password, confirmPassword } = formData;
 
     // Validation
     if (!fullName || !email || !phoneNumber || !password) {
@@ -49,8 +47,7 @@ export const RegisterScreen: React.FC<{ navigation  }> = ({ navigation  }) => {
       email,
       phone: phoneNumber,
       phoneNumber,
-      password,
-      role
+      password
     });
 
     if (!result.success) {
@@ -106,21 +103,6 @@ export const RegisterScreen: React.FC<{ navigation  }> = ({ navigation  }) => {
               onChangeText={(value) => updateFormData('phoneNumber', value)}
               keyboardType="phone-pad"
             />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Role</Text>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={formData.role}
-                onValueChange={(value) => updateFormData('role', value)}
-                style={styles.picker}
-              >
-                <Picker.Item label="Customer" value={ROLES.USER || 'USER'} />
-                <Picker.Item label="Service Provider" value={ROLES.AGENT} />
-                <Picker.Item label="Staff" value={ROLES.STAFF} />
-              </Picker>
-            </View>
           </View>
 
           <View style={styles.inputContainer}>
@@ -223,15 +205,6 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 16,
     backgroundColor: '#f8f9fa',
-  },
-  pickerContainer: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    backgroundColor: '#f8f9fa',
-  },
-  picker: {
-    height: 50,
   },
   button: {
     backgroundColor: '#007AFF',

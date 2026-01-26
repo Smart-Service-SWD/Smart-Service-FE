@@ -77,7 +77,7 @@ interface DesignToken {
 }
 
 type RootStackParamList = {
-  Home: undefined;
+  HomeMain: undefined;
   ServiceList: { category: string };
   ServiceDetail: { service: FeaturedService };
   Profile: undefined;
@@ -86,9 +86,10 @@ type RootStackParamList = {
   Promotions: undefined;
   Support: undefined;
   AllServices: undefined;
+  CreateRequest: { service: FeaturedService };
 };
 
-type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
+type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'HomeMain'>;
 
 interface HomeScreenProps {
   navigation: HomeScreenNavigationProp;
@@ -183,45 +184,41 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
   // Mock data for service categories
   const serviceCategories: ServiceCategory[] = [
-    { id: 1, name: 'Cleaning', icon: 'water-outline', color: '#06B6D4' },
-    { id: 2, name: 'Plumbing', icon: 'construct-outline', color: '#F59E0B' },
-    { id: 3, name: 'Electrical', icon: 'flash-outline', color: '#EF4444' },
-    { id: 4, name: 'Painting', icon: 'color-palette-outline', color: '#8B5CF6' },
-    { id: 5, name: 'Carpentry', icon: 'hammer-outline', color: '#F97316' },
-    { id: 6, name: 'AC Repair', icon: 'snow-outline', color: '#3B82F6' },
-    { id: 7, name: 'Appliance', icon: 'tv-outline', color: '#EC4899' },
-    { id: 8, name: 'Gardening', icon: 'leaf-outline', color: '#10B981' },
+    { id: 1, name: 'Electronics', icon: 'phone-portrait-outline', color: '#06B6D4' },
+    { id: 2, name: 'Electrical', icon: 'flash-outline', color: '#EF4444' },
+    { id: 3, name: 'Legal', icon: 'document-text-outline', color: '#8B5CF6' },
+    { id: 4, name: 'Real Estate', icon: 'map-outline', color: '#10B981' },
   ];
 
   // Mock data for featured services
   const featuredServices: FeaturedService[] = [
     {
       id: 1,
-      name: 'Home Deep Cleaning',
-      category: 'Cleaning',
+      name: 'Phone & Laptop Repair',
+      category: 'Electronics',
       rating: 4.8,
       reviews: 1250,
       price: '150,000 VND',
-      image: 'https://via.placeholder.com/300x200/007AFF/FFFFFF?text=Cleaning',
+      image: 'https://via.placeholder.com/300x200/06B6D4/FFFFFF?text=Electronics',
       discount: '20%',
     },
     {
       id: 2,
-      name: 'Professional Plumbing',
-      category: 'Plumbing',
+      name: 'Electrical Installation',
+      category: 'Electrical',
       rating: 4.9,
       reviews: 890,
       price: '200,000 VND',
-      image: 'https://via.placeholder.com/300x200/FF9500/FFFFFF?text=Plumbing',
+      image: 'https://via.placeholder.com/300x200/EF4444/FFFFFF?text=Electrical',
     },
     {
       id: 3,
-      name: 'Electrical Installation',
-      category: 'Electrical',
+      name: 'Legal Consultation',
+      category: 'Legal',
       rating: 4.7,
       reviews: 560,
-      price: '180,000 VND',
-      image: 'https://via.placeholder.com/300x200/FF3B30/FFFFFF?text=Electrical',
+      price: '500,000 VND',
+      image: 'https://via.placeholder.com/300x200/8B5CF6/FFFFFF?text=Legal',
       discount: '10%',
     },
   ];
@@ -267,18 +264,26 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     );
   };
 
-  const renderCategoryItem = ({ item }: { item: ServiceCategory }): React.ReactElement => (
-    <TouchableOpacity
-      style={styles.categoryItem}
-      onPress={() => navigation.navigate('ServiceList', { category: item.name })}
-      activeOpacity={0.7}
-    >
-      <View style={[styles.categoryContainer, { backgroundColor: item.color + '15' }]}>
-        <Ionicons name={item.icon} size={28} color={item.color} />
-      </View>
-      <Text style={styles.categoryLabel} numberOfLines={1}>{item.name}</Text>
-    </TouchableOpacity>
-  );
+  const renderCategoryItem = ({ item }: { item: ServiceCategory }): React.ReactElement => {
+    const handlePress = () => {
+      console.log('Category item clicked:', item.name);
+      navigation.navigate('ServiceList', { category: item.name });
+    };
+    
+    return (
+      <TouchableOpacity
+        style={styles.categoryItem}
+        onPress={handlePress}
+        activeOpacity={0.7}
+      >
+        <View style={[styles.categoryContainer, { backgroundColor: item.color + '15' }]}>
+          <Ionicons name={item.icon} size={28} color={item.color} />
+        </View>
+        <View style={{ height: 8 }} />
+        <Text style={styles.categoryLabel} numberOfLines={1}>{item.name}</Text>
+      </TouchableOpacity>
+    );
+  };
 
   const renderFeaturedService = ({ item }: { item: FeaturedService }): React.ReactElement => {
     const serviceColor = item.image.includes('007AFF') ? '#007AFF' : 
@@ -374,6 +379,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             <View style={[styles.quickActionIcon, { backgroundColor: '#007AFF20' }]}>
               <Ionicons name="camera" size={24} color="#007AFF" />
             </View>
+            <View style={{ height: 8 }} />
             <Text style={styles.quickActionText}>Scan Issue</Text>
           </TouchableOpacity>
 
@@ -384,6 +390,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             <View style={[styles.quickActionIcon, { backgroundColor: '#34C75920' }]}>
               <Ionicons name="time" size={24} color="#34C759" />
             </View>
+            <View style={{ height: 8 }} />
             <Text style={styles.quickActionText}>My Requests</Text>
           </TouchableOpacity>
 
@@ -394,6 +401,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             <View style={[styles.quickActionIcon, { backgroundColor: '#FF950020' }]}>
               <Ionicons name="pricetag" size={24} color="#FF9500" />
             </View>
+            <View style={{ height: 8 }} />
             <Text style={styles.quickActionText}>Promotions</Text>
           </TouchableOpacity>
 
@@ -404,6 +412,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             <View style={[styles.quickActionIcon, { backgroundColor: '#5856D620' }]}>
               <Ionicons name="headset" size={24} color="#5856D6" />
             </View>
+            <View style={{ height: 8 }} />
             <Text style={styles.quickActionText}>Support</Text>
           </TouchableOpacity>
         </View>
@@ -656,6 +665,7 @@ const styles = StyleSheet.create<Styles>({
   categoryItem: {
     alignItems: 'center',
     width: (width - 60) / 4,
+    paddingVertical: 8,
   },
   categoryContainer: {
     width: 60,
@@ -663,13 +673,15 @@ const styles = StyleSheet.create<Styles>({
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 0,
   },
   categoryLabel: {
     fontSize: 11,
     color: '#374151',
     textAlign: 'center',
     fontWeight: '500',
+    marginTop: 0,
+    paddingHorizontal: 4,
   },
   // Quick Actions
   quickActions: {
@@ -679,6 +691,7 @@ const styles = StyleSheet.create<Styles>({
   quickAction: {
     alignItems: 'center',
     flex: 1,
+    paddingVertical: 8,
   },
   quickActionIcon: {
     width: 56,
@@ -686,13 +699,15 @@ const styles = StyleSheet.create<Styles>({
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 0,
   },
   quickActionText: {
     fontSize: 11,
     color: '#4B5563',
     textAlign: 'center',
     fontWeight: '500',
+    marginTop: 0,
+    paddingHorizontal: 4,
   },
   // Service Card - Professional
   featuredList: {

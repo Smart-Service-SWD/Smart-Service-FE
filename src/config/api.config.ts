@@ -1,7 +1,7 @@
 // API Configuration
 export const API_CONFIG = {
   // Thay đổi địa chỉ BE của bạn
-  BASE_URL: 'http://192.168.1.100:5000/api', // Thay bằng IP/Port của BE
+  BASE_URL: 'http://10.0.2.2:5000/api', // Android Emulator: 10.0.2.2 = localhost của máy host
   TIMEOUT: 30000,
   ENDPOINTS: {
     // Service Analysis
