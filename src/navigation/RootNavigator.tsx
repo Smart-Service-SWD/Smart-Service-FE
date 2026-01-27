@@ -24,8 +24,10 @@ import { CreateRequestScreen } from '../screens/CreateRequestScreen';
 import { HistoryScreen } from '../screens/HistoryScreen';
 
 // Staff Screens
+import { StaffDashboardScreen } from '../screens/staff/StaffDashboardScreen';
 
 // Agent Screens
+import { AgentDashboardScreen } from '../screens/agent/AgentDashboardScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -33,6 +35,45 @@ const AuthStack = createNativeStackNavigator();
 
 // Home Stack Navigator (for service browsing)
 const HomeStackNavigator = () => {
+  const { user } = useAuth();
+  
+  // If user is STAFF or ADMIN, show Staff Dashboard
+  if (user && (user.role === 'STAFF' || user.role === 'ADMIN')) {
+    return (
+      <Stack.Navigator
+        id="HomeStack"
+        screenOptions={{
+          headerShown: false,
+        }}
+      >
+        <Stack.Screen
+          name="StaffDashboard"
+          component={StaffDashboardScreen}
+          options={{ title: 'Staff Dashboard' }}
+        />
+      </Stack.Navigator>
+    );
+  }
+
+  // If user is AGENT, show Agent Dashboard
+  if (user && user.role === 'AGENT') {
+    return (
+      <Stack.Navigator
+        id="HomeStack"
+        screenOptions={{
+          headerShown: false,
+        }}
+      >
+        <Stack.Screen
+          name="AgentDashboard"
+          component={AgentDashboardScreen}
+          options={{ title: 'Agent Dashboard' }}
+        />
+      </Stack.Navigator>
+    );
+  }
+
+  // Default: Customer/Guest view
   return (
     <Stack.Navigator
       id="HomeStack"

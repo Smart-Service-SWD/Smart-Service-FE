@@ -10,6 +10,8 @@ import {
     Text,
     TouchableOpacity,
     View,
+    StatusBar,
+    Platform,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 
@@ -223,7 +225,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 16 : 16,
+    paddingBottom: 16,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
