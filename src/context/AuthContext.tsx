@@ -172,7 +172,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     CUSTOMER: 'USER' as const,
     STAFF: 'STAFF' as const,
     AGENT: 'AGENT' as const,
-    ADMIN: 'STAFF' as const,
+    ADMIN: 'ADMIN' as const,
   };
 
   const value: AuthContextType = {

@@ -25,9 +25,20 @@ import { HistoryScreen } from '../screens/HistoryScreen';
 
 // Staff Screens
 import { StaffDashboardScreen } from '../screens/staff/StaffDashboardScreen';
+import { PendingEvaluationsScreen } from '../screens/staff/PendingEvaluationsScreen';
+import { ReEvaluationsScreen } from '../screens/staff/ReEvaluationsScreen';
 
 // Agent Screens
 import { AgentDashboardScreen } from '../screens/agent/AgentDashboardScreen';
+
+// Admin Screens
+import { AdminDashboardScreen } from '../screens/admin/AdminDashboardScreen';
+import { UserManagementScreen } from '../screens/admin/UserManagementScreen';
+import { ServiceManagementScreen } from '../screens/admin/ServiceManagementScreen';
+import { StaffManagementScreen } from '../screens/admin/StaffManagementScreen';
+import { AgentManagementScreen } from '../screens/admin/AgentManagementScreen';
+import { ReportsScreen } from '../screens/admin/ReportsScreen';
+import { SystemSettingsScreen } from '../screens/admin/SystemSettingsScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -37,8 +48,26 @@ const AuthStack = createNativeStackNavigator();
 const HomeStackNavigator = () => {
   const { user } = useAuth();
   
-  // If user is STAFF or ADMIN, show Staff Dashboard
-  if (user && (user.role === 'STAFF' || user.role === 'ADMIN')) {
+  // If user is ADMIN, show Admin Dashboard
+  if (user && user.role === 'ADMIN') {
+    return (
+      <Stack.Navigator
+        id="HomeStack"
+        screenOptions={{
+          headerShown: false,
+        }}
+      >
+        <Stack.Screen
+          name="AdminDashboard"
+          component={AdminDashboardScreen}
+          options={{ title: 'Admin Dashboard' }}
+        />
+      </Stack.Navigator>
+    );
+  }
+  
+  // If user is STAFF, show Staff Dashboard
+  if (user && user.role === 'STAFF') {
     return (
       <Stack.Navigator
         id="HomeStack"
@@ -245,8 +274,148 @@ const ProfileStackNavigator = () => {
   );
 };
 
+// Staff Tab Navigator
+const StaffTabNavigator = () => {
+  return (
+    <Tab.Navigator
+      id="StaffTabs"
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarIcon: ({ focused, color, size }) => {
+          let iconName: any;
+
+          if (route.name === 'StaffDashboard') {
+            iconName = focused ? 'stats-chart' : 'stats-chart-outline';
+          } else if (route.name === 'PendingEvaluations') {
+            iconName = focused ? 'checkmark-circle' : 'checkmark-circle-outline';
+          } else if (route.name === 'ReEvaluations') {
+            iconName = focused ? 'refresh-circle' : 'refresh-circle-outline';
+          } else if (route.name === 'StaffProfile') {
+            iconName = focused ? 'person' : 'person-outline';
+          }
+
+          return <Ionicons name={iconName} size={size} color={color} />;
+        },
+        tabBarActiveTintColor: '#007AFF',
+        tabBarInactiveTintColor: '#666',
+        tabBarStyle: {
+          backgroundColor: '#fff',
+          borderTopColor: '#e0e0e0',
+          paddingBottom: 5,
+          paddingTop: 5,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '500',
+        },
+      })}
+    >
+      <Tab.Screen
+        name="StaffDashboard"
+        component={StaffDashboardScreen}
+        options={{ title: 'Dashboard' }}
+      />
+      <Tab.Screen
+        name="PendingEvaluations"
+        component={PendingEvaluationsScreen}
+        options={{ title: 'Confirm AI' }}
+      />
+      <Tab.Screen
+        name="ReEvaluations"
+        component={ReEvaluationsScreen}
+        options={{ title: 'Re-evaluate' }}
+      />
+      <Tab.Screen
+        name="StaffProfile"
+        component={ProfileStackNavigator}
+        options={{ title: 'Profile' }}
+      />
+    </Tab.Navigator>
+  );
+};
+
+// Admin Tab Navigator
+const AdminTabNavigator = () => {
+  return (
+    <Tab.Navigator
+      id="AdminTabs"
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarIcon: ({ focused, color, size }) => {
+          let iconName: any;
+
+          if (route.name === 'AdminDashboard') {
+            iconName = focused ? 'analytics' : 'analytics-outline';
+          } else if (route.name === 'UserManagement') {
+            iconName = focused ? 'people' : 'people-outline';
+          } else if (route.name === 'ServiceManagement') {
+            iconName = focused ? 'construct' : 'construct-outline';
+          } else if (route.name === 'Reports') {
+            iconName = focused ? 'bar-chart' : 'bar-chart-outline';
+          } else if (route.name === 'SystemSettings') {
+            iconName = focused ? 'settings' : 'settings-outline';
+          }
+
+          return <Ionicons name={iconName} size={size} color={color} />;
+        },
+        tabBarActiveTintColor: '#007AFF',
+        tabBarInactiveTintColor: '#666',
+        tabBarStyle: {
+          backgroundColor: '#fff',
+          borderTopColor: '#e0e0e0',
+          paddingBottom: 5,
+          paddingTop: 5,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '500',
+        },
+      })}
+    >
+      <Tab.Screen
+        name="AdminDashboard"
+        component={AdminDashboardScreen}
+        options={{ title: 'Dashboard' }}
+      />
+      <Tab.Screen
+        name="UserManagement"
+        component={UserManagementScreen}
+        options={{ title: 'Người dùng' }}
+      />
+      <Tab.Screen
+        name="ServiceManagement"
+        component={ServiceManagementScreen}
+        options={{ title: 'Dịch vụ' }}
+      />
+      <Tab.Screen
+        name="Reports"
+        component={ReportsScreen}
+        options={{ title: 'Báo cáo' }}
+      />
+      <Tab.Screen
+        name="SystemSettings"
+        component={SystemSettingsScreen}
+        options={{ title: 'Cài đặt' }}
+      />
+    </Tab.Navigator>
+  );
+};
+
 // App Navigator (Always available - no login required to browse)
 const AppNavigator = () => {
+  const { user } = useAuth();
+
+  // If user is ADMIN, show Admin-specific tabs
+  if (user && user.role === 'ADMIN') {
+    return <AdminTabNavigator />;
+  }
+
+  // If user is STAFF, show Staff-specific tabs
+  if (user && user.role === 'STAFF') {
+    return <StaffTabNavigator />;
+  }
+
+  // Default tabs for USER, AGENT and guests
   return (
     <Tab.Navigator
       id="AppTabs"

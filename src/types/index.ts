@@ -5,7 +5,7 @@ export interface User {
   email: string;
   phone?: string;
   phoneNumber?: string;
-  role: 'USER' | 'STAFF' | 'AGENT';
+  role: 'USER' | 'STAFF' | 'AGENT' | 'ADMIN';
   profileImage?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -24,6 +24,7 @@ export interface AuthContextType {
     USER: 'USER';
     STAFF: 'STAFF';
     AGENT: 'AGENT';
+    ADMIN: 'ADMIN';
   };
 }
 
@@ -33,7 +34,7 @@ export interface RegisterData {
   password: string;
   phone: string;
   phoneNumber?: string;
-  role: 'USER' | 'STAFF' | 'AGENT';
+  role: 'USER' | 'STAFF' | 'AGENT' | 'ADMIN';
 }
 
 export interface AnalysisResult {
