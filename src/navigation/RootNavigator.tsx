@@ -25,14 +25,17 @@ import { HistoryScreen } from '../screens/HistoryScreen';
 
 // Staff Screens
 import { StaffDashboardScreen } from '../screens/staff/StaffDashboardScreen';
+import { StaffProfileScreen } from '../screens/staff/StaffProfileScreen';
 import { PendingEvaluationsScreen } from '../screens/staff/PendingEvaluationsScreen';
 import { ReEvaluationsScreen } from '../screens/staff/ReEvaluationsScreen';
 
 // Agent Screens
 import { AgentDashboardScreen } from '../screens/agent/AgentDashboardScreen';
+import { AgentProfileScreen } from '../screens/agent/AgentProfileScreen';
 
 // Admin Screens
 import { AdminDashboardScreen } from '../screens/admin/AdminDashboardScreen';
+import { AdminProfileScreen } from '../screens/admin/AdminProfileScreen';
 import { UserManagementScreen } from '../screens/admin/UserManagementScreen';
 import { ServiceManagementScreen } from '../screens/admin/ServiceManagementScreen';
 import { StaffManagementScreen } from '../screens/admin/StaffManagementScreen';
@@ -327,7 +330,7 @@ const StaffTabNavigator = () => {
       />
       <Tab.Screen
         name="StaffProfile"
-        component={ProfileStackNavigator}
+        component={StaffProfileScreen}
         options={{ title: 'Profile' }}
       />
     </Tab.Navigator>
@@ -352,8 +355,8 @@ const AdminTabNavigator = () => {
             iconName = focused ? 'construct' : 'construct-outline';
           } else if (route.name === 'Reports') {
             iconName = focused ? 'bar-chart' : 'bar-chart-outline';
-          } else if (route.name === 'SystemSettings') {
-            iconName = focused ? 'settings' : 'settings-outline';
+          } else if (route.name === 'AdminProfile') {
+            iconName = focused ? 'person' : 'person-outline';
           }
 
           return <Ionicons name={iconName} size={size} color={color} />;
@@ -393,9 +396,55 @@ const AdminTabNavigator = () => {
         options={{ title: 'Báo cáo' }}
       />
       <Tab.Screen
-        name="SystemSettings"
-        component={SystemSettingsScreen}
-        options={{ title: 'Cài đặt' }}
+        name="AdminProfile"
+        component={AdminProfileScreen}
+        options={{ title: 'Profile' }}
+      />
+    </Tab.Navigator>
+  );
+};
+
+// Agent Tab Navigator
+const AgentTabNavigator = () => {
+  return (
+    <Tab.Navigator
+      id="AgentTabs"
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarIcon: ({ focused, color, size }) => {
+          let iconName: any;
+
+          if (route.name === 'AgentHome') {
+            iconName = focused ? 'home' : 'home-outline';
+          } else if (route.name === 'AgentProfile') {
+            iconName = focused ? 'person' : 'person-outline';
+          }
+
+          return <Ionicons name={iconName} size={size} color={color} />;
+        },
+        tabBarActiveTintColor: '#34C759',
+        tabBarInactiveTintColor: '#666',
+        tabBarStyle: {
+          backgroundColor: '#fff',
+          borderTopColor: '#e0e0e0',
+          paddingBottom: 5,
+          paddingTop: 5,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '500',
+        },
+      })}
+    >
+      <Tab.Screen
+        name="AgentHome"
+        component={AgentDashboardScreen}
+        options={{ title: 'Dashboard' }}
+      />
+      <Tab.Screen
+        name="AgentProfile"
+        component={AgentProfileScreen}
+        options={{ title: 'Profile' }}
       />
     </Tab.Navigator>
   );
@@ -415,7 +464,12 @@ const AppNavigator = () => {
     return <StaffTabNavigator />;
   }
 
-  // Default tabs for USER, AGENT and guests
+  // If user is AGENT, show Agent-specific tabs
+  if (user && user.role === 'AGENT') {
+    return <AgentTabNavigator />;
+  }
+
+  // Default tabs for USER and guests
   return (
     <Tab.Navigator
       id="AppTabs"
