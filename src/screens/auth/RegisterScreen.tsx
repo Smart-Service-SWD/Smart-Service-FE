@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 
-export const RegisterScreen: React.FC<{ navigation  }> = ({ navigation  }) => {
+export const RegisterScreen: React.FC<{ navigation }> = ({ navigation }) => {
   const { register, loading } = useAuth();
   const [formData, setFormData] = useState<any>({
     fullName: '',
@@ -47,7 +47,8 @@ export const RegisterScreen: React.FC<{ navigation  }> = ({ navigation  }) => {
       email,
       phone: phoneNumber,
       phoneNumber,
-      password
+      password,
+      role: 'USER'
     });
 
     if (!result.success) {
