@@ -1,54 +1,40 @@
-name: .NET Clean Architecture CI (No Tests)
+name: React Native CI
 
 on:
   push:
-    branches: 
+    branches:
       - main
       - develop
       - feature/*
       - hotfix/*
   pull_request:
-    branches: 
+    branches:
       - main
       - develop
 
-env:
-  DOTNET_VERSION: '8.0.x'
-  BUILD_CONFIGURATION: 'Release'
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
-
+  validate:
+    name: Validate
     runs-on: ubuntu-latest
-
     steps:
-    # 1. Checkout source
-    - name: Checkout source
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    # 2. Setup .NET
-    - name: Setup .NET SDK
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
 
-    # 3. Cache NuGet packages
-    - name: Cache NuGet packages
-      uses: actions/cache@v4
-      with:
-        path: ~/.nuget/packages
-        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
-        restore-keys: |
-          ${{ runner.os }}-nuget-
+      - name: Install dependencies
+        run: npm ci
 
-    # 4. Restore
-    - name: Restore dependencies
-      run: dotnet restore MySolution.sln
+      - name: Type Check
+        run: npm run type-check
 
-    # 5. Build
-    - name: Build solution
-      run: dotnet build MySolution.sln -c ${{ env.BUILD_CONFIGURATION }} --no-restore
-
-    # 6. Publish API (artifact)
-    - name: Publish API
-      run: dotnet publish src/WebAPI/WebAPI.csproj -c ${{ env.BUILD_CONFIGURATION }} -o publish
+      #- name: Lint
+      #  run: npm run lint
