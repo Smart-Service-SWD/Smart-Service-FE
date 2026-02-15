@@ -11,6 +11,7 @@ import { LoginScreen } from '../screens/auth/LoginScreen';
 import { RegisterScreen } from '../screens/auth/RegisterScreen';
 
 // Common Screens
+import { GraphQLDemoScreen } from '../screens/common/GraphQLDemoScreen';
 import { HomeScreen } from '../screens/common/HomeScreen';
 import { ProfileScreen } from '../screens/common/ProfileScreen';
 import { ServiceDetailScreen } from '../screens/common/ServiceDetailScreen';
@@ -127,6 +128,11 @@ const HomeStackNavigator = () => {
         name="ServiceDetail"
         component={ServiceDetailScreen}
         options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="GraphQLDemo"
+        component={GraphQLDemoScreen}
+        options={{ title: 'GraphQL Demo', headerShown: true }}
       />
       <Stack.Screen
         name="CreateRequest"

@@ -87,6 +87,7 @@ type RootStackParamList = {
   Support: undefined;
   AllServices: undefined;
   CreateRequest: { service: FeaturedService };
+  GraphQLDemo: undefined;
 };
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'HomeMain'>;
@@ -355,6 +356,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       {/* Promotional Banner */}
       {renderBanner()}
 
+      {/* GraphQL Demo - BE cổng 5268 */}
+      <TouchableOpacity
+        style={styles.graphqlDemoCard}
+        onPress={() => navigation.navigate('GraphQLDemo')}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="code-slash" size={24} color="#007AFF" />
+        <Text style={styles.graphqlDemoText}>GraphQL Demo (BE :5268)</Text>
+        <Ionicons name="chevron-forward" size={20} color="#666" />
+      </TouchableOpacity>
+
       {/* Service Categories */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Service Categories</Text>
@@ -501,6 +513,8 @@ interface Styles {
   infoText: ViewStyle;
   infoTitle: TextStyle;
   infoDescription: TextStyle;
+  graphqlDemoCard: ViewStyle;
+  graphqlDemoText: TextStyle;
 }
 
 const styles = StyleSheet.create<Styles>({
@@ -633,6 +647,24 @@ const styles = StyleSheet.create<Styles>({
   activeIndicator: {
     opacity: 1,
     width: 20,
+  },
+  graphqlDemoCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 20,
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    gap: 10,
+  },
+  graphqlDemoText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#111827',
   },
   // Section
   section: {
