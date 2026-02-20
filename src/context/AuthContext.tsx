@@ -26,7 +26,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const storedToken = await AsyncStorage.getItem('authToken');
       const storedUser = await AsyncStorage.getItem('user');
-      
+
       if (storedToken && storedUser) {
         setToken(storedToken);
         setUser(JSON.parse(storedUser));
@@ -41,76 +41,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
       setLoading(true);
-      
-      // Mock accounts for testing
-      const mockAccounts = [
-        {
-          email: 'user@test.com',
-          password: '123456',
-          user: {
-            id: '1',
-            email: 'user@test.com',
-            fullName: 'Nguyễn Văn A',
-            phoneNumber: '0901234567',
-            role: 'USER' as const,
-          },
-          token: 'mock-user-token-123',
-        },
-        {
-          email: 'staff@test.com',
-          password: '123456',
-          user: {
-            id: '2',
-            email: 'staff@test.com',
-            fullName: 'Trần Thị B',
-            phoneNumber: '0912345678',
-            role: 'STAFF' as const,
-          },
-          token: 'mock-staff-token-456',
-        },
-        {
-          email: 'admin@test.com',
-          password: '123456',
-          user: {
-            id: '3',
-            email: 'admin@test.com',
-            fullName: 'Lê Văn C',
-            phoneNumber: '0923456789',
-            role: 'ADMIN' as const,
-          },
-          token: 'mock-admin-token-789',
-        },
-      ];
 
-      // Check mock accounts first
-      const mockAccount = mockAccounts.find(
-        acc => acc.email === email && acc.password === password
-      );
-
-      if (mockAccount) {
-        await AsyncStorage.setItem('authToken', mockAccount.token);
-        await AsyncStorage.setItem('user', JSON.stringify(mockAccount.user));
-        
-        setToken(mockAccount.token);
-        setUser(mockAccount.user);
-        return { success: true };
-      }
-
-      // If not mock account, try real API
       const response = await authService.login(email, password);
-      
-      const { token: authToken, user: userData } = response;
-      
-      await AsyncStorage.setItem('authToken', authToken);
+
+      const { accessToken, userId, email: userEmail, fullName, role } = response;
+      const roleString = role === 0 ? 'USER' : role === 1 ? 'STAFF' : role === 2 ? 'ADMIN' : 'USER';
+
+      const userData: User = {
+        id: userId,
+        email: userEmail,
+        fullName,
+        role: roleString as any,
+      };
+
+      await AsyncStorage.setItem('authToken', accessToken);
       await AsyncStorage.setItem('user', JSON.stringify(userData));
-      
-      setToken(authToken);
+
+      setToken(accessToken);
       setUser(userData);
       return { success: true };
     } catch (error) {
       const err = error as Error;
       console.error('Login error:', err);
-      return { success: false, error: err.message || 'Login failed' };
+      const apiError = (error as any).response?.data?.message || err.message || 'Login failed';
+      return { success: false, error: apiError };
     } finally {
       setLoading(false);
     }
@@ -120,19 +74,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setLoading(true);
       const response = await authService.register(userData);
-      
-      const { token: authToken, user: newUser } = response;
-      
-      await AsyncStorage.setItem('authToken', authToken);
+
+      const { accessToken, userId, email: userEmail, fullName, role } = response;
+      const roleString = role === 0 ? 'USER' : role === 1 ? 'STAFF' : role === 2 ? 'ADMIN' : 'USER';
+
+      const newUser: User = {
+        id: userId,
+        email: userEmail,
+        fullName,
+        role: roleString as any,
+      };
+
+      await AsyncStorage.setItem('authToken', accessToken);
       await AsyncStorage.setItem('user', JSON.stringify(newUser));
-      
-      setToken(authToken);
+
+      setToken(accessToken);
       setUser(newUser);
       return { success: true };
     } catch (error) {
       const err = error as Error;
       console.error('Registration error:', err);
-      return { success: false, error: err.message || 'Registration failed' };
+      const apiError = (error as any).response?.data?.message || err.message || 'Registration failed';
+      return { success: false, error: apiError };
     } finally {
       setLoading(false);
     }

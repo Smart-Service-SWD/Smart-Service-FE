@@ -1,6 +1,6 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_CONFIG } from '../config/api.config';
+import { API_CONFIG, resolveRestBaseUrl } from '../config/api.config';
 
 const apiClient = axios.create({
   baseURL: API_CONFIG.BASE_URL,
@@ -10,9 +10,16 @@ const apiClient = axios.create({
   },
 });
 
-// Request interceptor - Add JWT token to requests
+// Request interceptor - Dynamically resolve base URL + Add JWT token
 apiClient.interceptors.request.use(
   async config => {
+    try {
+      // Dynamically resolve the correct REST base URL (finds the reachable host)
+      const resolvedBaseUrl = await resolveRestBaseUrl();
+      config.baseURL = resolvedBaseUrl;
+    } catch (err) {
+      console.warn('Could not resolve REST base URL, using fallback:', err);
+    }
     try {
       const token = await AsyncStorage.getItem('authToken');
       if (token) {

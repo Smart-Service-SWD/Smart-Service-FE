@@ -45,10 +45,8 @@ export const RegisterScreen: React.FC<{ navigation }> = ({ navigation }) => {
     const result = await register({
       fullName,
       email,
-      phone: phoneNumber,
-      phoneNumber,
       password,
-      role: 'USER'
+      phoneNumber
     });
 
     if (!result.success) {
