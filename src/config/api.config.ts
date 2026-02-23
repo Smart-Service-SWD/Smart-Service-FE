@@ -1,17 +1,18 @@
 import axios from 'axios';
+import { ToastService } from '../components/toast';
 
 // API Configuration - 5 máy: app sẽ thử lần lượt và dùng IP đầu tiên kết nối được
 // Sửa 5 IP dưới cho đúng mạng của bạn (Android Emulator: 10.0.2.2 = localhost)
 const POSSIBLE_HOSTS = [
   '10.0.2.2',        // Android Emulator
   '192.168.1.26', // Máy Window T_Thịnh
-  '192.168.1.101',
+  '192.168.1.100', // Máy Linux T_Thinh
   '192.168.1.102',
   '192.168.1.103',
 ];
 
 const GRAPHQL_PORT = 5268;
-const REST_PORT = 5000;
+const REST_PORT = 5268;
 const TIMEOUT_MS = 30000;
 const CONNECT_CHECK_TIMEOUT = 5000;
 
@@ -53,10 +54,11 @@ export const resolveGraphQLBaseUrl = async (): Promise<string> => {
     }
   }
   const urls = getTriedUrls().join(', ');
-  throw new Error(
-    `Không kết nối được BE. Đã thử: ${urls}. Kiểm tra: (1) BE chạy cổng ${GRAPHQL_PORT} (dotnet run), (2) 5 IP trong api.config.ts đúng với mạng của bạn, (3) Expo Go dùng IP máy tính (không dùng localhost).`
-  );
+  const errorMessage = `Không kết nối được BE. Đã thử: ${urls}. Kiểm tra: (1) BE chạy cổng ${GRAPHQL_PORT} (dotnet run), (2) 5 IP trong api.config.ts đúng với mạng của bạn, (3) Expo Go dùng IP máy tính (không dùng localhost).`;
+  ToastService.show({ type: 'error', title: 'Lỗi kết nối', message: errorMessage, duration: 5000 });
+  throw new Error(errorMessage);
 };
+
 
 /** Trả về base URL REST (dùng cùng host đã resolve cho GraphQL nếu có, không thì thử 5 IP) */
 export const resolveRestBaseUrl = async (): Promise<string> => {
@@ -88,11 +90,11 @@ export const API_CONFIG = {
     ANALYZE_SERVICE: '/ServiceAnalysis/analyze',
     GET_ANALYSIS_HISTORY: '/ServiceAnalysis/history',
     GET_ANALYSIS_DETAIL: '/ServiceAnalysis/:id',
-    
+
     // Service Requests
     CREATE_REQUEST: '/ServiceRequest/create',
     GET_REQUESTS: '/ServiceRequest/list',
-    
+
     // Service Categories
     GET_CATEGORIES: '/ServiceCategory/list',
   },
