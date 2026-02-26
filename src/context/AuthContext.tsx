@@ -13,6 +13,28 @@ export const useAuth = (): AuthContextType => {
   return context;
 };
 
+const normalizeRole = (role: number | string | undefined | null): User['role'] => {
+  if (typeof role === 'string') {
+    const normalized = role.toUpperCase();
+    if (normalized === 'ADMIN') return 'ADMIN';
+    if (normalized === 'STAFF') return 'STAFF';
+    if (normalized === 'AGENT') return 'AGENT';
+    return 'USER';
+  }
+
+  switch (role) {
+    case 3:
+      return 'ADMIN';
+    case 1:
+      return 'STAFF';
+    case 2:
+      return 'AGENT';
+    case 0:
+    default:
+      return 'USER';
+  }
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -45,7 +67,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const response = await authService.login(email, password);
 
       const { accessToken, userId, email: userEmail, fullName, role } = response;
-      const roleString = role === 0 ? 'USER' : role === 1 ? 'STAFF' : role === 2 ? 'ADMIN' : 'USER';
+      const roleString = normalizeRole(role);
 
       const userData: User = {
         id: userId,
@@ -76,7 +98,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const response = await authService.register(userData);
 
       const { accessToken, userId, email: userEmail, fullName, role } = response;
-      const roleString = role === 0 ? 'USER' : role === 1 ? 'STAFF' : role === 2 ? 'ADMIN' : 'USER';
+      const roleString = normalizeRole(role);
 
       const newUser: User = {
         id: userId,

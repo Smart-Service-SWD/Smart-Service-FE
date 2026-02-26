@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
+  ActivityIndicator,
   View,
   Text,
   StyleSheet,
@@ -12,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
+import { getDashboardSummary, getRecentActivityLogs } from '../../services/graphqlService';
 
 interface DashboardStats {
   totalUsers: number;
@@ -25,27 +27,68 @@ interface DashboardStats {
   monthlyRevenue: number;
 }
 
+interface ActivityLogItem {
+  id: string;
+  action: string;
+  createdAt: string;
+  serviceRequestId: string;
+}
+
 export const AdminDashboardScreen: React.FC = () => {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const navigation = useNavigation();
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<DashboardStats>({
-    totalUsers: 1250,
-    totalStaff: 45,
-    totalAgents: 12,
-    totalServices: 28,
-    totalRequests: 3420,
-    pendingRequests: 85,
-    completedRequests: 3335,
-    todayRevenue: 2500000,
-    monthlyRevenue: 75000000,
+    totalUsers: 0,
+    totalStaff: 0,
+    totalAgents: 0,
+    totalServices: 0,
+    totalRequests: 0,
+    pendingRequests: 0,
+    completedRequests: 0,
+    todayRevenue: 0,
+    monthlyRevenue: 0,
   });
+  const [activities, setActivities] = useState<ActivityLogItem[]>([]);
+
+  const loadDashboardData = useCallback(async (isRefresh = false) => {
+    if (!token) {
+      setLoading(false);
+      if (isRefresh) setRefreshing(false);
+      return;
+    }
+
+    if (!isRefresh) {
+      setLoading(true);
+    }
+
+    try {
+      const [summary, recentLogs] = await Promise.all([
+        getDashboardSummary(token),
+        getRecentActivityLogs(token, 5),
+      ]);
+      setStats(summary);
+      setActivities(recentLogs);
+    } catch (error) {
+      console.error('Dashboard load error:', error);
+      Alert.alert('Lỗi', (error as Error).message || 'Không thể tải dữ liệu dashboard');
+    } finally {
+      if (isRefresh) {
+        setRefreshing(false);
+      } else {
+        setLoading(false);
+      }
+    }
+  }, [token]);
+
+  useEffect(() => {
+    loadDashboardData();
+  }, [loadDashboardData]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setRefreshing(false);
+    loadDashboardData(true);
   };
 
   const formatCurrency = (amount: number) => {
@@ -93,6 +136,27 @@ export const AdminDashboardScreen: React.FC = () => {
     </TouchableOpacity>
   );
 
+  const formatRelativeTime = (timestamp: string) => {
+    const created = new Date(timestamp).getTime();
+    const diffMs = Date.now() - created;
+    const minutes = Math.floor(diffMs / (1000 * 60));
+    if (minutes < 1) return 'Vừa xong';
+    if (minutes < 60) return `${minutes} phút trước`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} giờ trước`;
+    const days = Math.floor(hours / 24);
+    return `${days} ngày trước`;
+  };
+
+  if (loading && !refreshing) {
+    return (
+      <SafeAreaView style={[styles.container, styles.loadingState]}>
+        <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={styles.loadingText}>Đang tải dữ liệu...</Text>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
@@ -131,20 +195,6 @@ export const AdminDashboardScreen: React.FC = () => {
               icon="briefcase-outline"
               color="#34C759"
               onPress={() => navigation.navigate('StaffManagement' as never)}
-            />
-            <StatCard
-              title="Đại lý"
-              value={stats.totalAgents}
-              icon="business-outline"
-              color="#FF9500"
-              onPress={() => navigation.navigate('AgentManagement' as never)}
-            />
-            <StatCard
-              title="Dịch vụ"
-              value={stats.totalServices}
-              icon="construct-outline"
-              color="#8E8E93"
-              onPress={() => navigation.navigate('ServiceManagement' as never)}
             />
           </View>
 
@@ -188,22 +238,10 @@ export const AdminDashboardScreen: React.FC = () => {
               onPress={() => navigation.navigate('StaffManagement' as never)}
             />
             <QuickAction
-              title="Quản lý đại lý"
-              icon="business"
-              color="#FF9500"
-              onPress={() => navigation.navigate('AgentManagement' as never)}
-            />
-            <QuickAction
               title="Quản lý dịch vụ"
               icon="construct"
               color="#8E8E93"
               onPress={() => navigation.navigate('ServiceManagement' as never)}
-            />
-            <QuickAction
-              title="Báo cáo"
-              icon="analytics"
-              color="#007AFF"
-              onPress={() => navigation.navigate('Reports' as never)}
             />
           </View>
         </View>
@@ -213,35 +251,21 @@ export const AdminDashboardScreen: React.FC = () => {
           <Text style={styles.sectionTitle}>Hoạt động gần đây</Text>
           
           <View style={styles.activityCard}>
-            <View style={styles.activityItem}>
-              <View style={styles.activityIcon}>
-                <Ionicons name="person-add" size={20} color="#007AFF" />
-              </View>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityTitle}>Người dùng mới đăng ký</Text>
-                <Text style={styles.activityTime}>2 phút trước</Text>
-              </View>
-            </View>
-            
-            <View style={styles.activityItem}>
-              <View style={styles.activityIcon}>
-                <Ionicons name="checkmark-circle" size={20} color="#34C759" />
-              </View>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityTitle}>Yêu cầu dịch vụ hoàn thành</Text>
-                <Text style={styles.activityTime}>5 phút trước</Text>
-              </View>
-            </View>
-            
-            <View style={styles.activityItem}>
-              <View style={styles.activityIcon}>
-                <Ionicons name="alert-circle" size={20} color="#FF9500" />
-              </View>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityTitle}>Cảnh báo hệ thống</Text>
-                <Text style={styles.activityTime}>10 phút trước</Text>
-              </View>
-            </View>
+            {activities.length === 0 ? (
+              <Text style={styles.emptyActivityText}>Chưa có hoạt động nào gần đây</Text>
+            ) : (
+              activities.map(activity => (
+                <View key={activity.id} style={styles.activityItem}>
+                  <View style={styles.activityIcon}>
+                    <Ionicons name="pulse" size={20} color="#007AFF" />
+                  </View>
+                  <View style={styles.activityContent}>
+                    <Text style={styles.activityTitle}>{activity.action}</Text>
+                    <Text style={styles.activityTime}>{formatRelativeTime(activity.createdAt)}</Text>
+                  </View>
+                </View>
+              ))
+            )}
           </View>
         </View>
       </ScrollView>
@@ -253,6 +277,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8F9FA',
+  },
+  loadingState: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#555',
   },
   header: {
     flexDirection: 'row',
@@ -384,6 +417,11 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
+  },
+  emptyActivityText: {
+    textAlign: 'center',
+    color: '#666',
+    fontSize: 14,
   },
   activityIcon: {
     width: 36,
