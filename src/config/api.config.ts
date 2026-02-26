@@ -7,7 +7,7 @@ const POSSIBLE_HOSTS = [
   '10.0.2.2',        // Android Emulator
   '192.168.1.26', // Máy Window T_Thịnh
   '192.168.1.100', // Máy Linux T_Thinh
-  '192.168.1.102',
+  '10.87.25.38', // Máy Window Linh_Tran
   '192.168.1.103',
 ];
 
