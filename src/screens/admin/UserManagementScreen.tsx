@@ -1,4 +1,16 @@
+// Hàm lấy màu trạng thái user
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case 'active': return '#34C759';
+    case 'inactive': return '#8E8E93';
+    case 'pending': return '#FF9500';
+    case 'suspended': return '#FF3B30';
+    default: return '#8E8E93';
+  }
+};
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useState, useEffect } from 'react';
+import { getUsers, getUsersByRole, normalizeRoleForBE } from '../../services/graphqlService';
 import {
   View,
   Text,
@@ -13,61 +25,41 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
-interface User {
-  id: string;
-  fullName: string;
-  email: string;
-  phoneNumber: string;
-  role: 'USER' | 'STAFF' | 'AGENT';
-  status: 'active' | 'inactive' | 'suspended';
-  createdAt: string;
-  lastLoginAt?: string;
-}
+import type { User as BEUser } from '../../services/graphqlService';
+type User = BEUser;
 
 export const UserManagementScreen: React.FC = () => {
-  const [users, setUsers] = useState<User[]>([
-    {
-      id: '1',
-      fullName: 'Nguyễn Văn A',
-      email: 'user1@example.com',
-      phoneNumber: '0901234567',
-      role: 'USER',
-      status: 'active',
-      createdAt: '2024-01-15',
-      lastLoginAt: '2024-01-27',
-    },
-    {
-      id: '2',
-      fullName: 'Trần Thị B',
-      email: 'staff1@example.com',
-      phoneNumber: '0912345678',
-      role: 'STAFF',
-      status: 'active',
-      createdAt: '2024-01-10',
-      lastLoginAt: '2024-01-26',
-    },
-    {
-      id: '3',
-      fullName: 'Lê Văn C',
-      email: 'agent1@example.com',
-      phoneNumber: '0923456789',
-      role: 'AGENT',
-      status: 'active',
-      createdAt: '2024-01-12',
-      lastLoginAt: '2024-01-25',
-    },
-  ]);
-  
+  const [selectedRole, setSelectedRole] = useState<string>('all');
+  const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>(users);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedRole, setSelectedRole] = useState<string>('all');
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
+  // Fetch users from API
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const token = await AsyncStorage.getItem('authToken');
+        let beData: BEUser[] = [];
+        if (selectedRole === 'all') {
+          beData = await getUsers(token);
+        } else {
+          beData = await getUsersByRole(normalizeRoleForBE(selectedRole), token);
+        }
+        setUsers(beData);
+      } catch (err) {
+        console.error('Lỗi fetchUsers:', err);
+        setUsers([]);
+      }
+    };
+    fetchUsers();
+  }, [selectedRole]);
+
   useEffect(() => {
     filterUsers();
-  }, [users, searchQuery, selectedRole]);
+  }, [users, searchQuery]);
 
   const filterUsers = () => {
     let filtered = users;
@@ -81,7 +73,7 @@ export const UserManagementScreen: React.FC = () => {
     }
 
     if (selectedRole !== 'all') {
-      filtered = filtered.filter(user => user.role === selectedRole);
+      filtered = filtered.filter(user => normalizeRoleForBE(user.role) === normalizeRoleForBE(selectedRole));
     }
 
     setFilteredUsers(filtered);
@@ -89,8 +81,18 @@ export const UserManagementScreen: React.FC = () => {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      let beData: BEUser[] = [];
+      if (selectedRole === 'all') {
+        beData = await getUsers(token);
+      } else {
+        beData = await getUsersByRole(normalizeRoleForBE(selectedRole), token);
+      }
+      setUsers(beData);
+    } catch {
+      setUsers([]);
+    }
     setRefreshing(false);
   };
 
@@ -99,15 +101,7 @@ export const UserManagementScreen: React.FC = () => {
       case 'USER': return '#007AFF';
       case 'STAFF': return '#34C759';
       case 'AGENT': return '#FF9500';
-      default: return '#8E8E93';
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return '#34C759';
-      case 'inactive': return '#8E8E93';
-      case 'suspended': return '#FF3B30';
+      case 'ADMIN': return '#5856D6';
       default: return '#8E8E93';
     }
   };
@@ -177,52 +171,12 @@ export const UserManagementScreen: React.FC = () => {
               {item.role}
             </Text>
           </View>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
-            <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-              {item.status}
-            </Text>
-          </View>
         </View>
       </View>
-      
       <View style={styles.userInfo}>
         <Text style={styles.userPhone}>{item.phoneNumber}</Text>
-        <Text style={styles.userDate}>
-          Tham gia: {new Date(item.createdAt).toLocaleDateString('vi-VN')}
-        </Text>
       </View>
-      
-      <View style={styles.userActions}>
-        <TouchableOpacity
-          style={[styles.actionButton, { backgroundColor: '#007AFF20' }]}
-          onPress={() => handleUserAction(item, 'edit')}
-        >
-          <Ionicons name="pencil" size={16} color="#007AFF" />
-          <Text style={[styles.actionText, { color: '#007AFF' }]}>Sửa</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.actionButton, { backgroundColor: item.status === 'suspended' ? '#34C75920' : '#FF950020' }]}
-          onPress={() => handleUserAction(item, 'suspend')}
-        >
-          <Ionicons 
-            name={item.status === 'suspended' ? "checkmark-circle" : "ban"} 
-            size={16} 
-            color={item.status === 'suspended' ? '#34C759' : '#FF9500'} 
-          />
-          <Text style={[styles.actionText, { color: item.status === 'suspended' ? '#34C759' : '#FF9500' }]}>
-            {item.status === 'suspended' ? 'Kích hoạt' : 'Khóa'}
-          </Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.actionButton, { backgroundColor: '#FF3B3020' }]}
-          onPress={() => handleUserAction(item, 'delete')}
-        >
-          <Ionicons name="trash" size={16} color="#FF3B30" />
-          <Text style={[styles.actionText, { color: '#FF3B30' }]}>Xóa</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Có thể bổ sung các action khác nếu cần */}
     </TouchableOpacity>
   );
 
@@ -305,20 +259,12 @@ export const UserManagementScreen: React.FC = () => {
                   <Text style={styles.detailValue}>{selectedUser.email}</Text>
                   
                   <Text style={styles.detailLabel}>Số điện thoại:</Text>
-                  <Text style={styles.detailValue}>{selectedUser.phoneNumber}</Text>
+                  <Text style={styles.detailValue}>{selectedUser.phoneNumber || 'Chưa cập nhật'}</Text>
                   
                   <Text style={styles.detailLabel}>Vai trò:</Text>
                   <Text style={styles.detailValue}>{selectedUser.role}</Text>
                   
-                  <Text style={styles.detailLabel}>Trạng thái:</Text>
-                  <Text style={[styles.detailValue, { color: getStatusColor(selectedUser.status) }]}>
-                    {selectedUser.status}
-                  </Text>
-                  
-                  <Text style={styles.detailLabel}>Ngày tham gia:</Text>
-                  <Text style={styles.detailValue}>
-                    {new Date(selectedUser.createdAt).toLocaleDateString('vi-VN')}
-                  </Text>
+
                   
                   {selectedUser.lastLoginAt && (
                     <>
