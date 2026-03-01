@@ -428,7 +428,7 @@ export const StaffManagementScreen: React.FC = () => {
 
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 20 }}>
               <TouchableOpacity
-                style={[styles.detailLabel, { flex: 1, textAlign: 'center', paddingVertical: 12, backgroundColor: '#F5F6FA', borderRadius: 10, borderWidth: 1, borderColor: '#E0E0E0' }]}
+                style={{ flex: 1, paddingVertical: 12, backgroundColor: '#F5F6FA', borderRadius: 10, borderWidth: 1, borderColor: '#E0E0E0', alignItems: 'center', marginTop: 12 }}
                 onPress={() => { setCreateModalVisible(false); setCreateForm({ fullName: '', email: '', phoneNumber: '' }); }}
               >
                 <Text style={{ color: '#555', fontWeight: '600', textAlign: 'center' }}>Hủy</Text>
