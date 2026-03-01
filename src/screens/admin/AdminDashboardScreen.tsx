@@ -185,28 +185,32 @@ export const AdminDashboardScreen: React.FC = () => {
 
           <View style={styles.statsGrid}>
             <StatCard
-              title="Yêu cầu chờ xử lý"
+              title="Chờ duyệt"
               value={stats.pendingRequests}
               icon="time-outline"
               color="#FF3B30"
+              onPress={() => (navigation as any).navigate('RequestManagement', { tab: 'pending' })}
             />
             <StatCard
               title="Đã hoàn thành"
               value={stats.completedRequests.toLocaleString()}
               icon="checkmark-circle-outline"
               color="#34C759"
+              onPress={() => (navigation as any).navigate('RequestManagement', { tab: 'completed' })}
             />
             <StatCard
               title="Doanh thu hôm nay"
               value={formatCurrency(normalizeAmount(stats.todayRevenue))}
               icon="trending-up-outline"
               color="#007AFF"
+              onPress={() => navigation.navigate('Reports' as never)}
             />
             <StatCard
               title="Doanh thu tháng"
               value={formatCurrency(normalizeAmount(stats.monthlyRevenue))}
               icon="bar-chart-outline"
               color="#32D74B"
+              onPress={() => navigation.navigate('Reports' as never)}
             />
           </View>
         </View>

@@ -57,6 +57,8 @@ export interface ServiceRequest {
   description?: string | null;
   status: string;
   createdAt: string;
+  addressText?: string | null;
+  assignedProviderId?: string | null;
   estimatedCost?: { amount: number; currency: string } | null;
 }
 
@@ -179,6 +181,27 @@ const SERVICE_REQUESTS_QUERY = `
       description
       status
       createdAt
+      addressText
+      assignedProviderId
+      estimatedCost {
+        amount
+        currency
+      }
+    }
+  }
+`;
+
+const SERVICE_REQUESTS_BY_STATUS_QUERY = `
+  query GetServiceRequestsByStatus($status: ServiceStatus!) {
+    getServiceRequestsByStatus(status: $status) {
+      id
+      customerId
+      categoryId
+      description
+      status
+      createdAt
+      addressText
+      assignedProviderId
       estimatedCost {
         amount
         currency
@@ -232,5 +255,12 @@ export const adminGraphqlService = {
       SERVICE_REQUESTS_QUERY
     );
     return data.getServiceRequests ?? [];
+  },
+  getServiceRequestsByStatus: async (status: string): Promise<ServiceRequest[]> => {
+    const data = await requestGraphql<{ getServiceRequestsByStatus: ServiceRequest[] }>(
+      SERVICE_REQUESTS_BY_STATUS_QUERY,
+      { status }
+    );
+    return data.getServiceRequestsByStatus ?? [];
   },
 };

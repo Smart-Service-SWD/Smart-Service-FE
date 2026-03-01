@@ -44,6 +44,7 @@ import { StaffManagementScreen } from '../screens/admin/StaffManagementScreen';
 import { AgentManagementScreen } from '../screens/admin/AgentManagementScreen';
 import { ReportsScreen } from '../screens/admin/ReportsScreen';
 import { SystemSettingsScreen } from '../screens/admin/SystemSettingsScreen';
+import { RequestManagementScreen } from '../screens/admin/RequestManagementScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -363,6 +364,11 @@ const AdminDashboardStackNavigator = () => {
         name="AgentManagement"
         component={AgentManagementScreen}
         options={{ headerShown: true, title: 'Quản lý thợ', headerStyle: { backgroundColor: '#007AFF' }, headerTintColor: '#fff' }}
+      />
+      <Stack.Screen
+        name="RequestManagement"
+        component={RequestManagementScreen}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );
