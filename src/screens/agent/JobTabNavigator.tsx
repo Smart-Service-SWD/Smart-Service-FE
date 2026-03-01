@@ -1,0 +1,42 @@
+// JobTabNavigator.tsx - NO SWIPE (chỉ tap tab)
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import React from 'react';
+import { JobDetailsScreen } from './JobDetailsScreen';
+import { JobOverviewScreen } from './JobOverviewScreen';
+
+const Tab = createBottomTabNavigator();
+
+interface JobTabNavigatorProps {
+    route: any;
+    navigation: any;
+}
+
+export const JobTabNavigator: React.FC<JobTabNavigatorProps> = ({ route, navigation }) => {
+    const job = route?.params?.job || {};
+
+    return (
+        <Tab.Navigator
+            id="JobTabNavigator"
+            initialRouteName="Overview"
+            screenOptions={{
+                tabBarStyle: { display: 'none' }, // Ẩn tab bar
+                headerShown: false,
+                lazy: true,
+            }}
+        >
+            <Tab.Screen
+                name="Overview"
+                component={JobOverviewScreen}
+                initialParams={{ job }}
+            />
+
+            <Tab.Screen
+                name="Details"
+                component={JobDetailsScreen}
+                initialParams={{ job }}
+            />
+        </Tab.Navigator>
+    );
+};
+
+export default JobTabNavigator;

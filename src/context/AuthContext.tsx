@@ -1,7 +1,58 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { authService } from '../services/authService';
-import type { AuthContextType, User, RegisterData } from '../types';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import type { AuthContextType, RegisterData, User } from '../types';
+
+// 1. Dữ liệu Mock khởi tạo (Default Mock Data)
+const DEFAULT_MOCK_ACCOUNTS = [
+  {
+    email: 'user@test.com',
+    password: '123456',
+    user: {
+      id: '1',
+      email: 'user@test.com',
+      fullName: 'Nguyễn Văn A',
+      phoneNumber: '0901234567',
+      role: 'USER' as const,
+    },
+    token: 'mock-user-token-123',
+  },
+  {
+    email: 'staff@test.com',
+    password: '123456',
+    user: {
+      id: '2',
+      email: 'staff@test.com',
+      fullName: 'Trần Thị B',
+      phoneNumber: '0912345678',
+      role: 'STAFF' as const,
+    },
+    token: 'mock-staff-token-456',
+  },
+  {
+    email: 'admin@test.com',
+    password: '123456',
+    user: {
+      id: '3',
+      email: 'admin@test.com',
+      fullName: 'Lê Văn C',
+      phoneNumber: '0923456789',
+      role: 'ADMIN' as const,
+    },
+    token: 'mock-admin-token-789',
+  },
+  {
+    email: 'agent@test.com', // Sửa lại chữ thường cho đồng bộ
+    password: '123456',
+    user: {
+      id: '4',
+      email: 'agent@test.com',
+      fullName: 'Nguyễn Văn D',
+      phoneNumber: '0934567892',
+      role: 'AGENT' as const,
+    },
+    token: 'mock-agent-token-101112',
+  }
+];
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -18,9 +69,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
+  // Khởi tạo Mock DB khi app chạy lần đầu
   useEffect(() => {
+    initMockDatabase();
     loadStoredAuth();
   }, []);
+
+  const initMockDatabase = async () => {
+    try {
+      const existingDb = await AsyncStorage.getItem('mock_users_db');
+      if (!existingDb) {
+        // Nếu chưa có DB giả, lưu danh sách mặc định vào
+        await AsyncStorage.setItem('mock_users_db', JSON.stringify(DEFAULT_MOCK_ACCOUNTS));
+      }
+    } catch (e) {
+      console.error('Failed to init mock db', e);
+    }
+  };
 
   const loadStoredAuth = async (): Promise<void> => {
     try {
@@ -42,49 +107,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setLoading(true);
       
-      // Mock accounts for testing
-      const mockAccounts = [
-        {
-          email: 'user@test.com',
-          password: '123456',
-          user: {
-            id: '1',
-            email: 'user@test.com',
-            fullName: 'Nguyễn Văn A',
-            phoneNumber: '0901234567',
-            role: 'USER' as const,
-          },
-          token: 'mock-user-token-123',
-        },
-        {
-          email: 'staff@test.com',
-          password: '123456',
-          user: {
-            id: '2',
-            email: 'staff@test.com',
-            fullName: 'Trần Thị B',
-            phoneNumber: '0912345678',
-            role: 'STAFF' as const,
-          },
-          token: 'mock-staff-token-456',
-        },
-        {
-          email: 'admin@test.com',
-          password: '123456',
-          user: {
-            id: '3',
-            email: 'admin@test.com',
-            fullName: 'Lê Văn C',
-            phoneNumber: '0923456789',
-            role: 'ADMIN' as const,
-          },
-          token: 'mock-admin-token-789',
-        },
-      ];
+      // 2. ĐỌC TỪ MOCK DB TRƯỚC (Thay vì danh sách cứng)
+      const storedDb = await AsyncStorage.getItem('mock_users_db');
+      // Nếu không có DB (lỗi gì đó), dùng danh sách mặc định
+      const allAccounts = storedDb ? JSON.parse(storedDb) : DEFAULT_MOCK_ACCOUNTS;
 
-      // Check mock accounts first
-      const mockAccount = mockAccounts.find(
-        acc => acc.email === email && acc.password === password
+      // Tìm kiếm user trong danh sách tổng hợp
+      const mockAccount = allAccounts.find(
+        (acc: any) => acc.email.toLowerCase() === email.toLowerCase() && acc.password === password
       );
 
       if (mockAccount) {
@@ -96,17 +126,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: true };
       }
 
-      // If not mock account, try real API
-      const response = await authService.login(email, password);
+      // Nếu không tìm thấy trong Mock DB, thử gọi API thật (nếu có backend)
+      // Chú ý: Nếu bạn chỉ đang test frontend thì phần này thường sẽ trả về lỗi luôn
+      // const response = await authService.login(email, password);
+      // ...
       
-      const { token: authToken, user: userData } = response;
-      
-      await AsyncStorage.setItem('authToken', authToken);
-      await AsyncStorage.setItem('user', JSON.stringify(userData));
-      
-      setToken(authToken);
-      setUser(userData);
-      return { success: true };
+      return { success: false, error: 'Email hoặc mật khẩu không đúng' };
+
     } catch (error) {
       const err = error as Error;
       console.error('Login error:', err);
@@ -119,16 +145,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const register = async (userData: RegisterData): Promise<{ success: boolean; error?: string }> => {
     try {
       setLoading(true);
-      const response = await authService.register(userData);
+
+      // 3. LOGIC ĐĂNG KÝ GIẢ (MOCK REGISTER)
       
-      const { token: authToken, user: newUser } = response;
+      // Lấy danh sách hiện tại
+      const storedDb = await AsyncStorage.getItem('mock_users_db');
+      const currentAccounts = storedDb ? JSON.parse(storedDb) : DEFAULT_MOCK_ACCOUNTS;
+
+      // Kiểm tra trùng email
+      const isExist = currentAccounts.some((acc: any) => acc.email.toLowerCase() === userData.email.toLowerCase());
+      if (isExist) {
+        return { success: false, error: 'Email đã tồn tại!' };
+      }
+
+      // Tạo user mới
+      const newUserId = Date.now().toString();
+      const newUserToken = `mock-token-${newUserId}`;
       
-      await AsyncStorage.setItem('authToken', authToken);
-      await AsyncStorage.setItem('user', JSON.stringify(newUser));
+      const newUserEntry = {
+        email: userData.email,
+        password: userData.password,
+        user: {
+          id: newUserId,
+          email: userData.email,
+          fullName: userData.fullName,
+          phoneNumber: userData.phoneNumber,
+          role: 'USER' as const, // Mặc định là USER
+        },
+        token: newUserToken,
+      };
+
+      // Thêm vào danh sách và lưu lại
+      const newAccountsList = [...currentAccounts, newUserEntry];
+      await AsyncStorage.setItem('mock_users_db', JSON.stringify(newAccountsList));
+
+      // Tự động login luôn
+      await AsyncStorage.setItem('authToken', newUserToken);
+      await AsyncStorage.setItem('user', JSON.stringify(newUserEntry.user));
       
-      setToken(authToken);
-      setUser(newUser);
+      setToken(newUserToken);
+      setUser(newUserEntry.user);
+      
       return { success: true };
+
     } catch (error) {
       const err = error as Error;
       console.error('Registration error:', err);
@@ -152,8 +211,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateProfile = async (updatedData: Partial<User>): Promise<void> => {
     try {
       const updatedUser = { ...user, ...updatedData } as User;
-      await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+      
+      // Cập nhật state
       setUser(updatedUser);
+      // Cập nhật session hiện tại
+      await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+
+      // Cập nhật trong Mock DB (để lần sau login vẫn thấy thông tin mới)
+      if (user?.email) {
+         const storedDb = await AsyncStorage.getItem('mock_users_db');
+         if (storedDb) {
+            const accounts = JSON.parse(storedDb);
+            const updatedAccounts = accounts.map((acc: any) => {
+                if (acc.email === user.email) {
+                    return { ...acc, user: { ...acc.user, ...updatedData } };
+                }
+                return acc;
+            });
+            await AsyncStorage.setItem('mock_users_db', JSON.stringify(updatedAccounts));
+         }
+      }
+
     } catch (error) {
       const err = error as Error;
       console.error('Update profile error:', err);
@@ -166,7 +244,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return user.role === role;
   };
 
-  // Role constants
   const ROLES = {
     USER: 'USER' as const,
     CUSTOMER: 'USER' as const,

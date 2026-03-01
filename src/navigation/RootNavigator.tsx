@@ -5,17 +5,19 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 
+
 // Auth Screens
 import { ForgotPasswordScreen } from '../screens/auth/ForgotPasswordScreen';
 import { LoginScreen } from '../screens/auth/LoginScreen';
 import { RegisterScreen } from '../screens/auth/RegisterScreen';
 
+
 // Common Screens
 import { GraphQLDemoScreen } from '../screens/common/GraphQLDemoScreen';
 import { HomeScreen } from '../screens/common/HomeScreen';
-import { ProfileScreen } from '../screens/common/ProfileScreen';
 import { ServiceDetailScreen } from '../screens/common/ServiceDetailScreen';
 import { ServiceListScreen } from '../screens/common/ServiceListScreen';
+
 
 // Customer Screens
 import { AnalysisDetailScreen } from '../screens/AnalysisDetailScreen';
@@ -24,29 +26,38 @@ import { CameraScreen } from '../screens/CameraScreen';
 import { CreateRequestScreen } from '../screens/CreateRequestScreen';
 import { HistoryScreen } from '../screens/HistoryScreen';
 
+
 // Staff Screens
-import { StaffDashboardScreen } from '../screens/staff/StaffDashboardScreen';
-import { StaffProfileScreen } from '../screens/staff/StaffProfileScreen';
 import { PendingEvaluationsScreen } from '../screens/staff/PendingEvaluationsScreen';
 import { ReEvaluationsScreen } from '../screens/staff/ReEvaluationsScreen';
+import { StaffDashboardScreen } from '../screens/staff/StaffDashboardScreen';
+import { StaffProfileScreen } from '../screens/staff/StaffProfileScreen';
+
 
 // Agent Screens
 import { AgentDashboardScreen } from '../screens/agent/AgentDashboardScreen';
 import { AgentProfileScreen } from '../screens/agent/AgentProfileScreen';
+import { AvailableJobsScreen } from '../screens/agent/AvailableJobsScreen';
+import { JobTabNavigator } from '../screens/agent/JobTabNavigator';
+
 
 // Admin Screens
 import { AdminDashboardScreen } from '../screens/admin/AdminDashboardScreen';
 import { AdminProfileScreen } from '../screens/admin/AdminProfileScreen';
-import { UserManagementScreen } from '../screens/admin/UserManagementScreen';
-import { ServiceManagementScreen } from '../screens/admin/ServiceManagementScreen';
-import { StaffManagementScreen } from '../screens/admin/StaffManagementScreen';
-import { AgentManagementScreen } from '../screens/admin/AgentManagementScreen';
 import { ReportsScreen } from '../screens/admin/ReportsScreen';
-import { SystemSettingsScreen } from '../screens/admin/SystemSettingsScreen';
+import { ServiceManagementScreen } from '../screens/admin/ServiceManagementScreen';
+import { UserManagementScreen } from '../screens/admin/UserManagementScreen';
+
+
+// User Screens
+import { UserProfileScreen } from '../screens/user/UserProfileScreen';
+
+
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 const AuthStack = createNativeStackNavigator();
+
 
 // Home Stack Navigator (for service browsing)
 const HomeStackNavigator = () => {
@@ -88,6 +99,7 @@ const HomeStackNavigator = () => {
     );
   }
 
+
   // If user is AGENT, show Agent Dashboard
   if (user && user.role === 'AGENT') {
     return (
@@ -105,6 +117,7 @@ const HomeStackNavigator = () => {
       </Stack.Navigator>
     );
   }
+
 
   // Default: Customer/Guest view
   return (
@@ -150,6 +163,7 @@ const HomeStackNavigator = () => {
   );
 };
 
+
 // Auth Navigator
 const AuthNavigator = () => {
   return (
@@ -165,6 +179,7 @@ const AuthNavigator = () => {
     </AuthStack.Navigator>
   );
 };
+
 
 // Customer (Camera) Stack Navigator
 const CameraStackNavigator = () => {
@@ -201,6 +216,7 @@ const CameraStackNavigator = () => {
   );
 };
 
+
 const HistoryStackNavigator = () => {
   return (
     <Stack.Navigator
@@ -235,29 +251,42 @@ const HistoryStackNavigator = () => {
   );
 };
 
+
 // Profile Stack Navigator (includes Login/Register)
 const ProfileStackNavigator = () => {
   const { user, token } = useAuth();
   const isAuthenticated = !!user && !!token;
   
+  // Xác định component Profile dựa trên role
+  const getProfileComponent = () => {
+    if (!user) return null;
+    
+    switch (user.role) {
+      case 'ADMIN':
+        return AdminProfileScreen;
+      case 'STAFF':
+        return StaffProfileScreen;
+      case 'AGENT':
+        return AgentProfileScreen;
+      case 'USER':
+      default:
+        return UserProfileScreen;  // ← Component mới
+    }
+  };
+  
+  const ProfileComponent = getProfileComponent();
+  
   return (
     <Stack.Navigator
       id="ProfileStack"
       screenOptions={{
-        headerShown: true,
-        headerStyle: {
-          backgroundColor: '#007AFF',
-        },
-        headerTintColor: '#fff',
-        headerTitleStyle: {
-          fontWeight: '600',
-        },
+        headerShown: false,  // Ẩn header vì UserProfileScreen đã có header riêng
       }}
     >
-      {isAuthenticated ? (
+      {isAuthenticated && ProfileComponent ? (
         <Stack.Screen
           name="ProfileMain"
-          component={ProfileScreen}
+          component={ProfileComponent}
           options={{ title: 'Profile' }}
         />
       ) : (
@@ -283,6 +312,72 @@ const ProfileStackNavigator = () => {
   );
 };
 
+
+// --- [THÊM MỚI] Stack riêng cho Agent Home để điều hướng con ---
+const AgentHomeStack = () => {
+  return (
+    <Stack.Navigator
+      id="AgentHomeStack" // <--- THÊM DÒNG NÀY
+      screenOptions={{ headerShown: false }}
+    >
+      <Stack.Screen name="AgentDashboardMain" component={AgentDashboardScreen} />
+      <Stack.Screen name="AvailableJobs" component={AvailableJobsScreen} />
+      <Stack.Screen name="JobTabs" component={JobTabNavigator} />
+    </Stack.Navigator>
+  );
+};
+
+
+
+// Agent Tab Navigator
+const AgentTabNavigator = () => {
+  return (
+    <Tab.Navigator
+      id="AgentTabs"
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarIcon: ({ focused, color, size }) => {
+          let iconName: any;
+
+
+          if (route.name === 'AgentHome') {
+            iconName = focused ? 'home' : 'home-outline';
+          } else if (route.name === 'AgentProfile') {
+            iconName = focused ? 'person' : 'person-outline';
+          }
+
+
+          return <Ionicons name={iconName} size={size} color={color} />;
+        },
+        tabBarActiveTintColor: '#34C759',
+        tabBarInactiveTintColor: '#666',
+        tabBarStyle: {
+          backgroundColor: '#fff',
+          borderTopColor: '#e0e0e0',
+          paddingBottom: 5,
+          paddingTop: 5,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '500',
+        },
+      })}
+    >
+      <Tab.Screen
+        name="AgentHome"
+        component={AgentHomeStack} // <-- [SỬA] Dùng Stack thay vì DashboardScreen trực tiếp
+        options={{ title: 'Dashboard' }}
+      />
+      <Tab.Screen
+        name="AgentProfile"
+        component={AgentProfileScreen}
+        options={{ title: 'Profile' }}
+      />
+    </Tab.Navigator>
+  );
+};
+
+
 // Staff Tab Navigator
 const StaffTabNavigator = () => {
   return (
@@ -293,6 +388,7 @@ const StaffTabNavigator = () => {
         tabBarIcon: ({ focused, color, size }) => {
           let iconName: any;
 
+
           if (route.name === 'StaffDashboard') {
             iconName = focused ? 'stats-chart' : 'stats-chart-outline';
           } else if (route.name === 'PendingEvaluations') {
@@ -302,6 +398,7 @@ const StaffTabNavigator = () => {
           } else if (route.name === 'StaffProfile') {
             iconName = focused ? 'person' : 'person-outline';
           }
+
 
           return <Ionicons name={iconName} size={size} color={color} />;
         },
@@ -343,6 +440,7 @@ const StaffTabNavigator = () => {
   );
 };
 
+
 // Admin Tab Navigator
 const AdminTabNavigator = () => {
   return (
@@ -352,6 +450,7 @@ const AdminTabNavigator = () => {
         headerShown: false,
         tabBarIcon: ({ focused, color, size }) => {
           let iconName: any;
+
 
           if (route.name === 'AdminDashboard') {
             iconName = focused ? 'analytics' : 'analytics-outline';
@@ -364,6 +463,7 @@ const AdminTabNavigator = () => {
           } else if (route.name === 'AdminProfile') {
             iconName = focused ? 'person' : 'person-outline';
           }
+
 
           return <Ionicons name={iconName} size={size} color={color} />;
         },
@@ -410,70 +510,29 @@ const AdminTabNavigator = () => {
   );
 };
 
-// Agent Tab Navigator
-const AgentTabNavigator = () => {
-  return (
-    <Tab.Navigator
-      id="AgentTabs"
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName: any;
-
-          if (route.name === 'AgentHome') {
-            iconName = focused ? 'home' : 'home-outline';
-          } else if (route.name === 'AgentProfile') {
-            iconName = focused ? 'person' : 'person-outline';
-          }
-
-          return <Ionicons name={iconName} size={size} color={color} />;
-        },
-        tabBarActiveTintColor: '#34C759',
-        tabBarInactiveTintColor: '#666',
-        tabBarStyle: {
-          backgroundColor: '#fff',
-          borderTopColor: '#e0e0e0',
-          paddingBottom: 5,
-          paddingTop: 5,
-        },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '500',
-        },
-      })}
-    >
-      <Tab.Screen
-        name="AgentHome"
-        component={AgentDashboardScreen}
-        options={{ title: 'Dashboard' }}
-      />
-      <Tab.Screen
-        name="AgentProfile"
-        component={AgentProfileScreen}
-        options={{ title: 'Profile' }}
-      />
-    </Tab.Navigator>
-  );
-};
 
 // App Navigator (Always available - no login required to browse)
 const AppNavigator = () => {
   const { user } = useAuth();
+
 
   // If user is ADMIN, show Admin-specific tabs
   if (user && user.role === 'ADMIN') {
     return <AdminTabNavigator />;
   }
 
+
   // If user is STAFF, show Staff-specific tabs
   if (user && user.role === 'STAFF') {
     return <StaffTabNavigator />;
   }
 
+
   // If user is AGENT, show Agent-specific tabs
   if (user && user.role === 'AGENT') {
     return <AgentTabNavigator />;
   }
+
 
   // Default tabs for USER and guests
   return (
@@ -484,6 +543,7 @@ const AppNavigator = () => {
         tabBarIcon: ({ focused, color, size }) => {
           let iconName: any;
 
+
           if (route.name === 'Home') {
             iconName = focused ? 'home' : 'home-outline';
           } else if (route.name === 'Camera') {
@@ -493,6 +553,7 @@ const AppNavigator = () => {
           } else if (route.name === 'Profile') {
             iconName = focused ? 'person' : 'person-outline';
           }
+
 
           return <Ionicons name={iconName} size={size} color={color} />;
         },
@@ -534,12 +595,15 @@ const AppNavigator = () => {
   );
 };
 
+
 export const RootNavigator = () => {
   const { loading } = useAuth();
+
 
   if (loading) {
     return null; // Or a loading screen
   }
+
 
   return (
     <NavigationContainer>

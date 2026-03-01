@@ -1,18 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect, useState } from 'react';
 import {
-  StyleSheet,
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
   ActivityIndicator,
   RefreshControl,
-  Switch
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 
-export const AgentDashboardScreen: React.FC<{ navigation  }> = ({ navigation  }) => {
+export const AgentDashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const { user } = useAuth();
   const [loading, setLoading] = useState<boolean>(false);
   const [refreshing, setRefreshing] = useState<boolean>(false);
@@ -31,11 +31,7 @@ export const AgentDashboardScreen: React.FC<{ navigation  }> = ({ navigation  })
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      // TODO: Call API to get agent dashboard stats
-      // const data = await agentService.getDashboardStats();
-      // setStats(data);
-      
-      // Mock data for now
+      // Mock data
       setTimeout(() => {
         setStats({
           pendingAssignments: 3,
@@ -60,11 +56,9 @@ export const AgentDashboardScreen: React.FC<{ navigation  }> = ({ navigation  })
 
   const toggleAvailability = async () => {
     setIsAvailable(!isAvailable);
-    // TODO: Call API to update availability status
-    // await agentService.updateAvailability(!isAvailable);
   };
 
-  const StatCard = ({ icon, title, value, color, suffix = '', onPress }) => (
+  const StatCard = ({ icon, title, value, color, suffix = '', onPress }: any) => (
     <TouchableOpacity 
       style={[styles.statCard, { borderLeftColor: color }]}
       onPress={onPress}
@@ -94,7 +88,7 @@ export const AgentDashboardScreen: React.FC<{ navigation  }> = ({ navigation  })
     >
       <View style={styles.header}>
         <View>
-          <Text style={styles.greeting}>Hello, {user?.fullName}!</Text>
+          <Text style={styles.greeting}>Hello, {user?.fullName || 'Agent'}!</Text>
           <Text style={styles.role}>Service Provider</Text>
         </View>
         <View style={styles.availabilityContainer}>
@@ -113,10 +107,10 @@ export const AgentDashboardScreen: React.FC<{ navigation  }> = ({ navigation  })
       <View style={styles.statsGrid}>
         <StatCard
           icon="notifications-outline"
-          title="New Assignments"
+          title="List đơn hàng treo" // <-- Updated Title
           value={stats.pendingAssignments}
           color="#FF9500"
-          onPress={() => navigation.navigate('MyAssignments', { filter: 'pending' })}
+          onPress={() => navigation.navigate('AvailableJobs')} // <-- Link to AvailableJobs
         />
         
         <StatCard
@@ -152,6 +146,15 @@ export const AgentDashboardScreen: React.FC<{ navigation  }> = ({ navigation  })
         
         <TouchableOpacity 
           style={styles.actionButton}
+          onPress={() => navigation.navigate('AvailableJobs')} // <-- Link to AvailableJobs
+        >
+          <Ionicons name="briefcase-outline" size={24} color="#34C759" />
+          <Text style={styles.actionButtonText}>Tìm việc mới (Available Jobs)</Text>
+          <Ionicons name="chevron-forward" size={20} color="#ccc" />
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.actionButton}
           onPress={() => navigation.navigate('MyAssignments')}
         >
           <Ionicons name="list-outline" size={24} color="#34C759" />
@@ -177,14 +180,6 @@ export const AgentDashboardScreen: React.FC<{ navigation  }> = ({ navigation  })
           <Ionicons name="chevron-forward" size={20} color="#ccc" />
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => navigation.navigate('MyCapabilities')}
-        >
-          <Ionicons name="build-outline" size={24} color="#34C759" />
-          <Text style={styles.actionButtonText}>My Capabilities</Text>
-          <Ionicons name="chevron-forward" size={20} color="#ccc" />
-        </TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -203,6 +198,7 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: '#fff',
     padding: 20,
+    paddingTop: 50,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -263,6 +259,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     marginTop: 8,
     paddingVertical: 16,
+    marginBottom: 20,
   },
   sectionTitle: {
     fontSize: 18,

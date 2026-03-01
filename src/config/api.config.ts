@@ -5,7 +5,7 @@ import axios from 'axios';
 const POSSIBLE_HOSTS = [
   '10.0.2.2',        // Android Emulator
   '192.168.1.26', // Máy Window T_Thịnh
-  '192.168.1.101',
+  '172.20.10.4', // Máy Window A_Duy
   '192.168.1.102',
   '192.168.1.103',
 ];
