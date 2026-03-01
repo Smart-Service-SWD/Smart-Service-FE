@@ -29,6 +29,7 @@ import { StaffDashboardScreen } from '../screens/staff/StaffDashboardScreen';
 import { StaffProfileScreen } from '../screens/staff/StaffProfileScreen';
 import { PendingEvaluationsScreen } from '../screens/staff/PendingEvaluationsScreen';
 import { ReEvaluationsScreen } from '../screens/staff/ReEvaluationsScreen';
+import { StaffListScreen } from '../screens/admin/StaffListScreen';
 
 // Agent Screens
 import { AgentDashboardScreen } from '../screens/agent/AgentDashboardScreen';
@@ -48,6 +49,15 @@ const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 const AuthStack = createNativeStackNavigator();
 
+const AdminStack = createNativeStackNavigator();
+
+const AdminStackNavigator = () => (
+  <AdminStack.Navigator screenOptions={{ headerShown: false }}>
+    <AdminStack.Screen name="AdminTabs" component={AdminTabNavigator} />
+    <AdminStack.Screen name="StaffList" component={StaffListScreen} options={{ title: 'Nhân viên & Agent' }} />
+  </AdminStack.Navigator>
+);
+
 // Home Stack Navigator (for service browsing)
 const HomeStackNavigator = () => {
   const { user } = useAuth();
@@ -65,6 +75,11 @@ const HomeStackNavigator = () => {
           name="AdminDashboard"
           component={AdminDashboardScreen}
           options={{ title: 'Admin Dashboard' }}
+        />
+        <Stack.Screen
+          name="StaffList"
+          component={StaffListScreen}
+          options={{ title: 'Nhân viên & Agent' }}
         />
       </Stack.Navigator>
     );
@@ -462,7 +477,7 @@ const AppNavigator = () => {
 
   // If user is ADMIN, show Admin-specific tabs
   if (user && user.role === 'ADMIN') {
-    return <AdminTabNavigator />;
+    return <AdminStackNavigator />;
   }
 
   // If user is STAFF, show Staff-specific tabs

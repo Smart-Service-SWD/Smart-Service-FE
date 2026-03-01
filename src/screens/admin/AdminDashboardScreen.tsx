@@ -194,7 +194,7 @@ export const AdminDashboardScreen: React.FC = () => {
               value={stats.totalStaff}
               icon="briefcase-outline"
               color="#34C759"
-              onPress={() => navigation.navigate('StaffManagement' as never)}
+              onPress={() => navigation.navigate('StaffList' as never)}
             />
           </View>
 
@@ -235,7 +235,7 @@ export const AdminDashboardScreen: React.FC = () => {
               title="Quản lý nhân viên"
               icon="people"
               color="#34C759"
-              onPress={() => navigation.navigate('StaffManagement' as never)}
+              onPress={() => navigation.navigate('StaffList' as never)}
             />
             <QuickAction
               title="Quản lý dịch vụ"
