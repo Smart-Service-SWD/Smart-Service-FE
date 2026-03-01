@@ -63,7 +63,7 @@ export const AgentProfileScreen: React.FC<{ navigation }> = ({ navigation }) => 
           <Ionicons name="shield-checkmark-outline" size={20} color="#666" />
           <View style={styles.infoContent}>
             <Text style={styles.infoLabel}>Vai trò</Text>
-            <Text style={styles.infoValue}>Đại lý cung cấp dịch vụ</Text>
+            <Text style={styles.infoValue}>Thợ cung cấp dịch vụ</Text>
           </View>
         </View>
 
