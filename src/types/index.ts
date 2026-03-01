@@ -20,6 +20,7 @@ export interface AuthContextType {
   logout: () => Promise<void>;
   updateProfile: (updatedData: Partial<User>) => Promise<void>;
   hasRole: (role: string) => boolean;
+  fetchAndUpdatePhoneNumber: () => Promise<void>;
   ROLES: {
     USER: 'USER';
     STAFF: 'STAFF';

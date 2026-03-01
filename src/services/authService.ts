@@ -1,4 +1,5 @@
 import apiClient from './apiClient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const authService = {
   // Login
@@ -18,13 +19,19 @@ export const authService = {
 
   // Get current user profile
   getProfile: async () => {
-    const response = await apiClient.get('/auth/profile');
+    const token = await AsyncStorage.getItem('authToken');
+    const response = await apiClient.get('/auth/profile', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
     return response.data;
   },
 
   // Update profile
   updateProfile: async (userData) => {
-    const response = await apiClient.put('/auth/profile', userData);
+    const token = await AsyncStorage.getItem('authToken');
+    const response = await apiClient.put('/auth/profile', userData, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
     return response.data;
   },
 

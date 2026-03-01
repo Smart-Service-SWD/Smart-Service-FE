@@ -14,6 +14,7 @@ import { RegisterScreen } from '../screens/auth/RegisterScreen';
 import { GraphQLDemoScreen } from '../screens/common/GraphQLDemoScreen';
 import { HomeScreen } from '../screens/common/HomeScreen';
 import { ProfileScreen } from '../screens/common/ProfileScreen';
+import { EditProfileScreen } from '../screens/common/EditProfileScreen';
 import { ServiceDetailScreen } from '../screens/common/ServiceDetailScreen';
 import { ServiceListScreen } from '../screens/common/ServiceListScreen';
 
@@ -51,7 +52,7 @@ const AuthStack = createNativeStackNavigator();
 // Home Stack Navigator (for service browsing)
 const HomeStackNavigator = () => {
   const { user } = useAuth();
-  
+
   // If user is ADMIN, show Admin Dashboard
   if (user && user.role === 'ADMIN') {
     return (
@@ -69,7 +70,7 @@ const HomeStackNavigator = () => {
       </Stack.Navigator>
     );
   }
-  
+
   // If user is STAFF, show Staff Dashboard
   if (user && user.role === 'STAFF') {
     return (
@@ -137,7 +138,7 @@ const HomeStackNavigator = () => {
       <Stack.Screen
         name="CreateRequest"
         component={CreateRequestScreen}
-        options={{ 
+        options={{
           headerShown: true,
           title: 'Book Service',
           headerStyle: {
@@ -239,7 +240,7 @@ const HistoryStackNavigator = () => {
 const ProfileStackNavigator = () => {
   const { user, token } = useAuth();
   const isAuthenticated = !!user && !!token;
-  
+
   return (
     <Stack.Navigator
       id="ProfileStack"
@@ -258,7 +259,13 @@ const ProfileStackNavigator = () => {
         <Stack.Screen
           name="ProfileMain"
           component={ProfileScreen}
-          options={{ title: 'Profile' }}
+          options={{
+            title: 'Hồ sơ cá nhân',
+            headerStyle: { backgroundColor: '#fff' },
+            headerTintColor: '#0f172a',
+            headerTitleStyle: { fontWeight: '700', fontSize: 17 },
+            headerShadowVisible: false,
+          }}
         />
       ) : (
         <>
@@ -534,6 +541,8 @@ const AppNavigator = () => {
   );
 };
 
+const GlobalStack = createNativeStackNavigator();
+
 export const RootNavigator = () => {
   const { loading } = useAuth();
 
@@ -543,7 +552,21 @@ export const RootNavigator = () => {
 
   return (
     <NavigationContainer>
-      <AppNavigator />
+      <GlobalStack.Navigator screenOptions={{ headerShown: false }}>
+        <GlobalStack.Screen name="Main" component={AppNavigator} />
+        <GlobalStack.Screen
+          name="EditProfile"
+          component={EditProfileScreen}
+          options={{
+            headerShown: true,
+            title: 'Chỉnh sửa hồ sơ',
+            headerStyle: { backgroundColor: '#fff' },
+            headerTintColor: '#0f172a',
+            headerTitleStyle: { fontWeight: '700', fontSize: 17 },
+            headerShadowVisible: false,
+          }}
+        />
+      </GlobalStack.Navigator>
     </NavigationContainer>
   );
 };
