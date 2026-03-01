@@ -56,6 +56,14 @@ export const adminRestService = {
     return response.data;
   },
 
+  // ── Service Categories ────────────────────────────────────────────────────
+
+  /** Tạo mới danh mục dịch vụ - POST /api/service-categories */
+  createServiceCategory: async (name: string, description: string): Promise<string> => {
+    const response = await apiClient.post('/service-categories', { name, description });
+    return response.data;
+  },
+
   // ── Services ──────────────────────────────────────────────────────────────
 
   /** Tạo mới dịch vụ - POST /api/services */

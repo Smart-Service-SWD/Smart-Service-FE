@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { adminGraphqlService, ServiceListItem, ServiceCategory, GraphqlUser } from '../../services/adminGraphqlService';
+import { adminGraphqlService, ServiceListItem, ServiceCategory } from '../../services/adminGraphqlService';
 import { adminRestService } from '../../services/adminRestService';
 
 interface Service {
@@ -36,8 +36,7 @@ interface Service {
 interface ServiceForm {
   name: string;
   description: string;
-  categoryId: string;   // auto-filled, hidden from user
-  agentId: string;      // shown as 'Thợ phụ trách'
+  categoryId: string;   // auto-filled from first category (required by BE)
   basePrice: string;
   estimatedDuration: string;
   isActive: boolean;
@@ -47,7 +46,6 @@ const EMPTY_FORM: ServiceForm = {
   name: '',
   description: '',
   categoryId: '',
-  agentId: '',
   basePrice: '',
   estimatedDuration: '',
   isActive: true,
@@ -56,19 +54,25 @@ const EMPTY_FORM: ServiceForm = {
 export const ServiceManagementScreen: React.FC = () => {
   const [services, setServices] = useState<Service[]>([]);
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
-  const [agents, setAgents] = useState<GraphqlUser[]>([]);
-  const [agentsLoading, setAgentsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'services' | 'categories'>('services');
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // Modal state
+  // Service modal state
   const [modalVisible, setModalVisible] = useState(false);
   const [isAddMode, setIsAddMode] = useState(false);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [form, setForm] = useState<ServiceForm>(EMPTY_FORM);
+
+  // Category modal state
+  const [catModalVisible, setCatModalVisible] = useState(false);
+  const [catName, setCatName] = useState('');
+  const [catDescription, setCatDescription] = useState('');
+  const [catCreating, setCatCreating] = useState(false);
 
   // ─── useMemo: tránh stale closure, reactive filter ───────────────────────────
   const filteredServices = useMemo(() => {
@@ -120,29 +124,15 @@ export const ServiceManagementScreen: React.FC = () => {
     }
   }, []);
 
-  const loadAgents = useCallback(async () => {
-    setAgentsLoading(true);
-    try {
-      const list = await adminGraphqlService.getUsersByRole('AGENT');
-      setAgents(list);
-    } catch (e) {
-      console.warn('Lỗi tải thợ:', e);
-    } finally {
-      setAgentsLoading(false);
-    }
-  }, []);
-
   const loadData = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
     try {
-      const [data, cats, agentList] = await Promise.all([
+      const [data, cats] = await Promise.all([
         adminGraphqlService.getServiceDefinitions(),
         adminGraphqlService.getServiceCategories(),
-        adminGraphqlService.getUsersByRole('AGENT'),
       ]);
       setServices(data.map(mapService));
       if (cats.length > 0) setCategories(cats);
-      setAgents(agentList);
     } catch (error) {
       Alert.alert('Lỗi', (error as Error).message || 'Không thể tải dữ liệu');
     } finally {
@@ -154,6 +144,23 @@ export const ServiceManagementScreen: React.FC = () => {
   useEffect(() => { loadData(); }, [loadData]);
 
   const onRefresh = () => { setRefreshing(true); loadData(true); };
+
+  const handleCreateCategory = async () => {
+    if (!catName.trim()) { Alert.alert('Lỗi', 'Vui lòng nhập tên danh mục'); return; }
+    setCatCreating(true);
+    try {
+      await adminRestService.createServiceCategory(catName.trim(), catDescription.trim());
+      Alert.alert('Thành công', `Đã tạo danh mục “${catName.trim()}”`);
+      setCatName('');
+      setCatDescription('');
+      setCatModalVisible(false);
+      loadData(true);
+    } catch (e) {
+      Alert.alert('Lỗi', (e as any)?.response?.data?.message || 'Không thể tạo danh mục');
+    } finally {
+      setCatCreating(false);
+    }
+  };
 
   // ─── Helpers ──────────────────────────────────────────────────────────────────
   const formatCurrency = (amount: number) =>
@@ -171,7 +178,7 @@ export const ServiceManagementScreen: React.FC = () => {
     setIsAddMode(true);
     setSelectedService(null);
     // auto-assign first category if available (required by BE)
-    setForm({ ...EMPTY_FORM, categoryId: categories[0]?.id ?? '' });
+    setForm({ ...EMPTY_FORM, categoryId: '' });
     setModalVisible(true);
   };
 
@@ -183,7 +190,6 @@ export const ServiceManagementScreen: React.FC = () => {
       name: service.name,
       description: service.description,
       categoryId: cat?.id ?? categories[0]?.id ?? '',
-      agentId: '',
       basePrice: String(service.price),
       estimatedDuration: String(service.duration),
       isActive: service.isActive,
@@ -207,9 +213,6 @@ export const ServiceManagementScreen: React.FC = () => {
         Alert.alert('Lỗi', 'Vui lòng chọn danh mục');
       }
       return;
-    }
-    if (!form.categoryId && categories.length > 0) {
-      setForm(prev => ({ ...prev, categoryId: categories[0].id }));
     }
     const price = parseFloat(form.basePrice);
     const duration = parseInt(form.estimatedDuration, 10);
@@ -325,12 +328,32 @@ export const ServiceManagementScreen: React.FC = () => {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Quản lý dịch vụ</Text>
-        <TouchableOpacity style={styles.addButton} onPress={openAddModal}>
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => activeTab === 'categories' ? setCatModalVisible(true) : openAddModal()}
+        >
           <Ionicons name="add" size={22} color="#fff" />
         </TouchableOpacity>
       </View>
 
-      {/* Search + Filter */}
+      {/* Tabs */}
+      <View style={styles.tabRow}>
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'services' && styles.tabButtonActive]}
+          onPress={() => setActiveTab('services')}
+        >
+          <Text style={[styles.tabText, activeTab === 'services' && styles.tabTextActive]}>Dịch vụ</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'categories' && styles.tabButtonActive]}
+          onPress={() => setActiveTab('categories')}
+        >
+          <Text style={[styles.tabText, activeTab === 'categories' && styles.tabTextActive]}>Danh mục ({categories.length})</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Search + Filter — only for services tab */}
+      {activeTab === 'services' && (
       <View style={styles.searchSection}>
         <View style={styles.searchBar}>
           <Ionicons name="search" size={16} color="#999" />
@@ -365,8 +388,45 @@ export const ServiceManagementScreen: React.FC = () => {
           ))}
         </ScrollView>
       </View>
+      )}
 
-      {/* List */}
+      {/* Categories tab content */}
+      {activeTab === 'categories' && (
+        <FlatList
+          data={categories}
+          keyExtractor={item => item.id}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#007AFF" />}
+          contentContainerStyle={[styles.listContainer, categories.length === 0 && styles.emptyList]}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              {loading ? <ActivityIndicator size="large" color="#007AFF" /> : (
+                <>
+                  <Ionicons name="folder-open-outline" size={48} color="#ddd" />
+                  <Text style={styles.emptyText}>Chưa có danh mục nào</Text>
+                  <TouchableOpacity
+                    style={{ marginTop: 12, backgroundColor: '#007AFF', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10 }}
+                    onPress={() => setCatModalVisible(true)}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '600' }}>Tạo danh mục đầu tiên</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          }
+          renderItem={({ item }) => (
+            <View style={styles.catCard}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.catName}>{item.name}</Text>
+                {item.description ? <Text style={styles.catDesc}>{item.description}</Text> : null}
+              </View>
+            </View>
+          )}
+        />
+      )}
+
+      {/* Services list — only for services tab */}
+      {activeTab === 'services' && (
       <FlatList
         data={filteredServices}
         renderItem={renderServiceItem}
@@ -397,7 +457,9 @@ export const ServiceManagementScreen: React.FC = () => {
         }
       />
 
-      {/* Create / Edit Modal */}
+      )}
+
+      {/* Create / Edit Service Modal */}
       <Modal
         animationType="slide"
         transparent
@@ -419,36 +481,6 @@ export const ServiceManagementScreen: React.FC = () => {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-              {/* Thợ phụ trách */}
-              <Text style={styles.fieldLabel}>Thợ phụ trách</Text>
-              {agentsLoading ? (
-                <ActivityIndicator size="small" color="#007AFF" style={{ marginVertical: 8 }} />
-              ) : agents.length === 0 ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                  <Text style={{ color: '#FF3B30', fontSize: 13 }}>Chưa có thợ nào</Text>
-                  <TouchableOpacity
-                    style={{ backgroundColor: '#007AFF', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}
-                    onPress={loadAgents}
-                  >
-                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }}>Tải lại</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
-                  {agents.map(agent => (
-                    <TouchableOpacity
-                      key={agent.id}
-                      style={[styles.categoryChip, form.agentId === agent.id && styles.categoryChipActive]}
-                      onPress={() => setForm(prev => ({ ...prev, agentId: prev.agentId === agent.id ? '' : agent.id }))}
-                    >
-                      <Text style={[styles.categoryChipText, form.agentId === agent.id && styles.categoryChipTextActive]}>
-                        {agent.fullName}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              )}
-
               {/* Name */}
               <Text style={styles.fieldLabel}>Tên dịch vụ *</Text>
               <TextInput
@@ -468,6 +500,34 @@ export const ServiceManagementScreen: React.FC = () => {
                 multiline
                 numberOfLines={3}
               />
+
+              {/* Category */}
+              <Text style={styles.fieldLabel}>Danh mục *</Text>
+              {categories.length === 0 ? (
+                <TouchableOpacity
+                  style={styles.catEmptyHint}
+                  onPress={() => { closeModal(); setTimeout(() => { setActiveTab('categories'); setCatModalVisible(true); }, 300); }}
+                >
+                  <Ionicons name="add-circle-outline" size={16} color="#007AFF" />
+                  <Text style={{ color: '#007AFF', marginLeft: 6, fontSize: 13 }}>Chưa có danh mục — nhấn để tạo</Text>
+                </TouchableOpacity>
+              ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {categories.map(cat => (
+                      <TouchableOpacity
+                        key={cat.id}
+                        style={[styles.catChip, form.categoryId === cat.id && styles.catChipActive]}
+                        onPress={() => setForm(prev => ({ ...prev, categoryId: cat.id }))}
+                      >
+                        <Text style={[styles.catChipText, form.categoryId === cat.id && styles.catChipTextActive]}>
+                          {cat.name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+              )}
 
               {/* Price */}
               <Text style={styles.fieldLabel}>Giá cơ bản (VNĐ) *</Text>
@@ -515,6 +575,53 @@ export const ServiceManagementScreen: React.FC = () => {
                 {saving
                   ? <ActivityIndicator size="small" color="#fff" />
                   : <Text style={styles.btnSaveText}>{isAddMode ? 'Tạo mới' : 'Lưu'}</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Create Category Modal */}
+      <Modal animationType="slide" transparent visible={catModalVisible} onRequestClose={() => setCatModalVisible(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '55%' }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Tạo danh mục mới</Text>
+              <TouchableOpacity onPress={() => setCatModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView keyboardShouldPersistTaps="handled">
+              <Text style={styles.fieldLabel}>Tên danh mục *</Text>
+              <TextInput
+                style={styles.fieldInput}
+                placeholder="VD: Sửa điện, Ô tô, Gia dụng..."
+                value={catName}
+                onChangeText={setCatName}
+              />
+              <Text style={styles.fieldLabel}>Mô tả</Text>
+              <TextInput
+                style={[styles.fieldInput, styles.fieldInputMulti]}
+                placeholder="Mô tả danh mục"
+                value={catDescription}
+                onChangeText={setCatDescription}
+                multiline
+                numberOfLines={3}
+              />
+            </ScrollView>
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.btnCancel} onPress={() => setCatModalVisible(false)}>
+                <Text style={styles.btnCancelText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.btnSave, catCreating && styles.btnDisabled]}
+                onPress={handleCreateCategory}
+                disabled={catCreating}
+              >
+                {catCreating
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <Text style={styles.btnSaveText}>Tạo mới</Text>
                 }
               </TouchableOpacity>
             </View>
@@ -714,4 +821,67 @@ const styles = StyleSheet.create({
   },
   btnDisabled: { opacity: 0.55 },
   btnSaveText: { fontSize: 14, color: '#fff', fontWeight: '600' },
+  // ── Tabs ───────────────────────────────────────────────────────────
+  tabRow: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#EFEFEF',
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 11,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  tabButtonActive: {
+    borderBottomColor: '#007AFF',
+  },
+  tabText: { fontSize: 14, color: '#888', fontWeight: '500' },
+  tabTextActive: { color: '#007AFF', fontWeight: '700' },
+  // ── Category cards ─────────────────────────────────────────────────
+  catCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    marginHorizontal: 14,
+    marginVertical: 5,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  catName: { fontSize: 15, fontWeight: '600', color: '#111' },
+  catDesc: { fontSize: 13, color: '#888', marginTop: 2 },
+  // ── Category chips (service form) ──────────────────────────────────
+  catChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#F0F1F5',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  catChipActive: {
+    backgroundColor: '#007AFF15',
+    borderColor: '#007AFF',
+  },
+  catChipText: { fontSize: 13, color: '#555', fontWeight: '500' },
+  catChipTextActive: { color: '#007AFF', fontWeight: '700' },
+  catEmptyHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F6FF',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#C8DFFF',
+  },
 });
