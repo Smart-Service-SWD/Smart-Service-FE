@@ -1,124 +1,62 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
-  StyleSheet,
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
   ActivityIndicator,
   RefreshControl,
-  Alert
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../context/AuthContext';
+import {
+  ServiceRequestSummary,
+  staffGraphqlService,
+} from '../../services/staffGraphqlService';
+
+// ─── Helpers ────────────────────────────────────────────────────────────────────
+
+const COMPLEXITY_LABEL: Record<number, string> = {
+  1: 'Rat don gian', 2: 'Don gian', 3: 'Trung binh', 4: 'Phuc tap', 5: 'Rat phuc tap',
+};
+
+const fmt = (iso: string) =>
+  new Date(iso).toLocaleString('vi-VN', {
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+
+// ─── Main Component ─────────────────────────────────────────────────────────────
 
 export const PendingEvaluationsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const { user } = useAuth();
-  const [loading, setLoading] = useState<boolean>(false);
-  const [refreshing, setRefreshing] = useState<boolean>(false);
-  const [pendingEvaluations, setPendingEvaluations] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [requests, setRequests] = useState<ServiceRequestSummary[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadPendingEvaluations();
-  }, []);
-
-  const loadPendingEvaluations = async () => {
+  const load = useCallback(async () => {
     try {
-      setLoading(true);
-      // TODO: Call API to get pending AI evaluations that need staff confirmation
-      // const data = await staffService.getPendingEvaluations();
-      // setPendingEvaluations(data);
-
-      // Mock data for now
-      setTimeout(() => {
-        setPendingEvaluations([
-          {
-            id: '1',
-            userName: 'Nguyễn Văn A',
-            serviceType: 'Car Damage Assessment',
-            aiResult: 'Minor scratches detected',
-            confidence: 85,
-            imageUrl: 'https://example.com/image1.jpg',
-            submittedAt: '2024-01-27T10:00:00Z'
-          },
-          {
-            id: '2',
-            userName: 'Trần Thị B',
-            serviceType: 'Home Inspection',
-            aiResult: 'Water damage detected',
-            confidence: 92,
-            imageUrl: 'https://example.com/image2.jpg',
-            submittedAt: '2024-01-27T11:30:00Z'
-          }
-        ]);
-        setLoading(false);
-        setRefreshing(false);
-      }, 1000);
-    } catch (error) {
-      console.error('Error loading pending evaluations:', error);
+      setError(null);
+      const data = await staffGraphqlService.getPendingReviewRequests();
+      setRequests(data);
+    } catch (err: any) {
+      setError(err?.message ?? 'Không tải được dữ liệu');
+    } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
-  const handleConfirmEvaluation = (evaluationId: string) => {
-    Alert.alert(
-      'Confirm AI Evaluation',
-      'Are you sure you want to confirm this AI evaluation?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm',
-          onPress: async () => {
-            try {
-              // TODO: Call API to confirm evaluation
-              // await staffService.confirmEvaluation(evaluationId);
-              Alert.alert('Success', 'AI evaluation confirmed successfully');
-              loadPendingEvaluations(); // Refresh list
-            } catch (error) {
-              Alert.alert('Error', 'Failed to confirm evaluation');
-            }
-          }
-        }
-      ]
-    );
-  };
-
-  const handleRejectEvaluation = (evaluationId: string) => {
-    Alert.alert(
-      'Reject AI Evaluation',
-      'Are you sure you want to reject this AI evaluation?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reject',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              // TODO: Call API to reject evaluation
-              // await staffService.rejectEvaluation(evaluationId);
-              Alert.alert('Success', 'AI evaluation rejected');
-              loadPendingEvaluations(); // Refresh list
-            } catch (error) {
-              Alert.alert('Error', 'Failed to reject evaluation');
-            }
-          }
-        }
-      ]
-    );
-  };
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadPendingEvaluations();
-  };
+  useEffect(() => { load(); }, [load]);
+  const onRefresh = () => { setRefreshing(true); load(); };
 
   if (loading && !refreshing) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>Loading pending evaluations...</Text>
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#1976D2" />
+        <Text style={styles.loadingText}>Đang tải yêu cầu chờ duyệt...</Text>
       </View>
     );
   }
@@ -126,206 +64,131 @@ export const PendingEvaluationsScreen: React.FC<{ navigation: any }> = ({ naviga
   return (
     <ScrollView
       style={styles.container}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
-      <LinearGradient
-        colors={["#1976D2", "#63a4ff"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.header}
-      >
-        <Text style={styles.greeting}>Xin chào, {user?.fullName}!</Text>
-        <Text style={styles.role}>Xác nhận đánh giá AI</Text>
+      <LinearGradient colors={['#1976D2', '#63a4ff']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
+        <View>
+          <Text style={styles.greeting}>Xin chào, {user?.fullName}!</Text>
+          <Text style={styles.role}>Xác nhận đánh giá AI</Text>
+        </View>
+        <View style={styles.countBadge}>
+          <Text style={styles.countText}>{requests.length}</Text>
+        </View>
       </LinearGradient>
 
       <View style={styles.content}>
-        {pendingEvaluations.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="checkmark-circle-outline" size={64} color="#ccc" />
-            <Text style={styles.emptyText}>No pending evaluations</Text>
-            <Text style={styles.emptySubtext}>All AI evaluations have been reviewed</Text>
+        {error && (
+          <View style={styles.errorBox}>
+            <Ionicons name="alert-circle-outline" size={20} color="#F44336" />
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity onPress={load}>
+              <Text style={styles.retryText}>Thử lại</Text>
+            </TouchableOpacity>
           </View>
-        ) : (
-          pendingEvaluations.map((evaluation) => (
-            <View key={evaluation.id} style={styles.evaluationCard}>
-              <View style={styles.evaluationHeader}>
-                <View>
-                  <Text style={styles.userName}>{evaluation.userName}</Text>
-                  <Text style={styles.serviceType}>{evaluation.serviceType}</Text>
-                </View>
-                <View style={styles.confidenceBadge}>
-                  <Text style={styles.confidenceText}>{evaluation.confidence}%</Text>
-                </View>
-              </View>
-
-              <View style={styles.aiResult}>
-                <Text style={styles.aiResultLabel}>AI Analysis:</Text>
-                <Text style={styles.aiResultText}>{evaluation.aiResult}</Text>
-              </View>
-
-              <Text style={styles.submittedAt}>
-                Submitted: {new Date(evaluation.submittedAt).toLocaleString()}
-              </Text>
-
-              <View style={styles.actionButtons}>
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.rejectButton]}
-                  onPress={() => handleRejectEvaluation(evaluation.id)}
-                >
-                  <Ionicons name="close-circle" size={20} color="#fff" />
-                  <Text style={styles.actionButtonText}>Reject</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.confirmButton]}
-                  onPress={() => handleConfirmEvaluation(evaluation.id)}
-                >
-                  <Ionicons name="checkmark-circle" size={20} color="#fff" />
-                  <Text style={styles.actionButtonText}>Confirm</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))
         )}
+        {!error && requests.length === 0 && (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="checkmark-circle-outline" size={72} color="#c8e6c9" />
+            <Text style={styles.emptyTitle}>Không có yêu cầu chờ duyệt</Text>
+            <Text style={styles.emptySubtext}>Tất cả yêu cầu đã được xử lý</Text>
+          </View>
+        )}
+        {requests.map(req => (
+          <RequestCard
+            key={req.id}
+            request={req}
+            onPress={() => navigation.navigate('StaffRequestDetail', { requestId: req.id })}
+          />
+        ))}
       </View>
     </ScrollView>
   );
 };
 
+// ─── Request Card ───────────────────────────────────────────────────────────────
+
+const RequestCard: React.FC<{ request: ServiceRequestSummary; onPress: () => void }> = ({ request, onPress }) => (
+  <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.85}>
+    <View style={styles.cardTop}>
+      <View style={styles.aiTag}>
+        <Ionicons name="analytics" size={13} color="#fff" />
+        <Text style={styles.aiTagText}>AI da phan tich</Text>
+      </View>
+      <Text style={styles.cardDate}>{fmt(request.createdAt)}</Text>
+    </View>
+    <Text style={styles.cardDesc} numberOfLines={2}>{request.description ?? '(Không có mô tả)'}</Text>
+    <View style={styles.metaRow}>
+      <View style={styles.metaItem}>
+        <Ionicons name="layers-outline" size={13} color="#607D8B" />
+        <Text style={styles.metaText}>
+          {COMPLEXITY_LABEL[request.complexity?.level] ?? `Level ${request.complexity?.level ?? '?'}`}
+        </Text>
+      </View>
+      {request.addressText ? (
+        <View style={styles.metaItem}>
+          <Ionicons name="location-outline" size={13} color="#607D8B" />
+          <Text style={styles.metaText} numberOfLines={1}>{request.addressText}</Text>
+        </View>
+      ) : null}
+    </View>
+    <View style={styles.cardFooter}>
+      <Text style={styles.idText}>#{request.id.slice(0, 8).toUpperCase()}</Text>
+      <View style={styles.reviewBtn}>
+        <Text style={styles.reviewBtnText}>Xem {"&"} Duyet</Text>
+        <Ionicons name="chevron-forward" size={15} color="#1976D2" />
+      </View>
+    </View>
+  </TouchableOpacity>
+);
+
+// ─── Styles ─────────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    paddingTop: 50,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: '#666',
-  },
+  container: { flex: 1, backgroundColor: '#f5f6fa', paddingTop: 50 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 8 },
+  loadingText: { color: '#666', marginTop: 8 },
   header: {
-    backgroundColor: '#1976D2',
-    paddingVertical: 20,
-    paddingHorizontal: 20,
-    marginBottom: 8,
+    paddingVertical: 22, paddingHorizontal: 20, marginBottom: 8,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
   },
-  greeting: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 4,
+  greeting: { fontSize: 22, fontWeight: 'bold', color: '#fff', marginBottom: 2 },
+  role: { fontSize: 15, color: '#e3f2fd' },
+  countBadge: {
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.25)', justifyContent: 'center', alignItems: 'center',
   },
-  role: {
-    fontSize: 16,
-    color: '#e3f2fd',
-    fontWeight: '600',
+  countText: { color: '#fff', fontSize: 20, fontWeight: '700' },
+  content: { padding: 16 },
+  errorBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: '#FFEBEE', borderRadius: 10, padding: 12, marginBottom: 12,
   },
-  content: {
-    padding: 20,
+  errorText: { flex: 1, color: '#F44336', fontSize: 13 },
+  retryText: { color: '#1976D2', fontWeight: '600', fontSize: 13 },
+  emptyContainer: { alignItems: 'center', paddingVertical: 60 },
+  emptyTitle: { fontSize: 17, fontWeight: '600', color: '#555', marginTop: 16 },
+  emptySubtext: { fontSize: 13, color: '#aaa', marginTop: 6, textAlign: 'center' },
+  card: {
+    backgroundColor: '#fff', borderRadius: 14, padding: 16, marginBottom: 14,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07,
+    shadowRadius: 6, elevation: 3, borderLeftWidth: 4, borderLeftColor: '#1976D2',
   },
-  emptyContainer: {
-    alignItems: 'center',
-    paddingVertical: 60,
+  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  aiTag: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: '#1976D2', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3,
   },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#666',
-    marginTop: 20,
+  aiTagText: { color: '#fff', fontSize: 11, fontWeight: '600' },
+  cardDate: { fontSize: 12, color: '#9E9E9E' },
+  cardDesc: { fontSize: 14, color: '#333', lineHeight: 20, marginBottom: 10 },
+  metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 12 },
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  metaText: { fontSize: 12, color: '#607D8B' },
+  cardFooter: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    borderTopWidth: 1, borderTopColor: '#f0f0f0', paddingTop: 10,
   },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#999',
-    marginTop: 5,
-  },
-  evaluationCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  evaluationHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  userName: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-  },
-  serviceType: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 2,
-  },
-  confidenceBadge: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  confidenceText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  aiResult: {
-    marginBottom: 12,
-  },
-  aiResultLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
-  },
-  aiResultText: {
-    fontSize: 16,
-    color: '#555',
-    lineHeight: 22,
-  },
-  submittedAt: {
-    fontSize: 12,
-    color: '#999',
-    marginBottom: 16,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    flex: 1,
-    marginHorizontal: 5,
-    justifyContent: 'center',
-  },
-  rejectButton: {
-    backgroundColor: '#FF3B30',
-  },
-  confirmButton: {
-    backgroundColor: '#34C759',
-  },
-  actionButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 5,
-  },
+  idText: { fontSize: 11, color: '#bbb' },
+  reviewBtn: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  reviewBtnText: { color: '#1976D2', fontSize: 13, fontWeight: '600' },
 });

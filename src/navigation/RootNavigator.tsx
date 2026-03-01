@@ -30,6 +30,7 @@ import { StaffDashboardScreen } from '../screens/staff/StaffDashboardScreen';
 import { StaffProfileScreen } from '../screens/staff/StaffProfileScreen';
 import { PendingEvaluationsScreen } from '../screens/staff/PendingEvaluationsScreen';
 import { ReEvaluationsScreen } from '../screens/staff/ReEvaluationsScreen';
+import { StaffRequestDetailScreen } from '../screens/staff/StaffRequestDetailScreen';
 
 // Agent Screens
 import { AgentDashboardScreen } from '../screens/agent/AgentDashboardScreen';
@@ -345,6 +346,23 @@ const StaffTabNavigator = () => {
   );
 };
 
+// Staff Stack Navigator (wraps tabs + detail screen)
+const StaffStackNavigator = () => {
+  return (
+    <Stack.Navigator
+      id="StaffStack"
+      screenOptions={{ headerShown: false }}
+    >
+      <Stack.Screen name="StaffTabs" component={StaffTabNavigator} />
+      <Stack.Screen
+        name="StaffRequestDetail"
+        component={StaffRequestDetailScreen}
+        options={{ headerShown: false }}
+      />
+    </Stack.Navigator>
+  );
+};
+
 // Admin Dashboard Stack Navigator (AdminDashboard + sub-management screens)
 const AdminDashboardStackNavigator = () => {
   return (
@@ -496,9 +514,9 @@ const AppNavigator = () => {
     return <AdminTabNavigator />;
   }
 
-  // If user is STAFF, show Staff-specific tabs
+  // If user is STAFF, show Staff-specific tabs + detail screen
   if (user && user.role === 'STAFF') {
-    return <StaffTabNavigator />;
+    return <StaffStackNavigator />;
   }
 
   // If user is AGENT, show Agent-specific tabs
