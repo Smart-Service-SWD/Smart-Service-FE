@@ -38,20 +38,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const normalizeRole = (role: any): User['role'] => {
+    if (typeof role === 'string') {
+      const upper = role.toUpperCase();
+      if (upper === 'CUSTOMER') return 'USER';
+      if (upper === 'STAFF') return 'STAFF';
+      if (upper === 'AGENT') return 'AGENT';
+      if (upper === 'ADMIN') return 'ADMIN';
+      if (upper === 'USER') return 'USER';
+    }
+    // BE serializes UserRole enum as numbers: Customer=0, Staff=1, Agent=2, Admin=3
+    if (typeof role === 'number') {
+      if (role === 0) return 'USER';   // Customer
+      if (role === 1) return 'STAFF';  // Staff
+      if (role === 2) return 'AGENT';  // Agent
+      if (role === 3) return 'ADMIN';  // Admin
+    }
+    return 'USER';
+  };
+
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
       setLoading(true);
 
       const response = await authService.login(email, password);
+      const { accessToken, userId, email: userEmail, fullName, role, phoneNumber, phone } = response || {};
 
-      const { accessToken, userId, email: userEmail, fullName, role } = response;
-      const roleString = role === 0 ? 'USER' : role === 1 ? 'STAFF' : role === 2 ? 'ADMIN' : 'USER';
+      if (!accessToken || !userId) {
+        return { success: false, error: 'Sai email hoặc mật khẩu' };
+      }
 
       const userData: User = {
         id: userId,
         email: userEmail,
         fullName,
-        role: roleString as any,
+        phoneNumber: phoneNumber || phone,
+        role: normalizeRole(role),
       };
 
       await AsyncStorage.setItem('authToken', accessToken);
@@ -63,7 +85,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       const err = error as Error;
       console.error('Login error:', err);
-      const apiError = (error as any).response?.data?.message || err.message || 'Login failed';
+      const status = (error as any).response?.status;
+      const apiError =
+        (error as any).response?.data?.message ||
+        (status === 401 ? 'Sai email hoặc mật khẩu' : undefined) ||
+        err.message ||
+        'Login failed';
       return { success: false, error: apiError };
     } finally {
       setLoading(false);
@@ -75,14 +102,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(true);
       const response = await authService.register(userData);
 
-      const { accessToken, userId, email: userEmail, fullName, role } = response;
-      const roleString = role === 0 ? 'USER' : role === 1 ? 'STAFF' : role === 2 ? 'ADMIN' : 'USER';
+      const { accessToken, userId, email: userEmail, fullName, role, phoneNumber, phone } = response;
 
       const newUser: User = {
         id: userId,
         email: userEmail,
         fullName,
-        role: roleString as any,
+        phoneNumber: phoneNumber || phone,
+        role: normalizeRole(role),
       };
 
       await AsyncStorage.setItem('authToken', accessToken);

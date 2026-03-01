@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,164 +9,140 @@ import {
   Alert,
   RefreshControl,
   Modal,
+  ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { adminGraphqlService, GraphqlUser, UserRole } from '../../services/adminGraphqlService';
+import { adminRestService } from '../../services/adminRestService';
 
-interface User {
-  id: string;
-  fullName: string;
-  email: string;
-  phoneNumber: string;
-  role: 'USER' | 'STAFF' | 'AGENT';
-  status: 'active' | 'inactive' | 'suspended';
-  createdAt: string;
-  lastLoginAt?: string;
-}
+interface User extends GraphqlUser {}
 
 export const UserManagementScreen: React.FC = () => {
-  const [users, setUsers] = useState<User[]>([
-    {
-      id: '1',
-      fullName: 'Nguyễn Văn A',
-      email: 'user1@example.com',
-      phoneNumber: '0901234567',
-      role: 'USER',
-      status: 'active',
-      createdAt: '2024-01-15',
-      lastLoginAt: '2024-01-27',
-    },
-    {
-      id: '2',
-      fullName: 'Trần Thị B',
-      email: 'staff1@example.com',
-      phoneNumber: '0912345678',
-      role: 'STAFF',
-      status: 'active',
-      createdAt: '2024-01-10',
-      lastLoginAt: '2024-01-26',
-    },
-    {
-      id: '3',
-      fullName: 'Lê Văn C',
-      email: 'agent1@example.com',
-      phoneNumber: '0923456789',
-      role: 'AGENT',
-      status: 'active',
-      createdAt: '2024-01-12',
-      lastLoginAt: '2024-01-25',
-    },
-  ]);
-  
-  const [filteredUsers, setFilteredUsers] = useState<User[]>(users);
+  const [users, setUsers] = useState<User[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRole, setSelectedRole] = useState<string>('all');
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [savingRole, setSavingRole] = useState(false);
+  const [editRoleVisible, setEditRoleVisible] = useState(false);
+  const [newRole, setNewRole] = useState<string>('');
+
+  // useMemo: reactive filter — no stale closure
+  const filteredUsers = useMemo(() => {
+    if (!searchQuery.trim()) return users;
+    const q = searchQuery.toLowerCase();
+    return users.filter(
+      u =>
+        u.fullName.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q) ||
+        (u.phoneNumber || '').includes(q),
+    );
+  }, [users, searchQuery]);
 
   useEffect(() => {
-    filterUsers();
-  }, [users, searchQuery, selectedRole]);
+    loadUsers();
+  }, [selectedRole]);
 
-  const filterUsers = () => {
-    let filtered = users;
-
-    if (searchQuery.trim()) {
-      filtered = filtered.filter(user =>
-        user.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.phoneNumber.includes(searchQuery)
-      );
+  const loadUsers = async (isRefresh = false) => {
+    if (!isRefresh) {
+      setLoading(true);
     }
-
-    if (selectedRole !== 'all') {
-      filtered = filtered.filter(user => user.role === selectedRole);
+    try {
+      const role = selectedRole === 'all' ? null : (selectedRole as UserRole);
+      const data = role
+        ? await adminGraphqlService.getUsersByRole(role)
+        : await adminGraphqlService.getUsers();
+      setUsers(data || []);
+    } catch (error) {
+      Alert.alert('Lỗi', (error as Error).message || 'Không thể tải danh sách người dùng');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
-
-    setFilteredUsers(filtered);
   };
 
   const onRefresh = async () => {
     setRefreshing(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setRefreshing(false);
+    await loadUsers(true);
+  };
+
+  const handleUpdateRole = async () => {
+    if (!selectedUser || !newRole) return;
+    setSavingRole(true);
+    try {
+      await adminRestService.updateUserRole(selectedUser.id, newRole);
+      Alert.alert('Thành công', 'Đã cập nhật vai trò người dùng');
+      setEditRoleVisible(false);
+      setModalVisible(false);
+      loadUsers(true);
+    } catch (error) {
+      Alert.alert('Lỗi', (error as any)?.response?.data?.message || 'Không thể cập nhật vai trò');
+    } finally {
+      setSavingRole(false);
+    }
   };
 
   const getRoleColor = (role: string) => {
     switch (role) {
-      case 'USER': return '#007AFF';
-      case 'STAFF': return '#34C759';
-      case 'AGENT': return '#FF9500';
-      default: return '#8E8E93';
+      case 'CUSTOMER':
+        return '#007AFF';
+      case 'STAFF':
+        return '#34C759';
+      case 'AGENT':
+        return '#FF9500';
+      case 'ADMIN':
+        return '#FF3B30';
+      default:
+        return '#8E8E93';
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return '#34C759';
-      case 'inactive': return '#8E8E93';
-      case 'suspended': return '#FF3B30';
-      default: return '#8E8E93';
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case 'CUSTOMER':
+        return 'Khách hàng';
+      case 'STAFF':
+        return 'Nhân viên';
+      case 'AGENT':
+        return 'Thợ';
+      case 'ADMIN':
+        return 'Quản trị';
+      default:
+        return role;
     }
   };
 
   const handleUserAction = (user: User, action: string) => {
     setSelectedUser(user);
-    
     switch (action) {
       case 'edit':
-        // Navigate to edit screen
-        Alert.alert('Thông báo', 'Chức năng chỉnh sửa đang được phát triển');
+        setNewRole(user.role);
+        setEditRoleVisible(true);
+        setModalVisible(true);
         break;
       case 'suspend':
-        Alert.alert(
-          'Xác nhận',
-          `Bạn có chắc chắn muốn ${user.status === 'suspended' ? 'kích hoạt lại' : 'tạm khóa'} tài khoản ${user.fullName}?`,
-          [
-            { text: 'Hủy', style: 'cancel' },
-            { 
-              text: 'Xác nhận',
-              onPress: () => {
-                setUsers(prev => prev.map(u => 
-                  u.id === user.id 
-                    ? { ...u, status: u.status === 'suspended' ? 'active' : 'suspended' }
-                    : u
-                ));
-              }
-            },
-          ]
-        );
+        Alert.alert('Thông báo', 'Chức năng tạm khóa tài khoản chưa được hỗ trợ');
         break;
       case 'delete':
-        Alert.alert(
-          'Xác nhận xóa',
-          `Bạn có chắc chắn muốn xóa tài khoản ${user.fullName}? Hành động này không thể hoàn tác.`,
-          [
-            { text: 'Hủy', style: 'cancel' },
-            { 
-              text: 'Xóa',
-              style: 'destructive',
-              onPress: () => {
-                setUsers(prev => prev.filter(u => u.id !== user.id));
-              }
-            },
-          ]
-        );
+        Alert.alert('Thông báo', 'Chức năng xóa người dùng chưa được hỗ trợ');
         break;
     }
   };
 
   const renderUserItem = ({ item }: { item: User }) => (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={styles.userCard}
       onPress={() => {
         setSelectedUser(item);
         setModalVisible(true);
       }}
     >
-      <View style={styles.userHeader}>
+      <View style={styles.userHeader}
+      >
         <View>
           <Text style={styles.userName}>{item.fullName}</Text>
           <Text style={styles.userEmail}>{item.email}</Text>
@@ -174,24 +150,16 @@ export const UserManagementScreen: React.FC = () => {
         <View style={styles.userBadges}>
           <View style={[styles.roleBadge, { backgroundColor: getRoleColor(item.role) + '20' }]}>
             <Text style={[styles.roleText, { color: getRoleColor(item.role) }]}>
-              {item.role}
-            </Text>
-          </View>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
-            <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-              {item.status}
+              {getRoleLabel(item.role)}
             </Text>
           </View>
         </View>
       </View>
-      
+
       <View style={styles.userInfo}>
-        <Text style={styles.userPhone}>{item.phoneNumber}</Text>
-        <Text style={styles.userDate}>
-          Tham gia: {new Date(item.createdAt).toLocaleDateString('vi-VN')}
-        </Text>
+        <Text style={styles.userPhone}>{item.phoneNumber || 'Chưa có số điện thoại'}</Text>
       </View>
-      
+
       <View style={styles.userActions}>
         <TouchableOpacity
           style={[styles.actionButton, { backgroundColor: '#007AFF20' }]}
@@ -200,21 +168,15 @@ export const UserManagementScreen: React.FC = () => {
           <Ionicons name="pencil" size={16} color="#007AFF" />
           <Text style={[styles.actionText, { color: '#007AFF' }]}>Sửa</Text>
         </TouchableOpacity>
-        
+
         <TouchableOpacity
-          style={[styles.actionButton, { backgroundColor: item.status === 'suspended' ? '#34C75920' : '#FF950020' }]}
+          style={[styles.actionButton, { backgroundColor: '#FF950020' }]}
           onPress={() => handleUserAction(item, 'suspend')}
         >
-          <Ionicons 
-            name={item.status === 'suspended' ? "checkmark-circle" : "ban"} 
-            size={16} 
-            color={item.status === 'suspended' ? '#34C759' : '#FF9500'} 
-          />
-          <Text style={[styles.actionText, { color: item.status === 'suspended' ? '#34C759' : '#FF9500' }]}>
-            {item.status === 'suspended' ? 'Kích hoạt' : 'Khóa'}
-          </Text>
+          <Ionicons name="ban" size={16} color="#FF9500" />
+          <Text style={[styles.actionText, { color: '#FF9500' }]}>Khóa</Text>
         </TouchableOpacity>
-        
+
         <TouchableOpacity
           style={[styles.actionButton, { backgroundColor: '#FF3B3020' }]}
           onPress={() => handleUserAction(item, 'delete')}
@@ -239,26 +201,33 @@ export const UserManagementScreen: React.FC = () => {
             onChangeText={setSearchQuery}
           />
         </View>
-        
-        <View style={styles.filterRow}>
-          {['all', 'USER', 'STAFF', 'AGENT'].map(role => (
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterRow}
+          keyboardShouldPersistTaps="handled"
+        >
+          {['all', 'CUSTOMER', 'STAFF', 'AGENT', 'ADMIN'].map(role => (
             <TouchableOpacity
               key={role}
               style={[
                 styles.filterButton,
-                selectedRole === role && styles.filterButtonActive
+                selectedRole === role && styles.filterButtonActive,
               ]}
               onPress={() => setSelectedRole(role)}
             >
-              <Text style={[
-                styles.filterText,
-                selectedRole === role && styles.filterTextActive
-              ]}>
-                {role === 'all' ? 'Tất cả' : role}
+              <Text
+                style={[
+                  styles.filterText,
+                  selectedRole === role && styles.filterTextActive,
+                ]}
+              >
+                {role === 'all' ? 'Tất cả' : getRoleLabel(role)}
               </Text>
             </TouchableOpacity>
           ))}
-        </View>
+        </ScrollView>
       </View>
 
       {/* Users List */}
@@ -267,14 +236,26 @@ export const UserManagementScreen: React.FC = () => {
         renderItem={renderUserItem}
         keyExtractor={item => item.id}
         showsVerticalScrollIndicator={false}
+        removeClippedSubviews
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        initialNumToRender={10}
+        keyboardShouldPersistTaps="handled"
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#007AFF" />
         }
         contentContainerStyle={styles.listContainer}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="people-outline" size={48} color="#ccc" />
-            <Text style={styles.emptyText}>Không tìm thấy người dùng nào</Text>
+            {loading
+              ? <ActivityIndicator size="large" color="#007AFF" />
+              : (
+                <>
+                  <Ionicons name="people-outline" size={48} color="#ddd" />
+                  <Text style={styles.emptyText}>Không tìm thấy người dùng nào</Text>
+                </>
+              )
+            }
           </View>
         }
       />
@@ -284,7 +265,7 @@ export const UserManagementScreen: React.FC = () => {
         animationType="slide"
         transparent={true}
         visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
+        onRequestClose={() => { setModalVisible(false); setEditRoleVisible(false); }}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -292,43 +273,62 @@ export const UserManagementScreen: React.FC = () => {
               <>
                 <View style={styles.modalHeader}>
                   <Text style={styles.modalTitle}>Chi tiết người dùng</Text>
-                  <TouchableOpacity onPress={() => setModalVisible(false)}>
+                  <TouchableOpacity onPress={() => { setModalVisible(false); setEditRoleVisible(false); }}>
                     <Ionicons name="close" size={24} color="#333" />
                   </TouchableOpacity>
                 </View>
-                
-                <View style={styles.modalBody}>
-                  <Text style={styles.detailLabel}>Họ tên:</Text>
-                  <Text style={styles.detailValue}>{selectedUser.fullName}</Text>
-                  
-                  <Text style={styles.detailLabel}>Email:</Text>
-                  <Text style={styles.detailValue}>{selectedUser.email}</Text>
-                  
-                  <Text style={styles.detailLabel}>Số điện thoại:</Text>
-                  <Text style={styles.detailValue}>{selectedUser.phoneNumber}</Text>
-                  
-                  <Text style={styles.detailLabel}>Vai trò:</Text>
-                  <Text style={styles.detailValue}>{selectedUser.role}</Text>
-                  
-                  <Text style={styles.detailLabel}>Trạng thái:</Text>
-                  <Text style={[styles.detailValue, { color: getStatusColor(selectedUser.status) }]}>
-                    {selectedUser.status}
-                  </Text>
-                  
-                  <Text style={styles.detailLabel}>Ngày tham gia:</Text>
-                  <Text style={styles.detailValue}>
-                    {new Date(selectedUser.createdAt).toLocaleDateString('vi-VN')}
-                  </Text>
-                  
-                  {selectedUser.lastLoginAt && (
-                    <>
-                      <Text style={styles.detailLabel}>Lần đăng nhập cuối:</Text>
-                      <Text style={styles.detailValue}>
-                        {new Date(selectedUser.lastLoginAt).toLocaleDateString('vi-VN')}
-                      </Text>
-                    </>
-                  )}
-                </View>
+
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  <View style={styles.modalBody}>
+                    <Text style={styles.detailLabel}>Họ tên:</Text>
+                    <Text style={styles.detailValue}>{selectedUser.fullName}</Text>
+
+                    <Text style={styles.detailLabel}>Email:</Text>
+                    <Text style={styles.detailValue}>{selectedUser.email}</Text>
+
+                    <Text style={styles.detailLabel}>Số điện thoại:</Text>
+                    <Text style={styles.detailValue}>
+                      {selectedUser.phoneNumber || 'Chưa có số điện thoại'}
+                    </Text>
+
+                    <Text style={styles.detailLabel}>Vai trò hiện tại:</Text>
+                    <View style={[styles.roleBadge, { backgroundColor: getRoleColor(selectedUser.role) + '20', alignSelf: 'flex-start', marginBottom: 16 }]}>
+                      <Text style={[styles.roleText, { color: getRoleColor(selectedUser.role) }]}>{getRoleLabel(selectedUser.role)}</Text>
+                    </View>
+
+                    {editRoleVisible && (
+                      <>
+                        <Text style={styles.detailLabel}>Thay đổi vai trò:</Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                          {['CUSTOMER', 'STAFF', 'AGENT', 'ADMIN'].map(role => (
+                            <TouchableOpacity
+                              key={role}
+                              style={[
+                                styles.roleChip,
+                                newRole === role && { backgroundColor: getRoleColor(role), borderColor: getRoleColor(role) },
+                              ]}
+                              onPress={() => setNewRole(role)}
+                            >
+                              <Text style={[styles.roleChipText, newRole === role && { color: '#fff' }]}>
+                                {getRoleLabel(role)}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                        <TouchableOpacity
+                          style={[styles.btnSaveRole, savingRole && { opacity: 0.6 }]}
+                          onPress={handleUpdateRole}
+                          disabled={savingRole}
+                        >
+                          {savingRole
+                            ? <ActivityIndicator size="small" color="#fff" />
+                            : <Text style={styles.btnSaveRoleText}>Lưu vai trò</Text>
+                          }
+                        </TouchableOpacity>
+                      </>
+                    )}
+                  </View>
+                </ScrollView>
               </>
             )}
           </View>
@@ -366,7 +366,9 @@ const styles = StyleSheet.create({
   },
   filterRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    gap: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
   },
   filterButton: {
     paddingVertical: 8,
@@ -431,15 +433,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
   userInfo: {
     marginBottom: 12,
   },
@@ -447,10 +440,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginBottom: 2,
-  },
-  userDate: {
-    fontSize: 12,
-    color: '#999',
   },
   userActions: {
     flexDirection: 'row',
@@ -517,5 +506,30 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     fontWeight: '500',
+  },
+  roleChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    backgroundColor: '#F8F9FA',
+  },
+  roleChipText: {
+    fontSize: 13,
+    color: '#555',
+    fontWeight: '500',
+  },
+  btnSaveRole: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  btnSaveRoleText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

@@ -7,9 +7,11 @@ import {
   TouchableOpacity,
   RefreshControl,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { adminGraphqlService, DashboardSummary } from '../../services/adminGraphqlService';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -22,7 +24,9 @@ interface ReportData {
 
 export const ReportsScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState('month');
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [reportData, setReportData] = useState<ReportData>({
     userGrowth: [20, 45, 28, 80, 99, 43, 120],
     revenueData: [150, 230, 180, 320, 450, 380, 520],
@@ -43,11 +47,26 @@ export const ReportsScreen: React.FC = () => {
     ],
   });
 
+  const fetchData = async (isRefresh = false) => {
+    if (!isRefresh) setLoading(true);
+    try {
+      const data = await adminGraphqlService.getDashboardSummary();
+      setSummary(data);
+    } catch (error) {
+      console.warn('Không thể tải dữ liệu báo cáo:', (error as Error).message);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
   const onRefresh = async () => {
     setRefreshing(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setRefreshing(false);
+    await fetchData(true);
   };
 
   const formatCurrency = (amount: number) => {
@@ -131,78 +150,40 @@ export const ReportsScreen: React.FC = () => {
         {/* Key Metrics */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Chỉ số chính</Text>
-          <View style={styles.statsGrid}>
-            <StatCard
-              title="Tổng doanh thu"
-              value={formatCurrency(reportData.monthlyRevenue.reduce((sum, item) => sum + item.amount, 0))}
-              change="+12.5%"
-              isPositive={true}
-              icon="trending-up-outline"
-            />
-            <StatCard
-              title="Người dùng mới"
-              value="435"
-              change="+8.2%"
-              isPositive={true}
-              icon="person-add-outline"
-            />
-            <StatCard
-              title="Đơn hoàn thành"
-              value="1,248"
-              change="+15.3%"
-              isPositive={true}
-              icon="checkmark-circle-outline"
-            />
-            <StatCard
-              title="Tỷ lệ hủy"
-              value="3.2%"
-              change="-2.1%"
-              isPositive={true}
-              icon="close-circle-outline"
-            />
-          </View>
-        </View>
-
-        {/* User Growth Chart */}
-        <View style={styles.section}>
-          <View style={styles.chartHeader}>
-            <Text style={styles.chartTitle}>Tăng trưởng người dùng</Text>
-            <Text style={styles.chartSubtitle}>7 tuần qua</Text>
-          </View>
-          <View style={styles.chartContainer}>
-            <View style={styles.mockChart}>
-              <Text style={styles.mockChartText}>📈 Biểu đồ tăng trưởng người dùng</Text>
-              <Text style={styles.mockChartSubtext}>Cần cài đặt react-native-chart-kit</Text>
+          {loading ? (
+            <ActivityIndicator size="large" color="#007AFF" />
+          ) : (
+            <View style={styles.statsGrid}>
+              <StatCard
+                title="Doanh thu hôm nay"
+                value={formatCurrency(Number(summary?.todayRevenue) || 0)}
+                change="+12.5%"
+                isPositive={true}
+                icon="trending-up-outline"
+              />
+              <StatCard
+                title="Doanh thu tháng"
+                value={formatCurrency(Number(summary?.monthlyRevenue) || 0)}
+                change="+8.2%"
+                isPositive={true}
+                icon="wallet-outline"
+              />
+              <StatCard
+                title="Yêu cầu chờ"
+                value={String(summary?.pendingRequests ?? '-')}
+                change={summary?.totalRequests ? `/${summary.totalRequests} tổng` : ''}
+                isPositive={true}
+                icon="time-outline"
+              />
+              <StatCard
+                title="Đã hoàn thành"
+                value={String(summary?.completedRequests ?? '-')}
+                change="+15.3%"
+                isPositive={true}
+                icon="checkmark-circle-outline"
+              />
             </View>
-          </View>
-        </View>
-
-        {/* Revenue Chart */}
-        <View style={styles.section}>
-          <View style={styles.chartHeader}>
-            <Text style={styles.chartTitle}>Doanh thu theo tháng</Text>
-            <Text style={styles.chartSubtitle}>6 tháng qua (triệu VNĐ)</Text>
-          </View>
-          <View style={styles.chartContainer}>
-            <View style={styles.mockChart}>
-              <Text style={styles.mockChartText}>📊 Biểu đồ doanh thu</Text>
-              <Text style={styles.mockChartSubtext}>Cần cài đặt react-native-chart-kit</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Service Usage Distribution */}
-        <View style={styles.section}>
-          <View style={styles.chartHeader}>
-            <Text style={styles.chartTitle}>Phân bố sử dụng dịch vụ</Text>
-            <Text style={styles.chartSubtitle}>Theo danh mục (%)</Text>
-          </View>
-          <View style={styles.chartContainer}>
-            <View style={styles.mockChart}>
-              <Text style={styles.mockChartText}>🥧 Biểu đồ tròn phân bố dịch vụ</Text>
-              <Text style={styles.mockChartSubtext}>Cần cài đặt react-native-chart-kit</Text>
-            </View>
-          </View>
+          )}
         </View>
 
         {/* Summary Statistics */}
@@ -210,24 +191,32 @@ export const ReportsScreen: React.FC = () => {
           <Text style={styles.sectionTitle}>Thống kê tổng quan</Text>
           <View style={styles.summaryCard}>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Tổng số đơn hàng:</Text>
-              <Text style={styles.summaryValue}>3,420</Text>
+              <Text style={styles.summaryLabel}>Tổng người dùng:</Text>
+              <Text style={styles.summaryValue}>{loading ? '...' : (summary?.totalUsers ?? '-')}</Text>
             </View>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Đơn hàng thành công:</Text>
-              <Text style={[styles.summaryValue, { color: '#34C759' }]}>3,310 (96.8%)</Text>
+              <Text style={styles.summaryLabel}>Nhân viên:</Text>
+              <Text style={styles.summaryValue}>{loading ? '...' : (summary?.totalStaff ?? '-')}</Text>
             </View>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Đơn hàng bị hủy:</Text>
-              <Text style={[styles.summaryValue, { color: '#FF3B30' }]}>110 (3.2%)</Text>
+              <Text style={styles.summaryLabel}>Thợ:</Text>
+              <Text style={styles.summaryValue}>{loading ? '...' : (summary?.totalAgents ?? '-')}</Text>
             </View>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Doanh thu trung bình/đơn:</Text>
-              <Text style={styles.summaryValue}>{formatCurrency(185000)}</Text>
+              <Text style={styles.summaryLabel}>Tổng dịch vụ:</Text>
+              <Text style={styles.summaryValue}>{loading ? '...' : (summary?.totalServices ?? '-')}</Text>
             </View>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Thời gian xử lý TB:</Text>
-              <Text style={styles.summaryValue}>2.5 ngày</Text>
+              <Text style={styles.summaryLabel}>Tổng yêu cầu:</Text>
+              <Text style={styles.summaryValue}>{loading ? '...' : (summary?.totalRequests ?? '-')}</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Yêu cầu hoàn thành:</Text>
+              <Text style={[styles.summaryValue, { color: '#34C759' }]}>{loading ? '...' : (summary?.completedRequests ?? '-')}</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Yêu cầu đang chờ:</Text>
+              <Text style={[styles.summaryValue, { color: '#FF9500' }]}>{loading ? '...' : (summary?.pendingRequests ?? '-')}</Text>
             </View>
           </View>
         </View>
