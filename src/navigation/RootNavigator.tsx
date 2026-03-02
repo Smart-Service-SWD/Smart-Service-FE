@@ -45,13 +45,12 @@ import { JobTabNavigator } from '../screens/agent/JobTabNavigator';
 // Admin Screens
 import { AdminDashboardScreen } from '../screens/admin/AdminDashboardScreen';
 import { AdminProfileScreen } from '../screens/admin/AdminProfileScreen';
-import { UserManagementScreen } from '../screens/admin/UserManagementScreen';
-import { ServiceManagementScreen } from '../screens/admin/ServiceManagementScreen';
-import { StaffManagementScreen } from '../screens/admin/StaffManagementScreen';
 import { AgentManagementScreen } from '../screens/admin/AgentManagementScreen';
 import { ReportsScreen } from '../screens/admin/ReportsScreen';
-import { SystemSettingsScreen } from '../screens/admin/SystemSettingsScreen';
 import { RequestManagementScreen } from '../screens/admin/RequestManagementScreen';
+import { ServiceManagementScreen } from '../screens/admin/ServiceManagementScreen';
+import { StaffManagementScreen } from '../screens/admin/StaffManagementScreen';
+import { UserManagementScreen } from '../screens/admin/UserManagementScreen';
 
 
 // User Screens
@@ -445,8 +444,6 @@ const StaffTabNavigator = () => {
   );
 };
 
-<<<<<<< HEAD
-=======
 // Staff Stack Navigator (wraps tabs + detail screen)
 const StaffStackNavigator = () => {
   return (
@@ -492,7 +489,6 @@ const AdminDashboardStackNavigator = () => {
     </Stack.Navigator>
   );
 };
->>>>>>> 8de95b4afdcbff1462334bc3e80db4f84ebed012
 
 // Admin Tab Navigator
 const AdminTabNavigator = () => {
@@ -574,12 +570,7 @@ const AppNavigator = () => {
     return <AdminTabNavigator />;
   }
 
-<<<<<<< HEAD
-
-  // If user is STAFF, show Staff-specific tabs
-=======
   // If user is STAFF, show Staff-specific tabs + detail screen
->>>>>>> 8de95b4afdcbff1462334bc3e80db4f84ebed012
   if (user && user.role === 'STAFF') {
     return <StaffStackNavigator />;
   }

@@ -6,16 +6,11 @@ import { ToastService } from '../components/toast';
 const POSSIBLE_HOSTS = [
   
   '10.0.2.2',        // Android Emulator
-<<<<<<< HEAD
   '192.168.1.26', // Máy Window T_Thịnh
   '172.20.10.4', // Máy Window A_Duy
-  '192.168.1.102',
-=======
-  '192.168.1.26',    // Máy Window T_Thịnh
   '192.168.1.100',   // Máy Linux T_Thinh
   '10.87.25.38',     // Máy Window Linh_Tran
   '192.168.123.188', // Máy IP 1111 Linh_Tran
->>>>>>> 8de95b4afdcbff1462334bc3e80db4f84ebed012
   '192.168.1.103',
 ];
 
