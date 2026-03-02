@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { NavigationContainer } from '@react-navigation/native';
+import { DefaultTheme, NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React from 'react';
+import { ActivityIndicator, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 
 // Auth Screens
@@ -30,6 +31,7 @@ import { StaffDashboardScreen } from '../screens/staff/StaffDashboardScreen';
 import { StaffProfileScreen } from '../screens/staff/StaffProfileScreen';
 import { PendingEvaluationsScreen } from '../screens/staff/PendingEvaluationsScreen';
 import { ReEvaluationsScreen } from '../screens/staff/ReEvaluationsScreen';
+import { StaffRequestDetailScreen } from '../screens/staff/StaffRequestDetailScreen';
 
 // Agent Screens
 import { AgentDashboardScreen } from '../screens/agent/AgentDashboardScreen';
@@ -44,6 +46,7 @@ import { StaffManagementScreen } from '../screens/admin/StaffManagementScreen';
 import { AgentManagementScreen } from '../screens/admin/AgentManagementScreen';
 import { ReportsScreen } from '../screens/admin/ReportsScreen';
 import { SystemSettingsScreen } from '../screens/admin/SystemSettingsScreen';
+import { RequestManagementScreen } from '../screens/admin/RequestManagementScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -350,6 +353,52 @@ const StaffTabNavigator = () => {
   );
 };
 
+// Staff Stack Navigator (wraps tabs + detail screen)
+const StaffStackNavigator = () => {
+  return (
+    <Stack.Navigator
+      id="StaffStack"
+      screenOptions={{ headerShown: false }}
+    >
+      <Stack.Screen name="StaffTabs" component={StaffTabNavigator} />
+      <Stack.Screen
+        name="StaffRequestDetail"
+        component={StaffRequestDetailScreen}
+        options={{ headerShown: false }}
+      />
+    </Stack.Navigator>
+  );
+};
+
+// Admin Dashboard Stack Navigator (AdminDashboard + sub-management screens)
+const AdminDashboardStackNavigator = () => {
+  return (
+    <Stack.Navigator
+      id="AdminDashboardStack"
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
+      <Stack.Screen name="AdminDashboardMain" component={AdminDashboardScreen} />
+      <Stack.Screen
+        name="StaffManagement"
+        component={StaffManagementScreen}
+        options={{ headerShown: true, title: 'Quản lý nhân viên', headerStyle: { backgroundColor: '#007AFF' }, headerTintColor: '#fff' }}
+      />
+      <Stack.Screen
+        name="AgentManagement"
+        component={AgentManagementScreen}
+        options={{ headerShown: true, title: 'Quản lý thợ', headerStyle: { backgroundColor: '#007AFF' }, headerTintColor: '#fff' }}
+      />
+      <Stack.Screen
+        name="RequestManagement"
+        component={RequestManagementScreen}
+        options={{ headerShown: false }}
+      />
+    </Stack.Navigator>
+  );
+};
+
 // Admin Tab Navigator
 const AdminTabNavigator = () => {
   return (
@@ -390,7 +439,7 @@ const AdminTabNavigator = () => {
     >
       <Tab.Screen
         name="AdminDashboard"
-        component={AdminDashboardScreen}
+        component={AdminDashboardStackNavigator}
         options={{ title: 'Dashboard' }}
       />
       <Tab.Screen
@@ -472,9 +521,9 @@ const AppNavigator = () => {
     return <AdminTabNavigator />;
   }
 
-  // If user is STAFF, show Staff-specific tabs
+  // If user is STAFF, show Staff-specific tabs + detail screen
   if (user && user.role === 'STAFF') {
-    return <StaffTabNavigator />;
+    return <StaffStackNavigator />;
   }
 
   // If user is AGENT, show Agent-specific tabs
@@ -547,7 +596,11 @@ export const RootNavigator = () => {
   const { loading } = useAuth();
 
   if (loading) {
-    return null; // Or a loading screen
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
+        <ActivityIndicator size="large" color="#007AFF" />
+      </View>
+    );
   }
 
   return (
