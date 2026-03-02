@@ -270,7 +270,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       console.log('Category item clicked:', item.name);
       navigation.navigate('ServiceList', { category: item.name });
     };
-    
+
     return (
       <TouchableOpacity
         style={styles.categoryItem}
@@ -287,9 +287,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   };
 
   const renderFeaturedService = ({ item }: { item: FeaturedService }): React.ReactElement => {
-    const serviceColor = item.image.includes('007AFF') ? '#007AFF' : 
-                         item.image.includes('FF9500') ? '#FF9500' : '#FF3B30';
-    
+    const serviceColor = item.image.includes('007AFF') ? '#007AFF' :
+      item.image.includes('FF9500') ? '#FF9500' : '#FF3B30';
+
     return (
       <TouchableOpacity
         style={styles.serviceCard}
@@ -343,8 +343,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             </View>
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity 
-            onPress={() => navigation.navigate('Profile')} 
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Profile')}
             style={styles.loginButton}
           >
             <Ionicons name="log-in-outline" size={20} color="#fff" />
@@ -356,16 +356,35 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       {/* Promotional Banner */}
       {renderBanner()}
 
-      {/* GraphQL Demo - BE cổng 5268 */}
-      <TouchableOpacity
-        style={styles.graphqlDemoCard}
-        onPress={() => navigation.navigate('GraphQLDemo')}
-        activeOpacity={0.8}
-      >
-        <Ionicons name="code-slash" size={24} color="#007AFF" />
-        <Text style={styles.graphqlDemoText}>GraphQL Demo (BE :5268)</Text>
-        <Ionicons name="chevron-forward" size={20} color="#666" />
-      </TouchableOpacity>
+      {/* GraphQL Demo & Toast Test */}
+      <View style={{ flexDirection: 'row', paddingHorizontal: 20, gap: 10, marginTop: 12 }}>
+        <TouchableOpacity
+          style={[styles.graphqlDemoCard, { flex: 1, marginHorizontal: 0, marginTop: 0 }]}
+          onPress={() => navigation.navigate('GraphQLDemo')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="code-slash" size={20} color="#007AFF" />
+          <Text style={[styles.graphqlDemoText, { fontSize: 13 }]}>GraphQL</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.graphqlDemoCard, { flex: 1, marginHorizontal: 0, marginTop: 0, borderColor: '#10B981' }]}
+          onPress={() => {
+            const { ToastService } = require('../../components/toast');
+            ToastService.show({
+              type: 'success',
+              title: 'Thành công!',
+              message: 'Toast custom hoạt động mượt mà.',
+              duration: 3000
+            });
+          }}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="notifications-outline" size={20} color="#10B981" />
+          <Text style={[styles.graphqlDemoText, { fontSize: 13, color: '#10B981' }]}>Test Toast</Text>
+        </TouchableOpacity>
+      </View>
+
 
       {/* Service Categories */}
       <View style={styles.section}>

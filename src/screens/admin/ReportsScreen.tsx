@@ -6,48 +6,47 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
-  Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-
-const screenWidth = Dimensions.get('window').width;
-
-interface ReportData {
-  userGrowth: number[];
-  revenueData: number[];
-  serviceUsage: Array<{ name: string; population: number; color: string; legendFontColor: string; legendFontSize: number }>;
-  monthlyRevenue: Array<{ month: string; amount: number }>;
-}
+import { adminGraphqlService, DashboardSummary, ServiceListItem } from '../../services/adminGraphqlService';
 
 export const ReportsScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedPeriod, setSelectedPeriod] = useState('month');
-  const [reportData, setReportData] = useState<ReportData>({
-    userGrowth: [20, 45, 28, 80, 99, 43, 120],
-    revenueData: [150, 230, 180, 320, 450, 380, 520],
-    serviceUsage: [
-      { name: 'Điện tử', population: 35, color: '#007AFF', legendFontColor: '#333', legendFontSize: 12 },
-      { name: 'Ô tô', population: 25, color: '#FF9500', legendFontColor: '#333', legendFontSize: 12 },
-      { name: 'Xe máy', population: 20, color: '#34C759', legendFontColor: '#333', legendFontSize: 12 },
-      { name: 'Gia đình', population: 12, color: '#FF3B30', legendFontColor: '#333', legendFontSize: 12 },
-      { name: 'Khác', population: 8, color: '#8E8E93', legendFontColor: '#333', legendFontSize: 12 },
-    ],
-    monthlyRevenue: [
-      { month: 'T1', amount: 45000000 },
-      { month: 'T2', amount: 52000000 },
-      { month: 'T3', amount: 48000000 },
-      { month: 'T4', amount: 65000000 },
-      { month: 'T5', amount: 70000000 },
-      { month: 'T6', amount: 85000000 },
-    ],
-  });
+  const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [topServices, setTopServices] = useState<ServiceListItem[]>([]);
+
+  const fetchData = async (isRefresh = false) => {
+    if (!isRefresh) setLoading(true);
+    try {
+      const [data, agentUsers, services] = await Promise.all([
+        adminGraphqlService.getDashboardSummary(),
+        adminGraphqlService.getUsersByRole('AGENT'),
+        adminGraphqlService.getServiceDefinitions(),
+      ]);
+      setSummary({
+        ...data,
+        totalAgents: data.totalAgents > 0 ? data.totalAgents : agentUsers.length,
+      });
+      const sorted = [...services].sort((a, b) => b.bookingCount - a.bookingCount).slice(0, 4);
+      setTopServices(sorted);
+    } catch (error) {
+      console.warn('Không thể tải dữ liệu báo cáo:', (error as Error).message);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setRefreshing(false);
+    await fetchData(true);
   };
 
   const formatCurrency = (amount: number) => {
@@ -58,51 +57,17 @@ export const ReportsScreen: React.FC = () => {
     }).format(amount);
   };
 
-  const PeriodSelector: React.FC = () => (
-    <View style={styles.periodSelector}>
-      {['week', 'month', 'quarter', 'year'].map(period => (
-        <TouchableOpacity
-          key={period}
-          style={[
-            styles.periodButton,
-            selectedPeriod === period && styles.periodButtonActive
-          ]}
-          onPress={() => setSelectedPeriod(period)}
-        >
-          <Text style={[
-            styles.periodText,
-            selectedPeriod === period && styles.periodTextActive
-          ]}>
-            {period === 'week' ? 'Tuần' : period === 'month' ? 'Tháng' : period === 'quarter' ? 'Quý' : 'Năm'}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
-
-  const StatCard: React.FC<{ 
-    title: string; 
-    value: string; 
-    change: string; 
-    isPositive: boolean;
+  const StatCard: React.FC<{
+    title: string;
+    value: string;
     icon: string;
-  }> = ({ title, value, change, isPositive, icon }) => (
+  }> = ({ title, value, icon }) => (
     <View style={styles.statCard}>
       <View style={styles.statHeader}>
         <Ionicons name={icon as any} size={20} color="#007AFF" />
         <Text style={styles.statTitle}>{title}</Text>
       </View>
       <Text style={styles.statValue}>{value}</Text>
-      <View style={styles.statChange}>
-        <Ionicons 
-          name={isPositive ? 'trending-up' : 'trending-down'} 
-          size={16} 
-          color={isPositive ? '#34C759' : '#FF3B30'} 
-        />
-        <Text style={[styles.changeText, { color: isPositive ? '#34C759' : '#FF3B30' }]}>
-          {change}
-        </Text>
-      </View>
     </View>
   );
 
@@ -123,86 +88,35 @@ export const ReportsScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Period Selector */}
-        <View style={styles.section}>
-          <PeriodSelector />
-        </View>
-
         {/* Key Metrics */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Chỉ số chính</Text>
-          <View style={styles.statsGrid}>
-            <StatCard
-              title="Tổng doanh thu"
-              value={formatCurrency(reportData.monthlyRevenue.reduce((sum, item) => sum + item.amount, 0))}
-              change="+12.5%"
-              isPositive={true}
-              icon="trending-up-outline"
-            />
-            <StatCard
-              title="Người dùng mới"
-              value="435"
-              change="+8.2%"
-              isPositive={true}
-              icon="person-add-outline"
-            />
-            <StatCard
-              title="Đơn hoàn thành"
-              value="1,248"
-              change="+15.3%"
-              isPositive={true}
-              icon="checkmark-circle-outline"
-            />
-            <StatCard
-              title="Tỷ lệ hủy"
-              value="3.2%"
-              change="-2.1%"
-              isPositive={true}
-              icon="close-circle-outline"
-            />
-          </View>
-        </View>
-
-        {/* User Growth Chart */}
-        <View style={styles.section}>
-          <View style={styles.chartHeader}>
-            <Text style={styles.chartTitle}>Tăng trưởng người dùng</Text>
-            <Text style={styles.chartSubtitle}>7 tuần qua</Text>
-          </View>
-          <View style={styles.chartContainer}>
-            <View style={styles.mockChart}>
-              <Text style={styles.mockChartText}>📈 Biểu đồ tăng trưởng người dùng</Text>
-              <Text style={styles.mockChartSubtext}>Cần cài đặt react-native-chart-kit</Text>
+          {loading ? (
+            <ActivityIndicator size="large" color="#007AFF" />
+          ) : (
+            <View style={styles.statsGrid}>
+              <StatCard
+                title="Doanh thu hôm nay"
+                value={formatCurrency(Number(summary?.todayRevenue) || 0)}
+                icon="trending-up-outline"
+              />
+              <StatCard
+                title="Doanh thu tháng"
+                value={formatCurrency(Number(summary?.monthlyRevenue) || 0)}
+                icon="wallet-outline"
+              />
+              <StatCard
+                title="Yêu cầu chờ"
+                value={String(summary?.pendingRequests ?? '-')}
+                icon="time-outline"
+              />
+              <StatCard
+                title="Đã hoàn thành"
+                value={String(summary?.completedRequests ?? '-')}
+                icon="checkmark-circle-outline"
+              />
             </View>
-          </View>
-        </View>
-
-        {/* Revenue Chart */}
-        <View style={styles.section}>
-          <View style={styles.chartHeader}>
-            <Text style={styles.chartTitle}>Doanh thu theo tháng</Text>
-            <Text style={styles.chartSubtitle}>6 tháng qua (triệu VNĐ)</Text>
-          </View>
-          <View style={styles.chartContainer}>
-            <View style={styles.mockChart}>
-              <Text style={styles.mockChartText}>📊 Biểu đồ doanh thu</Text>
-              <Text style={styles.mockChartSubtext}>Cần cài đặt react-native-chart-kit</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Service Usage Distribution */}
-        <View style={styles.section}>
-          <View style={styles.chartHeader}>
-            <Text style={styles.chartTitle}>Phân bố sử dụng dịch vụ</Text>
-            <Text style={styles.chartSubtitle}>Theo danh mục (%)</Text>
-          </View>
-          <View style={styles.chartContainer}>
-            <View style={styles.mockChart}>
-              <Text style={styles.mockChartText}>🥧 Biểu đồ tròn phân bố dịch vụ</Text>
-              <Text style={styles.mockChartSubtext}>Cần cài đặt react-native-chart-kit</Text>
-            </View>
-          </View>
+          )}
         </View>
 
         {/* Summary Statistics */}
@@ -210,24 +124,32 @@ export const ReportsScreen: React.FC = () => {
           <Text style={styles.sectionTitle}>Thống kê tổng quan</Text>
           <View style={styles.summaryCard}>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Tổng số đơn hàng:</Text>
-              <Text style={styles.summaryValue}>3,420</Text>
+              <Text style={styles.summaryLabel}>Tổng người dùng:</Text>
+              <Text style={styles.summaryValue}>{loading ? '...' : (summary?.totalUsers ?? '-')}</Text>
             </View>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Đơn hàng thành công:</Text>
-              <Text style={[styles.summaryValue, { color: '#34C759' }]}>3,310 (96.8%)</Text>
+              <Text style={styles.summaryLabel}>Nhân viên:</Text>
+              <Text style={styles.summaryValue}>{loading ? '...' : (summary?.totalStaff ?? '-')}</Text>
             </View>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Đơn hàng bị hủy:</Text>
-              <Text style={[styles.summaryValue, { color: '#FF3B30' }]}>110 (3.2%)</Text>
+              <Text style={styles.summaryLabel}>Thợ:</Text>
+              <Text style={styles.summaryValue}>{loading ? '...' : (summary?.totalAgents ?? '-')}</Text>
             </View>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Doanh thu trung bình/đơn:</Text>
-              <Text style={styles.summaryValue}>{formatCurrency(185000)}</Text>
+              <Text style={styles.summaryLabel}>Tổng dịch vụ:</Text>
+              <Text style={styles.summaryValue}>{loading ? '...' : (summary?.totalServices ?? '-')}</Text>
             </View>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Thời gian xử lý TB:</Text>
-              <Text style={styles.summaryValue}>2.5 ngày</Text>
+              <Text style={styles.summaryLabel}>Tổng yêu cầu:</Text>
+              <Text style={styles.summaryValue}>{loading ? '...' : (summary?.totalRequests ?? '-')}</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Yêu cầu hoàn thành:</Text>
+              <Text style={[styles.summaryValue, { color: '#34C759' }]}>{loading ? '...' : (summary?.completedRequests ?? '-')}</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Yêu cầu đang chờ:</Text>
+              <Text style={[styles.summaryValue, { color: '#FF9500' }]}>{loading ? '...' : (summary?.pendingRequests ?? '-')}</Text>
             </View>
           </View>
         </View>
@@ -236,24 +158,26 @@ export const ReportsScreen: React.FC = () => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Top dịch vụ được đặt nhiều nhất</Text>
           <View style={styles.topServicesCard}>
-            {[
-              { name: 'Sửa chữa điện tử', bookings: 245, revenue: 36750000 },
-              { name: 'Bảo dưỡng ô tô', bookings: 189, revenue: 94500000 },
-              { name: 'Sửa chữa xe máy', bookings: 156, revenue: 15600000 },
-              { name: 'Dịch vụ gia đình', bookings: 98, revenue: 19600000 },
-            ].map((service, index) => (
-              <View key={service.name} style={styles.topServiceItem}>
-                <View style={styles.rankBadge}>
-                  <Text style={styles.rankText}>{index + 1}</Text>
+            {loading ? (
+              <ActivityIndicator color="#007AFF" />
+            ) : topServices.length === 0 ? (
+              <Text style={{ color: '#999', textAlign: 'center', padding: 12 }}>Chưa có dữ liệu</Text>
+            ) : (
+              topServices.map((service, index) => (
+                <View key={service.id} style={styles.topServiceItem}>
+                  <View style={styles.rankBadge}>
+                    <Text style={styles.rankText}>{index + 1}</Text>
+                  </View>
+                  <View style={styles.topServiceInfo}>
+                    <Text style={styles.topServiceName}>{service.name}</Text>
+                    <Text style={styles.topServiceStats}>
+                      {service.bookingCount > 0 ? `${service.bookingCount} lượt đặt` : 'Chưa có lịch đặt'}
+                      {' • '}{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(service.basePrice) || 0)}
+                    </Text>
+                  </View>
                 </View>
-                <View style={styles.topServiceInfo}>
-                  <Text style={styles.topServiceName}>{service.name}</Text>
-                  <Text style={styles.topServiceStats}>
-                    {service.bookings} lượt đặt • {formatCurrency(service.revenue)}
-                  </Text>
-                </View>
-              </View>
-            ))}
+              ))
+            )}
           </View>
         </View>
       </ScrollView>
