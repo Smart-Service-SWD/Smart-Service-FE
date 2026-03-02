@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import React, { useCallback, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { StepHeader } from '../components/StepHeader';
+import { StepHeader } from '../../components/toast/StepHeader';
 
 export const RequestPage = ({ navigation }: any) => {
   const [request, setRequest] = useState('');

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { StepHeader } from '../components/StepHeader';
+import { StepHeader } from '../../components/toast/StepHeader';
 
 export const FeedbackScreen = ({ navigation, route }: any) => {
   const [orderName, setOrderName] = useState(route?.params?.orderId || '');

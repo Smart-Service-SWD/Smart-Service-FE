@@ -1,6 +1,6 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { StepHeader } from '../components/StepHeader';
+import { StepHeader } from '../../components/toast/StepHeader';
 
 export const PaymentScreen = ({ navigation }: any) => {
   const InputGroup = ({ label }: any) => (
