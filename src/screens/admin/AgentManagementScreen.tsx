@@ -1,17 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
+  ScrollView,
   TouchableOpacity,
   TextInput,
   Alert,
   RefreshControl,
   Modal,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { adminGraphqlService } from '../../services/adminGraphqlService';
+import { adminRestService } from '../../services/adminRestService';
 
 interface Agent {
   id: string;
@@ -30,70 +36,25 @@ interface Agent {
 }
 
 export const AgentManagementScreen: React.FC = () => {
-  const [agents, setAgents] = useState<Agent[]>([
-    {
-      id: '1',
-      fullName: 'Nguyễn Văn Đức',
-      email: 'duc.nguyen@agent.com',
-      phoneNumber: '0901234567',
-      businessName: 'Trung tâm sửa chữa Đức',
-      address: '123 Nguyễn Trãi, Q.1, TP.HCM',
-      status: 'active',
-      joinDate: '2023-05-15',
-      servicesOffered: ['Sửa chữa điện tử', 'Bảo dưỡng ô tô'],
-      totalRevenue: 45000000,
-      completedOrders: 156,
-      averageRating: 4.8,
-      commissionRate: 15,
-    },
-    {
-      id: '2',
-      fullName: 'Trần Thị Hoa',
-      email: 'hoa.tran@agent.com',
-      phoneNumber: '0912345678',
-      businessName: 'Dịch vụ gia đình Hoa',
-      address: '456 Lê Văn Sỹ, Q.3, TP.HCM',
-      status: 'active',
-      joinDate: '2023-03-20',
-      servicesOffered: ['Vệ sinh nhà cửa', 'Chăm sóc người già'],
-      totalRevenue: 32000000,
-      completedOrders: 89,
-      averageRating: 4.6,
-      commissionRate: 12,
-    },
-    {
-      id: '3',
-      fullName: 'Lê Minh Tuấn',
-      email: 'tuan.le@agent.com',
-      phoneNumber: '0923456789',
-      businessName: 'Garage Tuấn',
-      address: '789 Võ Văn Tần, Q.3, TP.HCM',
-      status: 'pending',
-      joinDate: '2024-01-15',
-      servicesOffered: ['Sửa chữa xe máy'],
-      totalRevenue: 8500000,
-      completedOrders: 23,
-      averageRating: 4.2,
-      commissionRate: 10,
-    },
-  ]);
-  
-  const [filteredAgents, setFilteredAgents] = useState<Agent[]>(agents);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [loading, setLoading] = useState(true);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
 
+  // Create agent form
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [createForm, setCreateForm] = useState({ fullName: '', email: '', phoneNumber: '' });
+  const [creating, setCreating] = useState(false);
+
   const statuses = ['all', 'active', 'inactive', 'pending', 'suspended'];
 
-  useEffect(() => {
-    filterAgents();
-  }, [agents, searchQuery, selectedStatus]);
-
-  const filterAgents = () => {
+  // Dùng useMemo để filter trực tiếp — tránh stale closure
+  const filteredAgents = useMemo(() => {
     let filtered = agents;
-
     if (searchQuery.trim()) {
       filtered = filtered.filter(agent =>
         agent.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -101,19 +62,67 @@ export const AgentManagementScreen: React.FC = () => {
         agent.businessName.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
-
     if (selectedStatus !== 'all') {
       filtered = filtered.filter(agent => agent.status === selectedStatus);
     }
+    return filtered;
+  }, [agents, searchQuery, selectedStatus]);
 
-    setFilteredAgents(filtered);
+
+  const loadAgents = async (isRefresh = false) => {
+    if (!isRefresh) setLoading(true);
+    try {
+      const users = await adminGraphqlService.getUsersByRole('AGENT');
+      const mapped: Agent[] = users.map(u => ({
+        id: u.id,
+        fullName: u.fullName,
+        email: u.email,
+        phoneNumber: u.phoneNumber ?? '',
+        businessName: u.fullName,
+        address: '',
+        status: 'active' as const,
+        joinDate: new Date().toISOString().split('T')[0],
+        servicesOffered: [],
+        totalRevenue: 0,
+        completedOrders: 0,
+        averageRating: 0,
+        commissionRate: 0,
+      }));
+      setAgents(mapped);
+    } catch (error) {
+      Alert.alert('Lỗi', (error as Error).message || 'Không thể tải danh sách thợ');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   };
+
+  useEffect(() => {
+    loadAgents();
+  }, []);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setRefreshing(false);
+    await loadAgents(true);
+  };
+
+  const handleCreateAgent = async () => {
+    const { fullName, email, phoneNumber } = createForm;
+    if (!fullName.trim()) { Alert.alert('Lỗi', 'Vui lòng nhập họ tên'); return; }
+    if (!email.trim() || !email.includes('@')) { Alert.alert('Lỗi', 'Email không hợp lệ'); return; }
+    if (!phoneNumber.trim()) { Alert.alert('Lỗi', 'Vui lòng nhập số điện thoại'); return; }
+    setCreating(true);
+    try {
+      await adminRestService.createAgent({ fullName: fullName.trim(), email: email.trim(), phoneNumber: phoneNumber.trim() });
+      Alert.alert('Thành công', 'Tạo thợ thành công');
+      setCreateModalVisible(false);
+      setCreateForm({ fullName: '', email: '', phoneNumber: '' });
+      loadAgents(true);
+    } catch (error) {
+      Alert.alert('Lỗi', (error as any)?.response?.data?.message || (error as Error).message || 'Tạo thợ thất bại');
+    } finally {
+      setCreating(false);
+    }
   };
 
   const formatCurrency = (amount: number) => {
@@ -154,7 +163,7 @@ export const AgentManagementScreen: React.FC = () => {
       case 'approve':
         Alert.alert(
           'Xác nhận',
-          `Bạn có chắc chắn muốn phê duyệt đại lý ${agent.businessName}?`,
+          `Bạn có chắc chắn muốn phê duyệt thợ ${agent.businessName}?`,
           [
             { text: 'Hủy', style: 'cancel' },
             { 
@@ -174,7 +183,7 @@ export const AgentManagementScreen: React.FC = () => {
         const newStatus = agent.status === 'suspended' ? 'active' : 'suspended';
         Alert.alert(
           'Xác nhận',
-          `Bạn có chắc chắn muốn ${newStatus === 'suspended' ? 'khóa' : 'mở khóa'} đại lý ${agent.businessName}?`,
+          `Bạn có chắc chắn muốn ${newStatus === 'suspended' ? 'khóa' : 'mở khóa'} thợ ${agent.businessName}?`,
           [
             { text: 'Hủy', style: 'cancel' },
             { 
@@ -297,12 +306,12 @@ export const AgentManagementScreen: React.FC = () => {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Quản lý đại lý</Text>
-        <TouchableOpacity style={styles.addButton}>
-          <Ionicons name="business" size={20} color="#007AFF" />
+        <Text style={styles.headerTitle}>Quản lý thợ</Text>
+        <TouchableOpacity style={styles.addButton} onPress={() => setCreateModalVisible(true)}>
+          <Ionicons name="hammer-outline" size={20} color="#007AFF" />
           <Text style={styles.addText}>Thêm</Text>
         </TouchableOpacity>
       </View>
@@ -313,13 +322,18 @@ export const AgentManagementScreen: React.FC = () => {
           <Ionicons name="search" size={20} color="#666" />
           <TextInput
             style={styles.searchInput}
-            placeholder="Tìm kiếm đại lý..."
+            placeholder="Tìm kiếm thợ..."
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
         </View>
         
-        <View style={styles.filterRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filterRow}
+          contentContainerStyle={styles.filterRowContent}
+        >
           {statuses.map(status => (
             <TouchableOpacity
               key={status}
@@ -337,7 +351,7 @@ export const AgentManagementScreen: React.FC = () => {
               </Text>
             </TouchableOpacity>
           ))}
-        </View>
+        </ScrollView>
       </View>
 
       {/* Agents List */}
@@ -346,14 +360,25 @@ export const AgentManagementScreen: React.FC = () => {
         renderItem={renderAgentItem}
         keyExtractor={item => item.id}
         showsVerticalScrollIndicator={false}
+        removeClippedSubviews
+        maxToRenderPerBatch={8}
+        windowSize={5}
+        initialNumToRender={8}
+        keyboardShouldPersistTaps="handled"
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#007AFF" />
         }
         contentContainerStyle={styles.listContainer}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="business-outline" size={48} color="#ccc" />
-            <Text style={styles.emptyText}>Không tìm thấy đại lý nào</Text>
+            {loading ? (
+              <ActivityIndicator size="large" color="#007AFF" />
+            ) : (
+              <>
+                <Ionicons name="hammer-outline" size={48} color="#ccc" />
+                <Text style={styles.emptyText}>Không tìm thấy thợ nào</Text>
+              </>
+            )}
           </View>
         }
       />
@@ -370,14 +395,14 @@ export const AgentManagementScreen: React.FC = () => {
             {selectedAgent && (
               <>
                 <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>Chi tiết đại lý</Text>
+                  <Text style={styles.modalTitle}>Chi tiết thợ</Text>
                   <TouchableOpacity onPress={() => setModalVisible(false)}>
                     <Ionicons name="close" size={24} color="#333" />
                   </TouchableOpacity>
                 </View>
                 
                 <View style={styles.modalBody}>
-                  <Text style={styles.detailLabel}>Tên đại lý:</Text>
+                  <Text style={styles.detailLabel}>Tên thợ:</Text>
                   <Text style={styles.detailValue}>{selectedAgent.fullName}</Text>
                   
                   <Text style={styles.detailLabel}>Tên doanh nghiệp:</Text>
@@ -428,6 +453,74 @@ export const AgentManagementScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
+
+      {/* Create Agent Modal */}
+      <Modal
+        animationType="slide"
+        transparent
+        visible={createModalVisible}
+        onRequestClose={() => setCreateModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' }}>
+          <View style={styles.createSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Thêm thợ mới</Text>
+              <TouchableOpacity onPress={() => setCreateModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.detailLabel}>Họ tên *</Text>
+            <TextInput
+              style={styles.formInput}
+              placeholder="Nhập họ tên"
+              value={createForm.fullName}
+              onChangeText={v => setCreateForm(p => ({ ...p, fullName: v }))}
+            />
+            <Text style={styles.detailLabel}>Email *</Text>
+            <TextInput
+              style={styles.formInput}
+              placeholder="Nhập email"
+              value={createForm.email}
+              onChangeText={v => setCreateForm(p => ({ ...p, email: v }))}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            <Text style={styles.detailLabel}>Số điện thoại *</Text>
+            <TextInput
+              style={styles.formInput}
+              placeholder="Nhập số điện thoại"
+              value={createForm.phoneNumber}
+              onChangeText={v => setCreateForm(p => ({ ...p, phoneNumber: v }))}
+              keyboardType="phone-pad"
+            />
+
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 20, marginBottom: Platform.OS === 'ios' ? 20 : 10 }}>
+              <TouchableOpacity
+                style={{ flex: 1, paddingVertical: 12, backgroundColor: '#F5F6FA', borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: '#E0E0E0' }}
+                onPress={() => setCreateModalVisible(false)}
+              >
+                <Text style={{ color: '#555', fontWeight: '600' }}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex: 1, paddingVertical: 12, backgroundColor: '#007AFF', borderRadius: 10, alignItems: 'center', opacity: creating ? 0.6 : 1 }}
+                onPress={handleCreateAgent}
+                disabled={creating}
+              >
+                {creating
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <Text style={{ color: '#fff', fontWeight: '600' }}>Tạo mới</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -442,7 +535,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 15,
+    paddingTop: 12,
+    paddingBottom: 12,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
@@ -486,7 +580,10 @@ const styles = StyleSheet.create({
   },
   filterRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+  },
+  filterRowContent: {
+    flexDirection: 'row',
+    gap: 8,
   },
   filterButton: {
     paddingVertical: 8,
@@ -646,6 +743,14 @@ const styles = StyleSheet.create({
     width: '90%',
     maxHeight: '80%',
   },
+  createSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 24,
+    paddingBottom: 32,
+    width: '100%',
+  },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -670,5 +775,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     fontWeight: '500',
+  },
+  formInput: {
+    backgroundColor: '#F5F6FA',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#333',
+    borderWidth: 1,
+    borderColor: '#EAEAEA',
+    marginBottom: 4,
   },
 });

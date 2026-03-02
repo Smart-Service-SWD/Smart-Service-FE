@@ -1,17 +1,80 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
   View,
   Text,
   TouchableOpacity,
   ScrollView,
-  Alert
+  Alert,
+  ActivityIndicator,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
+import { adminGraphqlService } from '../../services/adminGraphqlService';
+import { adminRestService } from '../../services/adminRestService';
 
 export const AdminProfileScreen: React.FC<{ navigation }> = ({ navigation }) => {
-  const { user, logout } = useAuth();
+  const { user, logout, updateProfile } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [editVisible, setEditVisible] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const openEdit = () => {
+    setEditName(user?.fullName || '');
+    setEditPhone(user?.phoneNumber || '');
+    setEditVisible(true);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!editName.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập họ và tên');
+      return;
+    }
+    setSaving(true);
+    try {
+      await adminRestService.updateProfile(editName.trim(), editPhone.trim());
+      await updateProfile({
+        fullName: editName.trim(),
+        email: user?.email || '',
+        phoneNumber: editPhone.trim() || undefined,
+        role: user?.role as any,
+      });
+      setEditVisible(false);
+      Alert.alert('Thành công', 'Cập nhật hồ sơ thành công');
+    } catch (error) {
+      Alert.alert('Lỗi', (error as Error).message || 'Không thể cập nhật hồ sơ');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const profile = await adminGraphqlService.getCurrentUser();
+        if (profile) {
+          await updateProfile({
+            fullName: profile.fullName,
+            email: profile.email,
+            phoneNumber: profile.phoneNumber || undefined,
+            role: profile.role === 'CUSTOMER' ? 'USER' : (profile.role as any),
+          });
+        }
+      } catch (error) {
+        Alert.alert('Lỗi', (error as Error).message || 'Không thể tải hồ sơ');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProfile();
+  }, [updateProfile]);
 
   const handleLogout = () => {
     Alert.alert(
@@ -29,6 +92,7 @@ export const AdminProfileScreen: React.FC<{ navigation }> = ({ navigation }) => 
   };
 
   return (
+    <View style={{ flex: 1, backgroundColor: '#f8f9fa' }}>
     <ScrollView style={styles.container}>
       <View style={styles.header}>
         <View style={[styles.avatarContainer, { backgroundColor: '#FF3B30' }]}>
@@ -42,30 +106,39 @@ export const AdminProfileScreen: React.FC<{ navigation }> = ({ navigation }) => 
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Thông tin tài khoản</Text>
-        
-        <View style={styles.infoItem}>
-          <Ionicons name="mail-outline" size={20} color="#666" />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Email</Text>
-            <Text style={styles.infoValue}>{user?.email || 'N/A'}</Text>
-          </View>
-        </View>
 
-        <View style={styles.infoItem}>
-          <Ionicons name="call-outline" size={20} color="#666" />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Số điện thoại</Text>
-            <Text style={styles.infoValue}>{user?.phoneNumber || 'N/A'}</Text>
+        {loading ? (
+          <View style={styles.loadingRow}>
+            <ActivityIndicator size="small" color="#007AFF" />
+            <Text style={styles.loadingText}>Đang tải hồ sơ...</Text>
           </View>
-        </View>
+        ) : (
+          <>
+            <View style={styles.infoItem}>
+              <Ionicons name="mail-outline" size={20} color="#666" />
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLabel}>Email</Text>
+                <Text style={styles.infoValue}>{user?.email || 'N/A'}</Text>
+              </View>
+            </View>
 
-        <View style={styles.infoItem}>
-          <Ionicons name="shield-checkmark-outline" size={20} color="#666" />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Vai trò</Text>
-            <Text style={styles.infoValue}>Quản trị viên hệ thống</Text>
-          </View>
-        </View>
+            <View style={styles.infoItem}>
+              <Ionicons name="call-outline" size={20} color="#666" />
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLabel}>Số điện thoại</Text>
+                <Text style={styles.infoValue}>{user?.phoneNumber || 'N/A'}</Text>
+              </View>
+            </View>
+
+            <View style={styles.infoItem}>
+              <Ionicons name="shield-checkmark-outline" size={20} color="#666" />
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLabel}>Vai trò</Text>
+                <Text style={styles.infoValue}>Quản trị viên hệ thống</Text>
+              </View>
+            </View>
+          </>
+        )}
       </View>
 
       <View style={styles.section}>
@@ -104,7 +177,7 @@ export const AdminProfileScreen: React.FC<{ navigation }> = ({ navigation }) => 
         
         <TouchableOpacity 
           style={styles.actionItem}
-          onPress={() => Alert.alert('Thông báo', 'Chức năng đang phát triển')}
+          onPress={openEdit}
         >
           <Ionicons name="create-outline" size={20} color="#007AFF" />
           <Text style={styles.actionText}>Chỉnh sửa thông tin</Text>
@@ -138,6 +211,46 @@ export const AdminProfileScreen: React.FC<{ navigation }> = ({ navigation }) => 
         </TouchableOpacity>
       </View>
     </ScrollView>
+
+      {/* Edit Profile Modal */}
+      <Modal visible={editVisible} transparent animationType="slide" onRequestClose={() => setEditVisible(false)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalSheet}>
+              <Text style={styles.modalTitle}>Chỉnh sửa hồ sơ</Text>
+
+              <Text style={styles.fieldLabel}>Họ và tên *</Text>
+              <TextInput
+                style={styles.input}
+                value={editName}
+                onChangeText={setEditName}
+                placeholder="Nhập họ và tên"
+                placeholderTextColor="#aaa"
+              />
+
+              <Text style={styles.fieldLabel}>Số điện thoại</Text>
+              <TextInput
+                style={styles.input}
+                value={editPhone}
+                onChangeText={setEditPhone}
+                placeholder="Nhập số điện thoại"
+                placeholderTextColor="#aaa"
+                keyboardType="phone-pad"
+              />
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity style={styles.btnCancel} onPress={() => setEditVisible(false)} disabled={saving}>
+                  <Text style={styles.btnCancelText}>Hủy</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.btnSave, saving && { opacity: 0.6 }]} onPress={handleSaveProfile} disabled={saving}>
+                  {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.btnSaveText}>Lưu</Text>}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </View>
   );
 };
 
@@ -210,6 +323,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
   },
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  loadingText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: '#666',
+  },
   actionItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -229,5 +353,69 @@ const styles = StyleSheet.create({
   },
   logoutText: {
     color: '#FF3B30',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 24,
+    paddingBottom: 32,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 20,
+  },
+  fieldLabel: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 6,
+    marginTop: 4,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 15,
+    color: '#333',
+    backgroundColor: '#fafafa',
+    marginBottom: 12,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  btnCancel: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    alignItems: 'center',
+  },
+  btnCancelText: {
+    fontSize: 15,
+    color: '#666',
+    fontWeight: '600',
+  },
+  btnSave: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: '#007AFF',
+    alignItems: 'center',
+  },
+  btnSaveText: {
+    fontSize: 15,
+    color: '#fff',
+    fontWeight: '700',
   },
 });

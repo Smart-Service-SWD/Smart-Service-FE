@@ -32,9 +32,7 @@ export interface RegisterData {
   fullName: string;
   email: string;
   password: string;
-  phone: string;
-  phoneNumber?: string;
-  role: 'USER' | 'STAFF' | 'AGENT' | 'ADMIN';
+  phoneNumber: string;
 }
 
 export interface AnalysisResult {

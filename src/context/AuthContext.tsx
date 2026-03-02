@@ -91,7 +91,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const storedToken = await AsyncStorage.getItem('authToken');
       const storedUser = await AsyncStorage.getItem('user');
-      
+
       if (storedToken && storedUser) {
         setToken(storedToken);
         setUser(JSON.parse(storedUser));
@@ -103,40 +103,60 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const normalizeRole = (role: any): User['role'] => {
+    if (typeof role === 'string') {
+      const upper = role.toUpperCase();
+      if (upper === 'CUSTOMER') return 'USER';
+      if (upper === 'STAFF') return 'STAFF';
+      if (upper === 'AGENT') return 'AGENT';
+      if (upper === 'ADMIN') return 'ADMIN';
+      if (upper === 'USER') return 'USER';
+    }
+    // BE serializes UserRole enum as numbers: Customer=0, Staff=1, Agent=2, Admin=3
+    if (typeof role === 'number') {
+      if (role === 0) return 'USER';   // Customer
+      if (role === 1) return 'STAFF';  // Staff
+      if (role === 2) return 'AGENT';  // Agent
+      if (role === 3) return 'ADMIN';  // Admin
+    }
+    return 'USER';
+  };
+
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
       setLoading(true);
-      
-      // 2. ĐỌC TỪ MOCK DB TRƯỚC (Thay vì danh sách cứng)
-      const storedDb = await AsyncStorage.getItem('mock_users_db');
-      // Nếu không có DB (lỗi gì đó), dùng danh sách mặc định
-      const allAccounts = storedDb ? JSON.parse(storedDb) : DEFAULT_MOCK_ACCOUNTS;
 
-      // Tìm kiếm user trong danh sách tổng hợp
-      const mockAccount = allAccounts.find(
-        (acc: any) => acc.email.toLowerCase() === email.toLowerCase() && acc.password === password
-      );
+      const response = await authService.login(email, password);
+      const { accessToken, userId, email: userEmail, fullName, role, phoneNumber, phone } = response || {};
 
-      if (mockAccount) {
-        await AsyncStorage.setItem('authToken', mockAccount.token);
-        await AsyncStorage.setItem('user', JSON.stringify(mockAccount.user));
-        
-        setToken(mockAccount.token);
-        setUser(mockAccount.user);
-        return { success: true };
+      if (!accessToken || !userId) {
+        return { success: false, error: 'Sai email hoặc mật khẩu' };
       }
 
-      // Nếu không tìm thấy trong Mock DB, thử gọi API thật (nếu có backend)
-      // Chú ý: Nếu bạn chỉ đang test frontend thì phần này thường sẽ trả về lỗi luôn
-      // const response = await authService.login(email, password);
-      // ...
-      
-      return { success: false, error: 'Email hoặc mật khẩu không đúng' };
+      const userData: User = {
+        id: userId,
+        email: userEmail,
+        fullName,
+        phoneNumber: phoneNumber || phone,
+        role: normalizeRole(role),
+      };
 
+      await AsyncStorage.setItem('authToken', accessToken);
+      await AsyncStorage.setItem('user', JSON.stringify(userData));
+
+      setToken(accessToken);
+      setUser(userData);
+      return { success: true };
     } catch (error) {
       const err = error as Error;
       console.error('Login error:', err);
-      return { success: false, error: err.message || 'Login failed' };
+      const status = (error as any).response?.status;
+      const apiError =
+        (error as any).response?.data?.message ||
+        (status === 401 ? 'Sai email hoặc mật khẩu' : undefined) ||
+        err.message ||
+        'Login failed';
+      return { success: false, error: apiError };
     } finally {
       setLoading(false);
     }
@@ -145,53 +165,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const register = async (userData: RegisterData): Promise<{ success: boolean; error?: string }> => {
     try {
       setLoading(true);
+      const response = await authService.register(userData);
 
-      // 3. LOGIC ĐĂNG KÝ GIẢ (MOCK REGISTER)
-      
-      // Lấy danh sách hiện tại
-      const storedDb = await AsyncStorage.getItem('mock_users_db');
-      const currentAccounts = storedDb ? JSON.parse(storedDb) : DEFAULT_MOCK_ACCOUNTS;
+      const { accessToken, userId, email: userEmail, fullName, role, phoneNumber, phone } = response;
 
-      // Kiểm tra trùng email
-      const isExist = currentAccounts.some((acc: any) => acc.email.toLowerCase() === userData.email.toLowerCase());
-      if (isExist) {
-        return { success: false, error: 'Email đã tồn tại!' };
-      }
-
-      // Tạo user mới
-      const newUserId = Date.now().toString();
-      const newUserToken = `mock-token-${newUserId}`;
-      
-      const newUserEntry = {
-        email: userData.email,
-        password: userData.password,
-        user: {
-          id: newUserId,
-          email: userData.email,
-          fullName: userData.fullName,
-          phoneNumber: userData.phoneNumber,
-          role: 'USER' as const, // Mặc định là USER
-        },
-        token: newUserToken,
+      const newUser: User = {
+        id: userId,
+        email: userEmail,
+        fullName,
+        phoneNumber: phoneNumber || phone,
+        role: normalizeRole(role),
       };
 
-      // Thêm vào danh sách và lưu lại
-      const newAccountsList = [...currentAccounts, newUserEntry];
-      await AsyncStorage.setItem('mock_users_db', JSON.stringify(newAccountsList));
+      await AsyncStorage.setItem('authToken', accessToken);
+      await AsyncStorage.setItem('user', JSON.stringify(newUser));
 
-      // Tự động login luôn
-      await AsyncStorage.setItem('authToken', newUserToken);
-      await AsyncStorage.setItem('user', JSON.stringify(newUserEntry.user));
-      
-      setToken(newUserToken);
-      setUser(newUserEntry.user);
-      
+      setToken(accessToken);
+      setUser(newUser);
       return { success: true };
 
     } catch (error) {
       const err = error as Error;
       console.error('Registration error:', err);
-      return { success: false, error: err.message || 'Registration failed' };
+      const apiError = (error as any).response?.data?.message || err.message || 'Registration failed';
+      return { success: false, error: apiError };
     } finally {
       setLoading(false);
     }
