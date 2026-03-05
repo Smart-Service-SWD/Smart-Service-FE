@@ -1,110 +1,114 @@
-import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { StepHeader } from '../../components/toast/StepHeader';
+import { Ionicons } from "@expo/vector-icons";
+import React, { useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { submitFeedback } from "../../services/userService";
 
-export const FeedbackScreen = ({ navigation, route }: any) => {
-  const [orderName, setOrderName] = useState(route?.params?.orderId || '');
+interface Props {
+  navigation: any;
+  route: { params?: { serviceRequestId?: string } };
+}
+
+export const FeedbackScreen = ({ navigation, route }: Props) => {
+  const serviceRequestId = route?.params?.serviceRequestId ?? "";
   const [rating, setRating] = useState(0);
-  const [feedback, setFeedback] = useState('');
+  const [comment, setComment] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const submitFeedback = async () => {
-    if (!orderName || rating === 0 || !feedback.trim()) {
-      Alert.alert('Lỗi', 'Vui lòng điền đầy đủ thông tin');
+  const handleSubmit = async () => {
+    if (!serviceRequestId) {
+      Alert.alert("Lỗi", "Không xác định được yêu cầu dịch vụ");
+      return;
+    }
+    if (rating === 0) {
+      Alert.alert("Thiếu thông tin", "Vui lòng chọn số sao đánh giá");
+      return;
+    }
+    if (!comment.trim()) {
+      Alert.alert("Thiếu thông tin", "Vui lòng nhập nhận xét của bạn");
       return;
     }
 
     setLoading(true);
     try {
-      // Thay thế bằng URL API thực từ hình ảnh Postman
-      const response = await fetch('https://your-api.com/api/feedback', {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          // Thêm Authorization nếu cần: 'Authorization': 'Bearer your-token',
-        },
-        body: JSON.stringify({
-          order_id: orderName,
-          rating: rating,
-          comment: feedback,
-        }),
-      });
-
-      if (response.ok) {
-        Alert.alert('Thành công', 'Gửi feedback thành công!');
-        navigation.popToTop();
-      } else {
-        Alert.alert('Lỗi', 'Gửi thất bại, vui lòng thử lại');
-      }
-    } catch (error) {
-      Alert.alert('Lỗi', 'Không kết nối được server');
-      console.error(error);
+      await submitFeedback({ serviceRequestId, rating, comment: comment.trim() });
+      Alert.alert("Cảm ơn!", "Đánh giá của bạn đã được ghi nhận.", [
+        { text: "OK", onPress: () => navigation.goBack() },
+      ]);
+    } catch (error: any) {
+      const msg = error?.response?.data?.message ?? error?.message ?? "Không thể gửi đánh giá";
+      Alert.alert("Lỗi", msg);
     } finally {
       setLoading(false);
     }
   };
 
+  const RATING_LABELS = ["", "Tệ", "Không tốt", "Bình thường", "Tốt", "Xuất sắc"];
+
   return (
     <View style={styles.container}>
-      <StepHeader step={3} title="Feedback" />
-      
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Tên đơn hàng</Text>
-          <TextInput 
-            style={styles.input} 
-            value={orderName}
-            onChangeText={setOrderName}
-            placeholder="Nhập tên đơn hàng"
-          />
-        </View>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={24} color="#fff" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Đánh giá dịch vụ</Text>
+        <View style={{ width: 40 }} />
+      </View>
 
-        {/* Star Rating */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Đánh giá số sao</Text>
-          <View style={styles.starContainer}>
-            {[1, 2, 3, 4, 5].map((i) => (
-              <TouchableOpacity key={i} onPress={() => setRating(i)}>
-                <Ionicons 
-                  name={i <= rating ? "star" : "star-outline"} 
-                  size={24} 
-                  color={i <= rating ? "#FBBF24" : "#9CA3AF"} 
-                  style={{ marginHorizontal: 4 }} 
+      <ScrollView contentContainerStyle={styles.content}>
+        {/* Star rating */}
+        <View style={styles.ratingSection}>
+          <Text style={styles.ratingTitle}>Bạn cảm thấy thế nào?</Text>
+          <View style={styles.starsRow}>
+            {[1, 2, 3, 4, 5].map(i => (
+              <TouchableOpacity key={i} onPress={() => setRating(i)} style={styles.starBtn}>
+                <Ionicons
+                  name={i <= rating ? "star" : "star-outline"}
+                  size={42}
+                  color={i <= rating ? "#FBBF24" : "#D1D5DB"}
                 />
               </TouchableOpacity>
             ))}
           </View>
+          {rating > 0 && (
+            <Text style={styles.ratingLabel}>{RATING_LABELS[rating]}</Text>
+          )}
         </View>
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Feedback</Text>
-          <TextInput 
-            style={[styles.input, styles.textArea]} 
-            multiline 
-            value={feedback}
-            onChangeText={setFeedback}
-            placeholder="Nhập nội dung feedback..."
-          />
-        </View>
+        {/* Comment */}
+        <Text style={styles.label}>Nhận xét *</Text>
+        <TextInput
+          style={[styles.input, styles.textArea]}
+          value={comment}
+          onChangeText={setComment}
+          placeholder="Chia sẻ trải nghiệm của bạn về dịch vụ..."
+          multiline
+          numberOfLines={5}
+          placeholderTextColor="#9CA3AF"
+          textAlignVertical="top"
+        />
 
-        {/* Links */}
-        <View style={styles.linkRow}>
-          <Text style={styles.linkBlue}>Thêm tài liệu đính kèm</Text>
-          <Text style={styles.linkRed}>Báo cáo sai phạm</Text>
-        </View>
-
-        {/* Send Button */}
-        <TouchableOpacity 
-          style={[styles.sendButton, loading && styles.sendButtonDisabled]}
-          onPress={submitFeedback}
-          disabled={loading}
+        <TouchableOpacity
+          style={[styles.submitBtn, (loading || rating === 0) && styles.submitBtnDisabled]}
+          onPress={handleSubmit}
+          disabled={loading || rating === 0}
         >
           {loading ? (
-            <Text style={styles.sendButtonText}>Đang gửi...</Text>
+            <ActivityIndicator color="#fff" size="small" />
           ) : (
-            <Text style={styles.sendButtonText}>Send</Text>
+            <>
+              <Ionicons name="send" size={18} color="#fff" />
+              <Text style={styles.submitBtnText}>Gửi đánh giá</Text>
+            </>
           )}
         </TouchableOpacity>
       </ScrollView>
@@ -113,37 +117,45 @@ export const FeedbackScreen = ({ navigation, route }: any) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  content: { padding: 24 },
-  inputGroup: { marginBottom: 20 },
-  label: { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 6 },
-  input: { 
-    backgroundColor: '#E5E7EB', 
-    borderRadius: 6, 
-    padding: 12, 
-    color: '#000',
-    fontSize: 16,
+  container: { flex: 1, backgroundColor: "#F9FAFB" },
+  header: {
+    backgroundColor: "#F59E0B",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingTop: 50,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
   },
-  textArea: { height: 96, textAlignVertical: 'top' },
-  starContainer: {
-    backgroundColor: '#E5E7EB', 
-    padding: 12, 
-    borderRadius: 6,
-    flexDirection: 'row', 
-    alignItems: 'center'
+  backBtn: { padding: 4, width: 40 },
+  headerTitle: { flex: 1, textAlign: "center", fontSize: 18, fontWeight: "700", color: "#fff" },
+  content: { padding: 24, paddingBottom: 40 },
+  ratingSection: { alignItems: "center", paddingVertical: 32 },
+  ratingTitle: { fontSize: 18, fontWeight: "700", color: "#1F2937", marginBottom: 20 },
+  starsRow: { flexDirection: "row", gap: 8 },
+  starBtn: { padding: 4 },
+  ratingLabel: { marginTop: 12, fontSize: 16, fontWeight: "600", color: "#F59E0B" },
+  label: { fontSize: 14, fontWeight: "600", color: "#374151", marginBottom: 8 },
+  input: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: "#111827",
   },
-  linkRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
-  linkBlue: { color: '#3B82F6', textDecorationLine: 'underline', fontSize: 12 },
-  linkRed: { color: '#EF4444', textDecorationLine: 'underline', fontSize: 12 },
-  sendButton: {
-    backgroundColor: '#2563EB', 
-    paddingVertical: 14, 
-    borderRadius: 6,
-    alignItems: 'center', 
-    marginTop: 32
+  textArea: { minHeight: 130, textAlignVertical: "top" },
+  submitBtn: {
+    flexDirection: "row",
+    backgroundColor: "#F59E0B",
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 24,
   },
-  sendButtonDisabled: {
-    backgroundColor: '#9CA3AF',
-  },
-  sendButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 18 },
+  submitBtnDisabled: { backgroundColor: "#FCD34D" },
+  submitBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
 });

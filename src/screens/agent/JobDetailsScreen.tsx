@@ -32,10 +32,10 @@ interface ServiceRequestResponse {
 
 const fetchServiceRequestById = async (id: string): Promise<ServiceRequest> => {
   try {
-    const token = await AsyncStorage.getItem('token');
-    const graphqlUrl = await resolveGraphQLBaseUrl(); // ✅ THÊM DÒNG NÀY
+    const token = await AsyncStorage.getItem('authToken');
+    const graphqlUrl = await resolveGraphQLBaseUrl();
     
-    const response = await fetch(graphqlUrl, { // ✅ THAY 'http://localhost:5268/graphql'
+    const response = await fetch(graphqlUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -77,7 +77,8 @@ const fetchServiceRequestById = async (id: string): Promise<ServiceRequest> => {
 export const JobDetailsScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { jobId } = route.params || {};
+  console.log("Route params:", route.params);
+  const jobId = route.params?.job?.id;
 
   const [serviceRequest, setServiceRequest] = useState<ServiceRequest | null>(null);
   const [loading, setLoading] = useState(true);

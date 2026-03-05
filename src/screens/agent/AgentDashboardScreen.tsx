@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -13,7 +14,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 
 export const AgentDashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const [loading, setLoading] = useState<boolean>(false);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [isAvailable, setIsAvailable] = useState<boolean>(true);
@@ -56,6 +57,29 @@ export const AgentDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
 
   const toggleAvailability = async () => {
     setIsAvailable(!isAvailable);
+  };
+
+  // 🔥 THÊM LOGOUT FUNCTION
+  const handleLogout = () => {
+    Alert.alert(
+      'Đăng xuất',
+      'Bạn có chắc chắn muốn đăng xuất?',
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Đăng xuất',
+          style: 'destructive',
+          onPress: () => {
+            logout();
+            // Navigate về Home sau logout
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Home' }]
+            });
+          }
+        }
+      ]
+    );
   };
 
   const StatCard = ({ icon, title, value, color, suffix = '', onPress }: any) => (
@@ -107,10 +131,10 @@ export const AgentDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
       <View style={styles.statsGrid}>
         <StatCard
           icon="notifications-outline"
-          title="List đơn hàng treo" // <-- Updated Title
+          title="List đơn hàng treo"
           value={stats.pendingAssignments}
           color="#FF9500"
-          onPress={() => navigation.navigate('AvailableJobs')} // <-- Link to AvailableJobs
+          onPress={() => navigation.navigate('AvailableJobs')}
         />
         
         <StatCard
@@ -146,7 +170,7 @@ export const AgentDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
         
         <TouchableOpacity 
           style={styles.actionButton}
-          onPress={() => navigation.navigate('AvailableJobs')} // <-- Link to AvailableJobs
+          onPress={() => navigation.navigate('AvailableJobs')}
         >
           <Ionicons name="briefcase-outline" size={24} color="#34C759" />
           <Text style={styles.actionButtonText}>Tìm việc mới (Available Jobs)</Text>
@@ -180,6 +204,15 @@ export const AgentDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
           <Ionicons name="chevron-forward" size={20} color="#ccc" />
         </TouchableOpacity>
 
+        {/* 🔥 NÚT LOGOUT - THÊM MỚI */}
+        <TouchableOpacity 
+          style={[styles.actionButton, styles.logoutButton]}
+          onPress={handleLogout}
+        >
+          <Ionicons name="log-out-outline" size={24} color="#FF3B30" />
+          <Text style={styles.logoutButtonText}>Đăng xuất</Text>
+          <Ionicons name="chevron-forward" size={20} color="#FF3B30" />
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -282,4 +315,21 @@ const styles = StyleSheet.create({
     color: '#333',
     marginLeft: 12,
   },
+  // 🔥 LOGOUT BUTTON STYLES
+  logoutButton: {
+    borderBottomWidth: 0,
+    borderTopWidth: 1,
+    borderTopColor: '#FFE5E5',
+    backgroundColor: '#FFF5F5',
+    marginTop: 8,
+  },
+  logoutButtonText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#FF3B30',
+    marginLeft: 12,
+    fontWeight: '600',
+  },
 });
+
+export default AgentDashboardScreen;

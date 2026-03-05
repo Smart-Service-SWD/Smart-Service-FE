@@ -4,14 +4,17 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { resolveGraphQLBaseUrl } from '../../config/api.config';
 import { useAuth } from '../../context/AuthContext';
+import { updateProfile } from '../../services/userService';
 
 // ✅ Types
 interface User {
@@ -28,14 +31,18 @@ interface UserResponse {
 }
 
 export const UserProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
-  const { user: authUser, logout } = useAuth();
+  const { user: authUser, logout, updateProfile: updateAuthProfile } = useAuth();
   const [profileUser, setProfileUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editFullName, setEditFullName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
 
   // ✅ GraphQL Query
   const fetchUserProfile = async (userId: string): Promise<User> => {
-    const token = await AsyncStorage.getItem('token');
+    const token = await AsyncStorage.getItem('authToken');
     const graphqlUrl = await resolveGraphQLBaseUrl();
 
     const response = await fetch(graphqlUrl, {
@@ -107,6 +114,31 @@ export const UserProfileScreen: React.FC<{ navigation: any }> = ({ navigation })
     );
   };
 
+  const openEditModal = () => {
+    setEditFullName(profileUser?.fullName ?? '');
+    setEditPhone(profileUser?.phoneNumber ?? '');
+    setEditModalVisible(true);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!editFullName.trim()) {
+      Alert.alert('Lỗi', 'Tên không được để trống');
+      return;
+    }
+    setEditSaving(true);
+    try {
+      await updateProfile({ fullName: editFullName.trim(), phoneNumber: editPhone.trim() });
+      setProfileUser(prev => prev ? { ...prev, fullName: editFullName.trim(), phoneNumber: editPhone.trim() } : prev);
+      await updateAuthProfile({ fullName: editFullName.trim(), phoneNumber: editPhone.trim() });
+      setEditModalVisible(false);
+      Alert.alert('Thành công', 'Hồ sơ đã được cập nhật');
+    } catch (err: any) {
+      Alert.alert('Lỗi', err?.response?.data?.message ?? err?.message ?? 'Không thể cập nhật hồ sơ');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   // ✅ Loading
   if (loading) {
     return (
@@ -174,23 +206,29 @@ export const UserProfileScreen: React.FC<{ navigation: any }> = ({ navigation })
           </View>
         </View>
 
-        {/* Các sections khác giữ nguyên */}
+        {/* Yêu cầu dịch vụ */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Bài đánh giá</Text>
-          <View style={styles.placeholderContainer}>
-            <Ionicons name="chatbubbles-outline" size={40} color="#ccc" />
-            <Text style={styles.placeholderText}>Chưa có bài đánh giá nào</Text>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Cài đặt tài khoản</Text>
-          <TouchableOpacity style={styles.actionItem} onPress={() => {}}>
-            <Ionicons name="settings-outline" size={20} color="#007AFF" />
-            <Text style={styles.actionText}>Cài đặt chung</Text>
+          <Text style={styles.sectionTitle}>Dịch vụ</Text>
+          <TouchableOpacity style={styles.actionItem} onPress={() => navigation.navigate('MyRequests')}>
+            <Ionicons name="list-outline" size={20} color="#007AFF" />
+            <Text style={styles.actionText}>Yêu cầu của tôi</Text>
             <Ionicons name="chevron-forward" size={20} color="#ccc" />
           </TouchableOpacity>
+          <TouchableOpacity style={[styles.actionItem, styles.logoutItem]} onPress={() => navigation.navigate('NewRequest')}>
+            <Ionicons name="add-circle-outline" size={20} color="#10B981" />
+            <Text style={[styles.actionText, { color: '#10B981' }]}>Tạo yêu cầu mới</Text>
+            <Ionicons name="chevron-forward" size={20} color="#ccc" />
+          </TouchableOpacity>
+        </View>
 
+        {/* Tài khoản */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Tài khoản</Text>
+          <TouchableOpacity style={styles.actionItem} onPress={openEditModal}>
+            <Ionicons name="create-outline" size={20} color="#007AFF" />
+            <Text style={styles.actionText}>Chỉnh sửa hồ sơ</Text>
+            <Ionicons name="chevron-forward" size={20} color="#ccc" />
+          </TouchableOpacity>
           <TouchableOpacity style={[styles.actionItem, styles.logoutItem]} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={20} color="#FF3B30" />
             <Text style={[styles.actionText, styles.logoutText]}>Đăng xuất</Text>
@@ -199,6 +237,57 @@ export const UserProfileScreen: React.FC<{ navigation: any }> = ({ navigation })
 
         <View style={{ height: 20 }} />
       </ScrollView>
+
+      {/* Edit Profile Modal */}
+      <Modal
+        visible={editModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>Chỉnh sửa hồ sơ</Text>
+            <Text style={styles.modalLabel}>Họ và tên</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={editFullName}
+              onChangeText={setEditFullName}
+              placeholder="Nhập họ và tên"
+              placeholderTextColor="#9CA3AF"
+            />
+            <Text style={styles.modalLabel}>Số điện thoại</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={editPhone}
+              onChangeText={setEditPhone}
+              placeholder="Nhập số điện thoại"
+              keyboardType="phone-pad"
+              placeholderTextColor="#9CA3AF"
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalBtnCancel}
+                onPress={() => setEditModalVisible(false)}
+                disabled={editSaving}
+              >
+                <Text style={styles.modalBtnCancelText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalBtnSave, editSaving && { opacity: 0.6 }]}
+                onPress={handleSaveProfile}
+                disabled={editSaving}
+              >
+                {editSaving ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.modalBtnSaveText}>Lưu</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -345,4 +434,47 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '600',
   },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalBox: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 24,
+    paddingBottom: 40,
+  },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 20 },
+  modalLabel: { fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6 },
+  modalInput: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: '#111827',
+    marginBottom: 16,
+  },
+  modalActions: { flexDirection: 'row', gap: 12, marginTop: 8 },
+  modalBtnCancel: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    alignItems: 'center',
+  },
+  modalBtnCancelText: { color: '#374151', fontWeight: '600', fontSize: 15 },
+  modalBtnSave: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: '#007AFF',
+    alignItems: 'center',
+  },
+  modalBtnSaveText: { color: '#fff', fontWeight: '700', fontSize: 15 },
 });
