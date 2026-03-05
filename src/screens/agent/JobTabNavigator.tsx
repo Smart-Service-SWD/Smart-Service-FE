@@ -2,7 +2,7 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import React from 'react';
 import { JobDetailsScreen } from './JobDetailsScreen';
-import { JobOverviewScreen } from './JobOverviewScreen';
+import JobOverviewScreen from './JobOverviewScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -19,7 +19,7 @@ export const JobTabNavigator: React.FC<JobTabNavigatorProps> = ({ route, navigat
             id="JobTabNavigator"
             initialRouteName="Overview"
             screenOptions={{
-                tabBarStyle: { display: 'none' }, // Ẩn tab bar
+                tabBarStyle: { display: 'none' },
                 headerShown: false,
                 lazy: true,
             }}
@@ -27,7 +27,7 @@ export const JobTabNavigator: React.FC<JobTabNavigatorProps> = ({ route, navigat
             <Tab.Screen
                 name="Overview"
                 component={JobOverviewScreen}
-                initialParams={{ job }}
+                initialParams={{ jobId: job.id }}
             />
 
             <Tab.Screen

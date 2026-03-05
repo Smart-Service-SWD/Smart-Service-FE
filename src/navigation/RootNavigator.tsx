@@ -20,14 +20,6 @@ import { ServiceDetailScreen } from '../screens/common/ServiceDetailScreen';
 import { ServiceListScreen } from '../screens/common/ServiceListScreen';
 
 
-// Customer Screens
-import { AnalysisDetailScreen } from '../screens/AnalysisDetailScreen';
-import { AnalysisResultScreen } from '../screens/AnalysisResultScreen';
-import { CameraScreen } from '../screens/CameraScreen';
-import { CreateRequestScreen } from '../screens/CreateRequestScreen';
-import { HistoryScreen } from '../screens/HistoryScreen';
-
-
 // Staff Screens
 import { PendingEvaluationsScreen } from '../screens/staff/PendingEvaluationsScreen';
 import { ReEvaluationsScreen } from '../screens/staff/ReEvaluationsScreen';
@@ -54,6 +46,11 @@ import { UserManagementScreen } from '../screens/admin/UserManagementScreen';
 
 
 // User Screens
+import { AIReviewScreen } from '../screens/user/AIReviewScreen';
+import { FeedbackScreen } from '../screens/user/FeedbackPage';
+import { MyRequestsScreen } from '../screens/user/MyRequestsScreen';
+import { RequestDetailScreen } from '../screens/user/RequestDetailScreen';
+import { RequestPage } from '../screens/user/RequestPage';
 import { UserProfileScreen } from '../screens/user/UserProfileScreen';
 
 
@@ -153,15 +150,18 @@ const HomeStackNavigator = () => {
       />
       <Stack.Screen
         name="CreateRequest"
-        component={CreateRequestScreen}
-        options={{ 
-          headerShown: true,
-          title: 'Book Service',
-          headerStyle: {
-            backgroundColor: '#007AFF',
-          },
-          headerTintColor: '#fff',
-        }}
+        component={RequestPage}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="AIReview"
+        component={AIReviewScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="RequestDetail"
+        component={RequestDetailScreen}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );
@@ -185,72 +185,38 @@ const AuthNavigator = () => {
 };
 
 
-// Customer (Camera) Stack Navigator
-const CameraStackNavigator = () => {
+// New-Request Stack (RequestPage → AIReviewScreen)
+const NewRequestStackNavigator = () => {
   return (
     <Stack.Navigator
-      id="CameraStack"
+      id="NewRequestStack"
       screenOptions={{
-        headerShown: true,
-        headerStyle: {
-          backgroundColor: '#007AFF',
-        },
-        headerTintColor: '#fff',
-        headerTitleStyle: {
-          fontWeight: '600',
-        },
+        headerShown: false,
       }}
     >
-      <Stack.Screen
-        name="CameraMain"
-        component={CameraScreen}
-        options={{ title: 'Service Analysis' }}
-      />
-      <Stack.Screen
-        name="AnalysisResult"
-        component={AnalysisResultScreen}
-        options={{ title: 'Result' }}
-      />
-      <Stack.Screen
-        name="CreateRequest"
-        component={CreateRequestScreen}
-        options={{ title: 'Create Request' }}
-      />
+      <Stack.Screen name="NewRequestMain" component={RequestPage} />
+      <Stack.Screen name="AIReview" component={AIReviewScreen} />
+      <Stack.Screen name="RequestDetail" component={RequestDetailScreen} />
+      <Stack.Screen name="Feedback" component={FeedbackScreen} />
     </Stack.Navigator>
   );
 };
 
-
-const HistoryStackNavigator = () => {
+// My-Requests Stack (MyRequestsScreen → RequestDetailScreen → FeedbackScreen)
+const MyRequestsStackNavigator = () => {
   return (
     <Stack.Navigator
-      id="HistoryStack"
+      id="MyRequestsStack"
       screenOptions={{
-        headerShown: true,
-        headerStyle: {
-          backgroundColor: '#007AFF',
-        },
-        headerTintColor: '#fff',
-        headerTitleStyle: {
-          fontWeight: '600',
-        },
+        headerShown: false,
       }}
     >
-      <Stack.Screen
-        name="HistoryMain"
-        component={HistoryScreen}
-        options={{ title: 'History' }}
-      />
-      <Stack.Screen
-        name="AnalysisDetail"
-        component={AnalysisDetailScreen}
-        options={{ title: 'Details' }}
-      />
-      <Stack.Screen
-        name="CreateRequest"
-        component={CreateRequestScreen}
-        options={{ title: 'Create Request' }}
-      />
+      <Stack.Screen name="MyRequestsMain" component={MyRequestsScreen} />
+      <Stack.Screen name="RequestDetail" component={RequestDetailScreen} />
+      <Stack.Screen name="Feedback" component={FeedbackScreen} />
+      {/* Allow creating a new request from here too */}
+      <Stack.Screen name="NewRequest" component={RequestPage} />
+      <Stack.Screen name="AIReview" component={AIReviewScreen} />
     </Stack.Navigator>
   );
 };
@@ -591,17 +557,15 @@ const AppNavigator = () => {
         tabBarIcon: ({ focused, color, size }) => {
           let iconName: any;
 
-
           if (route.name === 'Home') {
             iconName = focused ? 'home' : 'home-outline';
-          } else if (route.name === 'Camera') {
-            iconName = focused ? 'camera' : 'camera-outline';
-          } else if (route.name === 'History') {
-            iconName = focused ? 'list' : 'list-outline';
+          } else if (route.name === 'NewRequest') {
+            iconName = focused ? 'add-circle' : 'add-circle-outline';
+          } else if (route.name === 'MyRequests') {
+            iconName = focused ? 'clipboard' : 'clipboard-outline';
           } else if (route.name === 'Profile') {
             iconName = focused ? 'person' : 'person-outline';
           }
-
 
           return <Ionicons name={iconName} size={size} color={color} />;
         },
@@ -622,22 +586,22 @@ const AppNavigator = () => {
       <Tab.Screen
         name="Home"
         component={HomeStackNavigator}
-        options={{ title: 'Home' }}
+        options={{ title: 'Trang chủ' }}
       />
       <Tab.Screen
-        name="Camera"
-        component={CameraStackNavigator}
-        options={{ title: 'Analyze' }}
+        name="NewRequest"
+        component={NewRequestStackNavigator}
+        options={{ title: 'Tạo yêu cầu' }}
       />
       <Tab.Screen
-        name="History"
-        component={HistoryStackNavigator}
-        options={{ title: 'History' }}
+        name="MyRequests"
+        component={MyRequestsStackNavigator}
+        options={{ title: 'Yêu cầu' }}
       />
       <Tab.Screen
         name="Profile"
         component={ProfileStackNavigator}
-        options={{ title: 'Account' }}
+        options={{ title: 'Tài khoản' }}
       />
     </Tab.Navigator>
   );

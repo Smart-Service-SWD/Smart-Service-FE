@@ -151,7 +151,8 @@ const MD3: DesignToken = {
 };
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const [menuVisible, setMenuVisible] = useState(false);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [currentBannerIndex, setCurrentBannerIndex] = useState<number>(0);
 
@@ -337,11 +338,43 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           <Text style={styles.subGreeting}>What service do you need today?</Text>
         </View>
         {user ? (
-          <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={styles.avatarButton}>
-            <View style={styles.avatar}>
-              <Ionicons name="person" size={24} color="#007AFF" />
-            </View>
-          </TouchableOpacity>
+          <>
+            <TouchableOpacity onPress={() => setMenuVisible((v) => !v)} style={styles.avatarButton}>
+              <View style={styles.avatar}>
+                <Ionicons name="person" size={24} color="#007AFF" />
+              </View>
+            </TouchableOpacity>
+            {menuVisible && (
+              <>
+                <TouchableOpacity style={styles.menuOverlay} onPress={() => setMenuVisible(false)} />
+                <View style={styles.dropdownMenu}>
+                  <Text style={styles.menuName}>{user.fullName}</Text>
+                  <Text style={styles.menuRole}>{user.role || 'User'}</Text>
+                  <View style={styles.menuDivider} />
+                  <TouchableOpacity
+                    style={styles.menuItem}
+                    onPress={() => {
+                      setMenuVisible(false);
+                      navigation.navigate('Profile');
+                    }}
+                  >
+                    <Ionicons name="person-circle-outline" size={18} color="#333" />
+                    <Text style={styles.menuItemText}>View Profile</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.menuItem, styles.logoutItem]}
+                    onPress={() => {
+                      setMenuVisible(false);
+                      logout();
+                    }}
+                  >
+                    <Ionicons name="log-out-outline" size={18} color="#E53935" />
+                    <Text style={[styles.menuItemText, { color: '#E53935' }]}>Logout</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </>
         ) : (
           <TouchableOpacity
             onPress={() => navigation.navigate('Profile')}
@@ -491,6 +524,15 @@ interface Styles {
   avatar: ViewStyle;
   loginButton: ViewStyle;
   loginButtonText: TextStyle;
+  // Dropdown menu styles
+  menuOverlay: ViewStyle;
+  dropdownMenu: ViewStyle;
+  menuName: TextStyle;
+  menuRole: TextStyle;
+  menuDivider: ViewStyle;
+  menuItem: ViewStyle;
+  menuItemText: TextStyle;
+  logoutItem: ViewStyle;
   banner: ViewStyle;
   bannerContent: ViewStyle;
   bannerTextContainer: ViewStyle;
@@ -578,6 +620,37 @@ const styles = StyleSheet.create<Styles>({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  // Dropdown menu styles
+  menuOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'transparent',
+  },
+  dropdownMenu: {
+    position: 'absolute',
+    top: 86,
+    right: 20,
+    width: 200,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 6,
+    zIndex: 999,
+  },
+  menuName: { fontWeight: '700', color: '#111827', marginBottom: 2 },
+  menuRole: { color: '#6B7280', fontSize: 12, marginBottom: 8 },
+  menuDivider: { height: 1, backgroundColor: '#F3F4F6', marginVertical: 6 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, gap: 10 },
+  menuItemText: { marginLeft: 8, color: '#111827' },
+  logoutItem: { marginTop: 6 },
   loginButton: {
     flexDirection: 'row',
     alignItems: 'center',
