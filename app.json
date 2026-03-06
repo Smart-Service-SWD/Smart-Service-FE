@@ -3,9 +3,11 @@
     "name": "Smart Service Mobile",
     "slug": "smart-service-mobile",
     "version": "1.0.0",
+    "icon": "./src/assets/icon.png",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
+      "image": "./src/assets/logo-splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#f4f6f8"
     },
@@ -17,9 +19,9 @@
     },
     "android": {
       "adaptiveIcon": {
+        "foregroundImage": "./src/assets/adaptive-icon.png",
         "backgroundColor": "#f4f6f8"
       }
     }
   }
 }
-

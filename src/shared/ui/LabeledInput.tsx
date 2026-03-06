@@ -3,9 +3,15 @@ import { colors } from "../../app/theme/colors";
 
 interface LabeledInputProps extends TextInputProps {
   label: string;
+  hint?: string;
 }
 
-export default function LabeledInput({ label, style, ...props }: LabeledInputProps) {
+export default function LabeledInput({
+  label,
+  hint,
+  style,
+  ...props
+}: LabeledInputProps) {
   return (
     <View style={styles.wrapper}>
       <Text style={styles.label}>{label}</Text>
@@ -14,27 +20,33 @@ export default function LabeledInput({ label, style, ...props }: LabeledInputPro
         placeholderTextColor={colors.textMuted}
         {...props}
       />
+      {hint ? <Text style={styles.hint}>{hint}</Text> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrapper: {
-    gap: 4
+    gap: 6
   },
   label: {
     color: colors.text,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "600"
   },
   input: {
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
-    paddingVertical: 10,
+    borderRadius: 12,
+    paddingVertical: 12,
     paddingHorizontal: 12,
     color: colors.text,
-    backgroundColor: "#fff"
+    backgroundColor: "#fff",
+    fontSize: 15
+  },
+  hint: {
+    color: colors.textMuted,
+    fontSize: 12,
+    lineHeight: 18
   }
 });
-

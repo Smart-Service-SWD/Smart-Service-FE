@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from "../features/auth/AuthContext";
 import AuthNavigator from "./navigation/AuthNavigator";
 import RoleNavigator from "./navigation/RoleNavigator";
 import { colors } from "./theme/colors";
+import BrandLogo from "../shared/ui/BrandLogo";
 
 const navTheme = {
   ...DefaultTheme,
@@ -26,8 +27,10 @@ function Router() {
   if (initializing) {
     return (
       <View style={styles.center}>
+        <BrandLogo size={88} />
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.centerText}>Loading session...</Text>
+        <Text style={styles.centerTitle}>Smart Service</Text>
+        <Text style={styles.centerText}>Đang khởi tạo phiên đăng nhập...</Text>
       </View>
     );
   }
@@ -61,11 +64,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
+    gap: 12
+  },
+  centerTitle: {
+    color: colors.text,
+    fontSize: 20,
+    fontWeight: "700"
   },
   centerText: {
-    marginTop: 12,
     color: colors.textMuted
   }
 });
-

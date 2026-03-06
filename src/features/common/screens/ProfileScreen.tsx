@@ -5,7 +5,11 @@ import { colors } from "../../../app/theme/colors";
 import { useAuth } from "../../auth/AuthContext";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
 import { ME_QUERY } from "../../../shared/api/graphqlDocuments";
-import { asErrorMessage } from "../../../shared/utils/format";
+import {
+  asErrorMessage,
+  formatBooleanLabel,
+  formatRoleLabel
+} from "../../../shared/utils/format";
 import ActionButton from "../../../shared/ui/ActionButton";
 import LabeledInput from "../../../shared/ui/LabeledInput";
 import { changePassword, updateProfile } from "../api/profileApi";
@@ -53,7 +57,7 @@ export default function ProfileScreen() {
     try {
       await refreshSession();
       await load();
-      setSuccess("Token refreshed");
+      setSuccess("Đã làm mới phiên đăng nhập");
     } catch (refreshError) {
       setError(asErrorMessage(refreshError));
     } finally {
@@ -73,7 +77,7 @@ export default function ProfileScreen() {
         fullName,
         phoneNumber
       });
-      setSuccess("Profile updated");
+      setSuccess("Đã cập nhật hồ sơ");
       await load();
     } catch (updateError) {
       setError(asErrorMessage(updateError));
@@ -96,7 +100,7 @@ export default function ProfileScreen() {
       });
       setCurrentPassword("");
       setNewPassword("");
-      setSuccess("Password changed");
+      setSuccess("Đã đổi mật khẩu");
     } catch (passwordError) {
       setError(asErrorMessage(passwordError));
     } finally {
@@ -105,56 +109,61 @@ export default function ProfileScreen() {
   };
 
   return (
-    <ScreenLayout title="Profile" subtitle="Current authenticated user">
+    <ScreenLayout
+      title="Tài khoản"
+      subtitle="Quản lý thông tin cá nhân, mật khẩu và phiên đăng nhập hiện tại"
+    >
       <View style={styles.card}>
-        <Text style={styles.label}>Session Email</Text>
+        <Text style={styles.label}>Email đăng nhập</Text>
         <Text style={styles.value}>{session?.email ?? "-"}</Text>
-        <Text style={styles.label}>Session Role</Text>
-        <Text style={styles.value}>{session?.role ?? "-"}</Text>
+        <Text style={styles.label}>Vai trò hiện tại</Text>
+        <Text style={styles.value}>{formatRoleLabel(session?.role)}</Text>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Live Profile (GraphQL me)</Text>
-        <Text style={styles.label}>Name</Text>
+        <Text style={styles.sectionTitle}>Thông tin từ hệ thống</Text>
+        <Text style={styles.label}>Họ tên</Text>
         <Text style={styles.value}>{profile?.fullName ?? "-"}</Text>
-        <Text style={styles.label}>Phone</Text>
+        <Text style={styles.label}>Số điện thoại</Text>
         <Text style={styles.value}>{profile?.phoneNumber ?? "-"}</Text>
-        <Text style={styles.label}>Locked</Text>
-        <Text style={styles.value}>{profile?.isLocked ? "Yes" : "No"}</Text>
+        <Text style={styles.label}>Trạng thái khóa</Text>
+        <Text style={styles.value}>
+          {formatBooleanLabel(profile?.isLocked ?? false, "Đã khóa", "Hoạt động")}
+        </Text>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Update Profile</Text>
-        <LabeledInput label="Full Name" value={fullName} onChangeText={setFullName} />
+        <Text style={styles.sectionTitle}>Cập nhật hồ sơ</Text>
+        <LabeledInput label="Họ và tên" value={fullName} onChangeText={setFullName} />
         <LabeledInput
-          label="Phone Number"
+          label="Số điện thoại"
           value={phoneNumber}
           onChangeText={setPhoneNumber}
           keyboardType="phone-pad"
         />
         <ActionButton
-          label={busy ? "Saving..." : "Save Profile"}
+          label={busy ? "Đang lưu..." : "Lưu hồ sơ"}
           onPress={() => void handleUpdateProfile()}
           disabled={busy}
         />
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Change Password</Text>
+        <Text style={styles.sectionTitle}>Đổi mật khẩu</Text>
         <LabeledInput
-          label="Current Password"
+          label="Mật khẩu hiện tại"
           value={currentPassword}
           onChangeText={setCurrentPassword}
           secureTextEntry
         />
         <LabeledInput
-          label="New Password"
+          label="Mật khẩu mới"
           value={newPassword}
           onChangeText={setNewPassword}
           secureTextEntry
         />
         <ActionButton
-          label={busy ? "Updating..." : "Update Password"}
+          label={busy ? "Đang cập nhật..." : "Cập nhật mật khẩu"}
           onPress={() => void handleChangePassword()}
           disabled={busy}
         />
@@ -164,11 +173,11 @@ export default function ProfileScreen() {
       {!!success ? <Text style={styles.success}>{success}</Text> : null}
 
       <ActionButton
-        label={busy ? "Refreshing..." : "Refresh Token + Reload"}
+        label={busy ? "Đang làm mới..." : "Làm mới phiên đăng nhập"}
         onPress={() => void handleRefreshToken()}
         disabled={busy}
       />
-      <ActionButton label="Logout" onPress={() => void logout()} variant="danger" />
+      <ActionButton label="Đăng xuất" onPress={() => void logout()} variant="danger" />
     </ScreenLayout>
   );
 }
@@ -178,7 +187,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 14,
     gap: 6
   },

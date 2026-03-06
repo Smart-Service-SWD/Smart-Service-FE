@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
+import { useNavigation } from "@react-navigation/native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import ScreenLayout from "../../../shared/ui/ScreenLayout";
 import { colors } from "../../../app/theme/colors";
@@ -15,19 +17,21 @@ import {
   createServiceRequest,
   type AnalyzeResult
 } from "../api/customerApi";
+import type { CustomerTabParamList } from "../../../app/navigation/types";
 
 interface CategoriesResponse {
   getServiceCategories: ServiceCategory[];
 }
 
 const attachmentTypeOptions = [
-  { label: "Image", value: 0 },
+  { label: "Ảnh", value: 0 },
   { label: "Video", value: 1 },
-  { label: "Document", value: 2 },
-  { label: "Other", value: 3 }
+  { label: "Tài liệu", value: 2 },
+  { label: "Khác", value: 3 }
 ] as const;
 
 export default function CreateRequestScreen() {
+  const navigation = useNavigation<BottomTabNavigationProp<CustomerTabParamList>>();
   const { session } = useAuth();
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState("");
@@ -72,7 +76,7 @@ export default function CreateRequestScreen() {
 
   const analyze = async () => {
     if (!description.trim()) {
-      setError("Description is required for analysis");
+      setError("Vui lòng nhập mô tả để AI phân tích");
       return;
     }
 
@@ -93,15 +97,15 @@ export default function CreateRequestScreen() {
 
   const submit = async () => {
     if (!session) {
-      setError("Not authenticated");
+      setError("Bạn chưa đăng nhập");
       return;
     }
     if (!description.trim()) {
-      setError("Description is required");
+      setError("Vui lòng nhập mô tả yêu cầu");
       return;
     }
     if (!selectedCategoryId) {
-      setError("Please choose a category");
+      setError("Vui lòng chọn danh mục");
       return;
     }
 
@@ -118,7 +122,7 @@ export default function CreateRequestScreen() {
         complexityLevel: parsedComplexityLevel
       });
 
-      setSuccess(`Created request ID: ${createdId}`);
+      setSuccess(`Đã tạo yêu cầu thành công. Mã yêu cầu: ${createdId}`);
       setCreatedRequestId(createdId);
       setDescription("");
       setAddressText("");
@@ -133,15 +137,15 @@ export default function CreateRequestScreen() {
 
   const submitAttachment = async () => {
     if (!session) {
-      setError("Not authenticated");
+      setError("Bạn chưa đăng nhập");
       return;
     }
     if (!createdRequestId.trim()) {
-      setError("Create request first or enter request ID");
+      setError("Hãy tạo yêu cầu trước hoặc nhập mã yêu cầu");
       return;
     }
     if (!attachmentFileName.trim() || !attachmentFileUrl.trim()) {
-      setError("Attachment name and URL are required");
+      setError("Cần nhập tên file và đường dẫn file");
       return;
     }
 
@@ -155,7 +159,7 @@ export default function CreateRequestScreen() {
         fileUrl: attachmentFileUrl.trim(),
         type: attachmentType
       });
-      setSuccess(`Attachment created: ${attachmentId}`);
+      setSuccess(`Đã thêm tệp đính kèm. Mã tệp: ${attachmentId}`);
       setAttachmentFileName("");
       setAttachmentFileUrl("");
     } catch (attachmentError) {
@@ -166,9 +170,20 @@ export default function CreateRequestScreen() {
   };
 
   return (
-    <ScreenLayout title="Create Request" subtitle="POST /api/service-requests">
+    <ScreenLayout
+      title="Tạo yêu cầu dịch vụ"
+      subtitle="Điền thông tin theo từng bước để gửi yêu cầu nhanh và dễ theo dõi"
+    >
+      <View style={styles.heroCard}>
+        <Text style={styles.sectionTitle}>Các bước trên FE</Text>
+        <Text style={styles.value}>Bước 1: Chọn danh mục phù hợp.</Text>
+        <Text style={styles.value}>Bước 2: Mô tả vấn đề càng rõ càng tốt.</Text>
+        <Text style={styles.value}>Bước 3: Nhấn “Gửi yêu cầu”.</Text>
+        <Text style={styles.value}>Bước 4: Nếu cần, thêm file đính kèm.</Text>
+      </View>
+
       <View style={styles.card}>
-        <Text style={styles.label}>Category</Text>
+        <Text style={styles.label}>Bước 1 · Chọn danh mục</Text>
         <View style={styles.categoryGrid}>
           {categories.map((category) => {
             const active = category.id === selectedCategoryId;
@@ -189,65 +204,81 @@ export default function CreateRequestScreen() {
         </View>
 
         <LabeledInput
-          label="Description"
+          label="Bước 2 · Mô tả yêu cầu"
           style={styles.multilineInput}
           value={description}
           onChangeText={setDescription}
-          placeholder="Describe the service issue..."
+          placeholder="Ví dụ: Máy lạnh không mát, có tiếng ồn lớn..."
           multiline
+          hint="Nên mô tả tình trạng hiện tại, thời điểm phát sinh và mức độ khẩn cấp"
         />
 
         <LabeledInput
-          label="Address (optional)"
+          label="Địa chỉ (tùy chọn)"
           value={addressText}
           onChangeText={setAddressText}
-          placeholder="Street / district / city"
+          placeholder="Số nhà, quận/huyện, tỉnh/thành"
         />
 
         <LabeledInput
-          label="Complexity (1-5, optional)"
+          label="Độ phức tạp (1-5, tùy chọn)"
           value={complexityLevel}
           onChangeText={setComplexityLevel}
           keyboardType="number-pad"
-          placeholder="Leave empty to let staff/AI evaluate"
+          placeholder="Để trống nếu muốn AI/nhân viên đánh giá"
         />
       </View>
 
       {!!analysis ? (
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>AI Analysis Preview</Text>
-          <Text style={styles.value}>Complexity: {analysis.complexity}</Text>
-          <Text style={styles.value}>Summary: {analysis.userMessage.summary}</Text>
-          <Text style={styles.value}>
-            Risk: {analysis.userMessage.riskExplanation}
-          </Text>
-          <Text style={styles.value}>
-            Safety: {analysis.userMessage.safetyAdvice}
-          </Text>
+          <Text style={styles.sectionTitle}>Kết quả AI phân tích</Text>
+          <Text style={styles.value}>Độ phức tạp gợi ý: {analysis.complexity}</Text>
+          <Text style={styles.value}>Tóm tắt: {analysis.userMessage.summary}</Text>
+          <Text style={styles.value}>Rủi ro: {analysis.userMessage.riskExplanation}</Text>
+          <Text style={styles.value}>Khuyến nghị an toàn: {analysis.userMessage.safetyAdvice}</Text>
+        </View>
+      ) : null}
+
+      {createdRequestId ? (
+        <View style={styles.successCard}>
+          <Text style={styles.sectionTitle}>Yêu cầu đã tạo</Text>
+          <Text style={styles.value}>Mã yêu cầu: {createdRequestId}</Text>
+          <View style={styles.actions}>
+            <ActionButton
+              label="Xem yêu cầu của tôi"
+              onPress={() => navigation.navigate("MyRequests")}
+            />
+            <ActionButton
+              label="Thêm đánh giá sau khi hoàn thành"
+              onPress={() => navigation.navigate("Feedback")}
+              variant="secondary"
+            />
+          </View>
         </View>
       ) : null}
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Attach File (optional)</Text>
+        <Text style={styles.sectionTitle}>Bước 4 · Thêm tệp đính kèm (tùy chọn)</Text>
         <LabeledInput
-          label="Request ID"
+          label="Mã yêu cầu"
           value={createdRequestId}
           onChangeText={setCreatedRequestId}
-          placeholder="Paste request ID"
+          placeholder="Dán mã yêu cầu"
           autoCapitalize="none"
         />
         <LabeledInput
-          label="File Name"
+          label="Tên tệp"
           value={attachmentFileName}
           onChangeText={setAttachmentFileName}
           placeholder="report.pdf"
         />
         <LabeledInput
-          label="File URL"
+          label="Đường dẫn tệp"
           value={attachmentFileUrl}
           onChangeText={setAttachmentFileUrl}
           placeholder="https://example.com/report.pdf"
           autoCapitalize="none"
+          hint="Hiện tại FE đang nhận URL có sẵn, chưa hỗ trợ chọn file trực tiếp từ máy"
         />
         <View style={styles.categoryGrid}>
           {attachmentTypeOptions.map((option) => {
@@ -274,18 +305,18 @@ export default function CreateRequestScreen() {
 
       <View style={styles.actions}>
         <ActionButton
-          label={busy ? "Analyzing..." : "Analyze Description"}
+          label={busy ? "Đang phân tích..." : "Phân tích bằng AI"}
           onPress={() => void analyze()}
           disabled={busy}
           variant="secondary"
         />
         <ActionButton
-          label={busy ? "Submitting..." : "Submit Request"}
+          label={busy ? "Đang gửi..." : "Gửi yêu cầu"}
           onPress={() => void submit()}
           disabled={busy}
         />
         <ActionButton
-          label={busy ? "Uploading..." : "Add Attachment"}
+          label={busy ? "Đang thêm..." : "Thêm tệp đính kèm"}
           onPress={() => void submitAttachment()}
           disabled={busy}
           variant="secondary"
@@ -296,11 +327,27 @@ export default function CreateRequestScreen() {
 }
 
 const styles = StyleSheet.create({
+  heroCard: {
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 16,
+    padding: 16,
+    gap: 6
+  },
   card: {
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 12,
+    borderRadius: 16,
+    padding: 14,
+    gap: 10
+  },
+  successCard: {
+    backgroundColor: "#ecfdf5",
+    borderWidth: 1,
+    borderColor: "#86efac",
+    borderRadius: 16,
     padding: 14,
     gap: 8
   },
@@ -345,7 +392,8 @@ const styles = StyleSheet.create({
   },
   value: {
     color: colors.textMuted,
-    fontSize: 13
+    fontSize: 13,
+    lineHeight: 20
   },
   actions: {
     gap: 10

@@ -1,0 +1,51 @@
+<svg width="1024" height="1024" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGradient" x1="64" y1="48" x2="448" y2="464" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0F766E" />
+      <stop offset="1" stop-color="#0B4F4A" />
+    </linearGradient>
+    <radialGradient id="glowGradient" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(180 150) rotate(40) scale(350 260)">
+      <stop offset="0" stop-color="#5EEAD4" stop-opacity="0.55" />
+      <stop offset="1" stop-color="#5EEAD4" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="accentGradient" x1="130" y1="120" x2="382" y2="392" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#CCFBF1" />
+      <stop offset="1" stop-color="#99F6E4" />
+    </linearGradient>
+    <filter id="softShadow" x="74" y="78" width="364" height="364" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#042F2E" flood-opacity="0.3" />
+    </filter>
+  </defs>
+
+  <rect x="24" y="24" width="464" height="464" rx="108" fill="url(#bgGradient)" />
+  <rect x="24" y="24" width="464" height="464" rx="108" fill="url(#glowGradient)" />
+
+  <g filter="url(#softShadow)">
+    <polygon
+      points="256,90 395,171 395,341 256,422 117,341 117,171"
+      stroke="url(#accentGradient)"
+      stroke-width="15"
+      stroke-linejoin="round"
+      fill="#FFFFFF"
+      fill-opacity="0.03"
+    />
+  </g>
+
+  <path
+    d="M335 132H223C185 132 154 163 154 201C154 239 185 270 223 270H289C321 270 347 296 347 328C347 360 321 386 289 386H177"
+    stroke="url(#accentGradient)"
+    stroke-width="40"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <path d="M318 168L356 168" stroke="#CCFBF1" stroke-width="10" stroke-linecap="round" />
+  <path d="M156 348L194 348" stroke="#CCFBF1" stroke-width="10" stroke-linecap="round" />
+
+  <circle cx="385" cy="171" r="16" fill="#CCFBF1" />
+  <circle cx="117" cy="341" r="16" fill="#CCFBF1" />
+  <circle cx="256" cy="90" r="12" fill="#99F6E4" />
+
+  <path d="M370 180L332 203" stroke="#99F6E4" stroke-width="7" stroke-linecap="round" />
+  <path d="M134 332L172 309" stroke="#99F6E4" stroke-width="7" stroke-linecap="round" />
+</svg>

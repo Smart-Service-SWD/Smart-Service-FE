@@ -12,7 +12,8 @@ import {
 import {
   asErrorMessage,
   formatCurrency,
-  formatDateTime
+  formatDateTime,
+  formatRequestStatus
 } from "../../../shared/utils/format";
 import type { ServiceFeedbackItem, ServiceRequestItem } from "../../../shared/types/domain";
 import LabeledInput from "../../../shared/ui/LabeledInput";
@@ -32,14 +33,14 @@ interface FeedbackByRequestResponse {
 }
 
 const filters = [
-  { label: "All", value: null },
-  { label: "Awaiting Analysis", value: "AWAITING_ANALYSIS" },
-  { label: "Created", value: "CREATED" },
-  { label: "Urgent", value: "URGENT_DISPATCH" },
-  { label: "Pending Review", value: "PENDING_REVIEW" },
-  { label: "Assigned", value: "ASSIGNED" },
-  { label: "In Progress", value: "IN_PROGRESS" },
-  { label: "Completed", value: "COMPLETED" }
+  { label: "Tất cả", value: null },
+  { label: "Chờ AI", value: "AWAITING_ANALYSIS" },
+  { label: "Mới tạo", value: "CREATED" },
+  { label: "Khẩn cấp", value: "URGENT_DISPATCH" },
+  { label: "Chờ duyệt", value: "PENDING_REVIEW" },
+  { label: "Đã phân công", value: "ASSIGNED" },
+  { label: "Đang làm", value: "IN_PROGRESS" },
+  { label: "Hoàn thành", value: "COMPLETED" }
 ] as const;
 
 export default function MyRequestsScreen() {
@@ -73,12 +74,14 @@ export default function MyRequestsScreen() {
     }
   };
 
-  const loadRequestDetail = async () => {
+  const loadRequestDetail = async (requestedId?: string) => {
     if (!session) {
       return;
     }
-    if (!detailRequestId.trim()) {
-      setError("Request ID is required");
+    const requestId = requestedId ?? detailRequestId;
+
+    if (!requestId.trim()) {
+      setError("Vui lòng nhập mã yêu cầu");
       return;
     }
 
@@ -88,16 +91,17 @@ export default function MyRequestsScreen() {
       const [requestData, feedbackData] = await Promise.all([
         graphqlRequest<RequestByIdResponse, { id: string }>(
           REQUEST_BY_ID_QUERY,
-          { id: detailRequestId.trim() },
+          { id: requestId.trim() },
           session.accessToken
         ),
         graphqlRequest<FeedbackByRequestResponse, { serviceRequestId: string }>(
           FEEDBACK_BY_REQUEST_QUERY,
-          { serviceRequestId: detailRequestId.trim() },
+          { serviceRequestId: requestId.trim() },
           session.accessToken
         )
       ]);
 
+      setDetailRequestId(requestId.trim());
       setDetail(requestData.getServiceRequestById);
       setDetailFeedbacks(feedbackData.getFeedbackByServiceRequestId);
       setAverageRating(feedbackData.getAverageRatingByServiceRequestId);
@@ -114,7 +118,10 @@ export default function MyRequestsScreen() {
   }, [statusFilter, session?.accessToken]);
 
   return (
-    <ScreenLayout title="My Requests" subtitle="GraphQL: getMyServiceRequests">
+    <ScreenLayout
+      title="Yêu cầu của tôi"
+      subtitle="Theo dõi trạng thái, chi phí ước tính và xem chi tiết từng yêu cầu"
+    >
       <View style={styles.filterRow}>
         {filters.map((filter) => {
           const active = filter.value === statusFilter;
@@ -134,55 +141,61 @@ export default function MyRequestsScreen() {
         })}
       </View>
 
-      {loading ? <Text style={styles.loading}>Loading...</Text> : null}
+      {loading ? <Text style={styles.loading}>Đang tải dữ liệu...</Text> : null}
       {!!error ? <Text style={styles.error}>{error}</Text> : null}
 
       {items.map((item) => (
-        <View key={item.id} style={styles.card}>
+        <Pressable
+          key={item.id}
+          style={styles.card}
+          onPress={() => void loadRequestDetail(item.id)}
+        >
           <Text style={styles.cardTitle}>{item.description}</Text>
-          <Text style={styles.meta}>Status: {item.status}</Text>
-          <Text style={styles.meta}>Created: {formatDateTime(item.createdAt)}</Text>
+          <Text style={styles.meta}>Trạng thái: {formatRequestStatus(item.status)}</Text>
+          <Text style={styles.meta}>Tạo lúc: {formatDateTime(item.createdAt)}</Text>
           <Text style={styles.meta}>
-            Complexity: {item.complexity?.level ?? "Not evaluated"}
+            Độ phức tạp: {item.complexity?.level ?? "Chưa đánh giá"}
           </Text>
           <Text style={styles.meta}>
-            Estimated Cost:{" "}
+            Chi phí ước tính:{" "}
             {item.estimatedCost
               ? formatCurrency(item.estimatedCost.amount, item.estimatedCost.currency)
-              : "N/A"}
+              : "Chưa có"}
           </Text>
-          {item.addressText ? <Text style={styles.meta}>Address: {item.addressText}</Text> : null}
-        </View>
+          {item.addressText ? <Text style={styles.meta}>Địa chỉ: {item.addressText}</Text> : null}
+          <Text style={styles.tapHint}>Nhấn để xem chi tiết và phản hồi</Text>
+        </Pressable>
       ))}
 
       {!loading && items.length === 0 ? (
-        <Text style={styles.empty}>No requests for this filter</Text>
+        <Text style={styles.empty}>Chưa có yêu cầu nào theo bộ lọc này</Text>
       ) : null}
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Request Detail + Feedback</Text>
+        <Text style={styles.cardTitle}>Chi tiết yêu cầu & đánh giá</Text>
         <LabeledInput
-          label="Request ID"
+          label="Mã yêu cầu"
           value={detailRequestId}
           onChangeText={setDetailRequestId}
-          placeholder="Paste request ID"
+          placeholder="Dán mã yêu cầu"
           autoCapitalize="none"
+          hint="Bạn có thể nhấn trực tiếp vào một thẻ ở trên để tự điền mã"
         />
         <ActionButton
-          label={loading ? "Loading..." : "Load Detail"}
+          label={loading ? "Đang tải..." : "Xem chi tiết"}
           onPress={() => void loadRequestDetail()}
           disabled={loading}
           variant="secondary"
         />
         {detail ? (
           <View style={styles.detailBox}>
-            <Text style={styles.meta}>Status: {detail.status}</Text>
-            <Text style={styles.meta}>Description: {detail.description}</Text>
+            <Text style={styles.meta}>Trạng thái: {formatRequestStatus(detail.status)}</Text>
+            <Text style={styles.meta}>Mô tả: {detail.description}</Text>
             <Text style={styles.meta}>
-              Complexity: {detail.complexity?.level ?? "Not evaluated"}
+              Độ phức tạp: {detail.complexity?.level ?? "Chưa đánh giá"}
             </Text>
-            <Text style={styles.meta}>Average Rating: {averageRating ?? 0}</Text>
-            <Text style={styles.meta}>Feedback Count: {detailFeedbacks.length}</Text>
+            <Text style={styles.meta}>Điểm trung bình: {averageRating ?? 0}</Text>
+            <Text style={styles.meta}>Số lượt đánh giá: {detailFeedbacks.length}</Text>
           </View>
         ) : null}
       </View>
@@ -227,9 +240,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 14,
-    gap: 4
+    gap: 6
   },
   cardTitle: {
     color: colors.text,
@@ -242,6 +255,12 @@ const styles = StyleSheet.create({
   detailBox: {
     gap: 3,
     marginTop: 8
+  },
+  tapHint: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 6
   },
   empty: {
     color: colors.textMuted,

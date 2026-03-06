@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import ScreenLayout from "../../../shared/ui/ScreenLayout";
 import { colors } from "../../../app/theme/colors";
 import { useAuth } from "../AuthContext";
 import { asErrorMessage } from "../../../shared/utils/format";
 import type { AuthStackParamList } from "../../../app/navigation/types";
+import ActionButton from "../../../shared/ui/ActionButton";
+import LabeledInput from "../../../shared/ui/LabeledInput";
 
 type RegisterScreenProps = NativeStackScreenProps<AuthStackParamList, "Register">;
 
@@ -32,19 +34,27 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   };
 
   return (
-    <ScreenLayout title="Create Account" subtitle="Role will be CUSTOMER by default">
+    <ScreenLayout
+      title="Tạo tài khoản"
+      subtitle="Tài khoản mới sẽ mặc định là vai trò Khách hàng"
+    >
+      <View style={styles.heroCard}>
+        <Text style={styles.heroTitle}>Hướng dẫn</Text>
+        <Text style={styles.heroText}>- Nhập đúng email và số điện thoại đang dùng</Text>
+        <Text style={styles.heroText}>- Mật khẩu nên từ 6 ký tự trở lên</Text>
+        <Text style={styles.heroText}>- Sau khi đăng ký xong, hệ thống sẽ tự đăng nhập</Text>
+      </View>
+
       <View style={styles.card}>
-        <Text style={styles.label}>Full Name</Text>
-        <TextInput
-          style={styles.input}
+        <LabeledInput
+          label="Họ và tên"
           value={fullName}
           onChangeText={setFullName}
-          placeholder="Nguyen Van A"
+          placeholder="Nguyễn Văn A"
         />
 
-        <Text style={styles.label}>Email</Text>
-        <TextInput
-          style={styles.input}
+        <LabeledInput
+          label="Email"
           autoCapitalize="none"
           keyboardType="email-address"
           value={email}
@@ -52,92 +62,69 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
           placeholder="customer@example.com"
         />
 
-        <Text style={styles.label}>Phone Number</Text>
-        <TextInput
-          style={styles.input}
+        <LabeledInput
+          label="Số điện thoại"
           keyboardType="phone-pad"
           value={phoneNumber}
           onChangeText={setPhoneNumber}
           placeholder="0900000000"
         />
 
-        <Text style={styles.label}>Password</Text>
-        <TextInput
-          style={styles.input}
+        <LabeledInput
+          label="Mật khẩu"
           value={password}
           onChangeText={setPassword}
           secureTextEntry
-          placeholder="At least 6 characters"
+          placeholder="Tối thiểu 6 ký tự"
+          hint="Bạn có thể đổi mật khẩu sau trong mục Tài khoản"
         />
 
         {!!error ? <Text style={styles.error}>{error}</Text> : null}
 
-        <Pressable
-          style={[styles.primaryButton, busy && styles.disabledButton]}
-          onPress={onSubmit}
+        <ActionButton
+          label={busy ? "Đang tạo tài khoản..." : "Tạo tài khoản"}
+          onPress={() => void onSubmit()}
           disabled={busy}
-        >
-          <Text style={styles.primaryButtonText}>
-            {busy ? "Creating..." : "Create Account"}
-          </Text>
-        </Pressable>
-
-        <Pressable style={styles.secondaryButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.secondaryButtonText}>Back to login</Text>
-        </Pressable>
+        />
+        <ActionButton
+          label="Quay lại đăng nhập"
+          onPress={() => navigation.goBack()}
+          variant="secondary"
+        />
       </View>
     </ScreenLayout>
   );
 }
 
 const styles = StyleSheet.create({
+  heroCard: {
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 16,
+    padding: 16,
+    gap: 6
+  },
+  heroTitle: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: "700"
+  },
+  heroText: {
+    color: colors.textMuted,
+    fontSize: 14,
+    lineHeight: 20
+  },
   card: {
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
-    gap: 10
-  },
-  label: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: "600"
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    backgroundColor: "#fff",
-    paddingHorizontal: 12,
-    paddingVertical: 10
+    gap: 12
   },
   error: {
     color: colors.danger,
     fontSize: 13
-  },
-  primaryButton: {
-    marginTop: 4,
-    borderRadius: 8,
-    backgroundColor: colors.primary,
-    paddingVertical: 12,
-    alignItems: "center"
-  },
-  primaryButtonText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 15
-  },
-  secondaryButton: {
-    paddingVertical: 10,
-    alignItems: "center"
-  },
-  secondaryButtonText: {
-    color: colors.primary,
-    fontWeight: "600"
-  },
-  disabledButton: {
-    opacity: 0.7
   }
 });
-

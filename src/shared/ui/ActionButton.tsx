@@ -19,11 +19,12 @@ export default function ActionButton({
 
   return (
     <Pressable
-      style={[
+      style={({ pressed }) => [
         styles.button,
         isPrimary && styles.primaryButton,
         variant === "secondary" && styles.secondaryButton,
         isDanger && styles.dangerButton,
+        pressed && !disabled && styles.pressed,
         disabled && styles.disabled
       ]}
       onPress={onPress}
@@ -45,8 +46,9 @@ export default function ActionButton({
 
 const styles = StyleSheet.create({
   button: {
-    borderRadius: 8,
-    paddingVertical: 11,
+    borderRadius: 14,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
     alignItems: "center",
     justifyContent: "center"
   },
@@ -54,7 +56,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary
   },
   secondaryButton: {
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
     borderColor: colors.primary,
     borderWidth: 1
   },
@@ -62,7 +64,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.danger
   },
   label: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "700"
   },
   primaryLabel: {
@@ -73,6 +75,9 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.65
+  },
+  pressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.92
   }
 });
-

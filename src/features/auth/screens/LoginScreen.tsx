@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import ScreenLayout from "../../../shared/ui/ScreenLayout";
 import { colors } from "../../../app/theme/colors";
 import { useAuth } from "../AuthContext";
 import { asErrorMessage } from "../../../shared/utils/format";
 import type { AuthStackParamList } from "../../../app/navigation/types";
+import ActionButton from "../../../shared/ui/ActionButton";
+import LabeledInput from "../../../shared/ui/LabeledInput";
 
 type LoginScreenProps = NativeStackScreenProps<AuthStackParamList, "Login">;
 
@@ -30,96 +32,82 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
   };
 
   return (
-    <ScreenLayout title="Smart Service" subtitle="Login with backend account">
+    <ScreenLayout
+      title="Đăng nhập"
+      subtitle="Sử dụng tài khoản đã có để truy cập hệ thống Smart Service"
+    >
+      <View style={styles.heroCard}>
+        <Text style={styles.heroTitle}>Bắt đầu nhanh</Text>
+        <Text style={styles.heroText}>1. Nhập email đã đăng ký</Text>
+        <Text style={styles.heroText}>2. Nhập mật khẩu của bạn</Text>
+        <Text style={styles.heroText}>3. Nhấn “Đăng nhập” để vào hệ thống</Text>
+      </View>
+
       <View style={styles.card}>
-        <Text style={styles.label}>Email</Text>
-        <TextInput
-          style={styles.input}
+        <LabeledInput
+          label="Email"
           autoCapitalize="none"
           keyboardType="email-address"
           value={email}
           onChangeText={setEmail}
           placeholder="customer@example.com"
+          hint="Ví dụ: customer@example.com"
         />
 
-        <Text style={styles.label}>Password</Text>
-        <TextInput
-          style={styles.input}
+        <LabeledInput
+          label="Mật khẩu"
           value={password}
           onChangeText={setPassword}
           secureTextEntry
-          placeholder="Enter password"
+          placeholder="Nhập mật khẩu"
         />
 
         {!!error ? <Text style={styles.error}>{error}</Text> : null}
 
-        <Pressable
-          style={[styles.primaryButton, busy && styles.disabledButton]}
-          onPress={onSubmit}
+        <ActionButton
+          label={busy ? "Đang đăng nhập..." : "Đăng nhập"}
+          onPress={() => void onSubmit()}
           disabled={busy}
-        >
-          <Text style={styles.primaryButtonText}>{busy ? "Signing in..." : "Login"}</Text>
-        </Pressable>
-
-        <Pressable
-          style={styles.secondaryButton}
+        />
+        <ActionButton
+          label="Tạo tài khoản mới"
           onPress={() => navigation.navigate("Register")}
-        >
-          <Text style={styles.secondaryButtonText}>Create new account</Text>
-        </Pressable>
+          variant="secondary"
+        />
       </View>
     </ScreenLayout>
   );
 }
 
 const styles = StyleSheet.create({
+  heroCard: {
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 16,
+    padding: 16,
+    gap: 6
+  },
+  heroTitle: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: "700"
+  },
+  heroText: {
+    color: colors.textMuted,
+    fontSize: 14,
+    lineHeight: 20
+  },
   card: {
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
-    gap: 10
-  },
-  label: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: "600"
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    backgroundColor: "#fff",
-    paddingHorizontal: 12,
-    paddingVertical: 10
+    gap: 12
   },
   error: {
     color: colors.danger,
     fontSize: 13
-  },
-  primaryButton: {
-    marginTop: 4,
-    borderRadius: 8,
-    backgroundColor: colors.primary,
-    paddingVertical: 12,
-    alignItems: "center"
-  },
-  primaryButtonText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 15
-  },
-  secondaryButton: {
-    paddingVertical: 10,
-    alignItems: "center"
-  },
-  secondaryButtonText: {
-    color: colors.primary,
-    fontWeight: "600"
-  },
-  disabledButton: {
-    opacity: 0.7
   }
 });
-

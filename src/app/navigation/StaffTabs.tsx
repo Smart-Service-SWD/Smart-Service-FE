@@ -4,27 +4,16 @@ import DispatchCenterScreen from "../../features/staff/screens/DispatchCenterScr
 import ActivityMonitorScreen from "../../features/staff/screens/ActivityMonitorScreen";
 import ProfileScreen from "../../features/common/screens/ProfileScreen";
 import type { StaffTabParamList } from "./types";
+import { getTabScreenOptions } from "./tabScreenOptions";
 
 const Tab = createBottomTabNavigator<StaffTabParamList>();
 
 export default function StaffTabs() {
   return (
-    <Tab.Navigator>
-      <Tab.Screen
-        name="ReviewQueue"
-        component={ReviewQueueScreen}
-        options={{ title: "Review Queue" }}
-      />
-      <Tab.Screen
-        name="DispatchCenter"
-        component={DispatchCenterScreen}
-        options={{ title: "Dispatch" }}
-      />
-      <Tab.Screen
-        name="ActivityMonitor"
-        component={ActivityMonitorScreen}
-        options={{ title: "Activity" }}
-      />
+    <Tab.Navigator screenOptions={getTabScreenOptions}>
+      <Tab.Screen name="ReviewQueue" component={ReviewQueueScreen} />
+      <Tab.Screen name="DispatchCenter" component={DispatchCenterScreen} />
+      <Tab.Screen name="ActivityMonitor" component={ActivityMonitorScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );

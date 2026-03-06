@@ -53,11 +53,11 @@ export default function FeedbackScreen() {
 
     const ratingNumber = Number.parseInt(rating, 10);
     if (Number.isNaN(ratingNumber) || ratingNumber < 1 || ratingNumber > 5) {
-      setError("Rating must be between 1 and 5");
+      setError("Điểm đánh giá phải từ 1 đến 5");
       return;
     }
     if (!requestId.trim()) {
-      setError("Service request ID is required");
+      setError("Vui lòng nhập mã yêu cầu dịch vụ");
       return;
     }
 
@@ -71,7 +71,7 @@ export default function FeedbackScreen() {
         rating: ratingNumber,
         comment: comment.trim() || null
       });
-      setSuccess(`Feedback created: ${feedbackId}`);
+      setSuccess(`Đã gửi đánh giá thành công. Mã đánh giá: ${feedbackId}`);
       setRequestId("");
       setComment("");
       await load();
@@ -83,32 +83,41 @@ export default function FeedbackScreen() {
   };
 
   return (
-    <ScreenLayout title="Feedback" subtitle="Create + monitor your service feedbacks">
+    <ScreenLayout
+      title="Đánh giá dịch vụ"
+      subtitle="Gửi phản hồi sau khi yêu cầu hoàn thành và xem lại các đánh giá đã gửi"
+    >
+      <View style={styles.noteCard}>
+        <Text style={styles.title}>Lưu ý</Text>
+        <Text style={styles.rowMeta}>- Chỉ nên đánh giá sau khi yêu cầu đã hoàn thành.</Text>
+        <Text style={styles.rowMeta}>- Điểm 5 là rất hài lòng, điểm 1 là chưa hài lòng.</Text>
+      </View>
+
       <View style={styles.card}>
-        <Text style={styles.title}>Create Feedback</Text>
+        <Text style={styles.title}>Tạo đánh giá mới</Text>
         <LabeledInput
-          label="Service Request ID"
+          label="Mã yêu cầu dịch vụ"
           value={requestId}
           onChangeText={setRequestId}
-          placeholder="Paste completed request ID"
+          placeholder="Dán mã yêu cầu đã hoàn thành"
           autoCapitalize="none"
         />
         <LabeledInput
-          label="Rating (1-5)"
+          label="Điểm đánh giá (1-5)"
           value={rating}
           onChangeText={setRating}
           keyboardType="number-pad"
         />
         <LabeledInput
-          label="Comment"
+          label="Nhận xét"
           value={comment}
           onChangeText={setComment}
           multiline
           style={styles.commentInput}
-          placeholder="Service quality, timing, professionalism..."
+          placeholder="Ví dụ: đến đúng giờ, xử lý nhanh, thái độ tốt..."
         />
         <ActionButton
-          label={busy ? "Submitting..." : "Submit Feedback"}
+          label={busy ? "Đang gửi..." : "Gửi đánh giá"}
           onPress={() => void handleCreate()}
           disabled={busy}
         />
@@ -118,27 +127,35 @@ export default function FeedbackScreen() {
       {!!success ? <Text style={styles.success}>{success}</Text> : null}
 
       <View style={styles.card}>
-        <Text style={styles.title}>My Feedbacks ({items.length})</Text>
+        <Text style={styles.title}>Đánh giá của tôi ({items.length})</Text>
         {items.map((item) => (
           <View key={item.id} style={styles.row}>
-            <Text style={styles.rowTitle}>Request: {item.serviceRequestId}</Text>
-            <Text style={styles.rowMeta}>Rating: {item.rating}/5</Text>
-            <Text style={styles.rowMeta}>Comment: {item.comment || "-"}</Text>
-            <Text style={styles.rowMeta}>Created: {formatDateTime(item.createdAt)}</Text>
+            <Text style={styles.rowTitle}>Yêu cầu: {item.serviceRequestId}</Text>
+            <Text style={styles.rowMeta}>Điểm: {item.rating}/5</Text>
+            <Text style={styles.rowMeta}>Nhận xét: {item.comment || "-"}</Text>
+            <Text style={styles.rowMeta}>Tạo lúc: {formatDateTime(item.createdAt)}</Text>
           </View>
         ))}
-        {!items.length ? <Text style={styles.rowMeta}>No feedback yet</Text> : null}
+        {!items.length ? <Text style={styles.rowMeta}>Bạn chưa gửi đánh giá nào</Text> : null}
       </View>
     </ScreenLayout>
   );
 }
 
 const styles = StyleSheet.create({
+  noteCard: {
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 16,
+    padding: 14,
+    gap: 4
+  },
   card: {
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 14,
     gap: 8
   },
@@ -178,4 +195,3 @@ const styles = StyleSheet.create({
     fontSize: 12
   }
 });
-
