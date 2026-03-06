@@ -4,25 +4,28 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
 import {
-    Alert,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-    StatusBar,
-    Platform,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  StatusBar,
+  Platform,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 
 interface Service {
-  id: number;
+  id: string;
   name: string;
   category: string;
+  categoryName?: string;
   rating: number;
   reviews: number;
   price: string;
+  basePrice?: number;
   description: string;
+  bookingCount?: number;
 }
 
 type RootStackParamList = {
@@ -44,63 +47,18 @@ export const ServiceDetailScreen: React.FC<ServiceDetailScreenProps> = ({ naviga
   const { user, token } = useAuth();
   const isAuthenticated = !!user && !!token;
 
-  // Get category-specific information
-  const getCategoryInfo = () => {
-    const categoryDetails: Record<string, { color: string; description: string; features: string[] }> = {
-      Electronics: {
-        color: '#06B6D4',
-        description: 'Expert electronics repair services with certified technicians. We handle smartphones, laptops, tablets, and all electronic devices with care and precision.',
-        features: [
-          'Certified electronics technicians',
-          'Original parts guarantee',
-          'Same-day service available',
-          '90-day warranty on repairs',
-          'Free diagnostic check',
-          'Data protection guaranteed'
-        ]
-      },
-      Electrical: {
-        color: '#EF4444',
-        description: 'Professional electrical services for homes and businesses. Licensed electricians with years of experience in installations, repairs, and maintenance.',
-        features: [
-          'Licensed & insured electricians',
-          'Safety compliance guaranteed',
-          'Emergency 24/7 service',
-          'Free consultation & quote',
-          'Quality materials used',
-          '1-year workmanship warranty'
-        ]
-      },
-      Legal: {
-        color: '#8B5CF6',
-        description: 'Expert legal consultation and services from qualified lawyers. Get professional advice on contracts, legal documents, and legal matters.',
-        features: [
-          'Qualified legal professionals',
-          'Confidential consultation',
-          'Transparent pricing',
-          'Contract review & drafting',
-          'Legal document preparation',
-          'Court representation available'
-        ]
-      },
-      'Real Estate': {
-        color: '#10B981',
-        description: 'Comprehensive real estate services including property valuation, consultation, and land surveys. Expert guidance for buying, selling, or investing in property.',
-        features: [
-          'Certified property valuators',
-          'Market analysis included',
-          'Legal documentation support',
-          'Investment consultation',
-          'Accurate land surveys',
-          'Negotiation assistance'
-        ]
-      }
+  // Get category-specific UI information
+  const getCategoryTheme = (categoryName: string) => {
+    const themes: Record<string, { color: string; icon: keyof typeof Ionicons.glyphMap }> = {
+      Electronics: { color: '#06B6D4', icon: 'hardware-chip-outline' },
+      Electrical: { color: '#EF4444', icon: 'flash-outline' },
+      Legal: { color: '#8B5CF6', icon: 'document-text-outline' },
+      'Real Estate': { color: '#10B981', icon: 'home-outline' },
     };
-
-    return categoryDetails[service.category] || categoryDetails.Electronics;
+    return themes[categoryName] || { color: '#0066CC', icon: 'construct-outline' };
   };
 
-  const categoryInfo = getCategoryInfo();
+  const theme = getCategoryTheme(service.categoryName || service.category);
 
   const handleBookService = () => {
     if (!isAuthenticated) {
@@ -145,50 +103,36 @@ export const ServiceDetailScreen: React.FC<ServiceDetailScreenProps> = ({ naviga
         {/* Service Image Placeholder */}
         <View style={styles.imageContainer}>
           <LinearGradient
-            colors={[categoryInfo.color, categoryInfo.color + 'CC']}
+            colors={[theme.color, theme.color + 'CC']}
             style={styles.imagePlaceholder}
           >
-            <Ionicons name="construct" size={80} color="#FFFFFF" />
+            <Ionicons name={theme.icon} size={80} color="#FFFFFF" />
           </LinearGradient>
         </View>
 
         {/* Service Info */}
         <View style={styles.infoCard}>
-          <View style={[styles.categoryBadge, { backgroundColor: categoryInfo.color + '20' }]}>
-            <Text style={[styles.categoryText, { color: categoryInfo.color }]}>{service.category}</Text>
+          <View style={[styles.categoryBadge, { backgroundColor: theme.color + '20' }]}>
+            <Text style={[styles.categoryText, { color: theme.color }]}>{service.categoryName || service.category}</Text>
           </View>
-          
+
           <Text style={styles.serviceName}>{service.name}</Text>
-          
+
           <View style={styles.ratingRow}>
             <View style={styles.ratingContainer}>
               <Ionicons name="star" size={20} color="#FFB800" />
-              <Text style={styles.rating}>{service.rating}</Text>
-              <Text style={styles.reviews}>({service.reviews} reviews)</Text>
+              <Text style={styles.rating}>5.0</Text>
+              <Text style={styles.reviews}>({service.bookingCount || 0} reviews)</Text>
             </View>
-            <Text style={styles.price}>{service.price}</Text>
+            <Text style={styles.price}>{service.basePrice !== undefined ? `${service.basePrice.toLocaleString('vi-VN')} VND` : service.price}</Text>
           </View>
 
           {/* Description */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>About This Service</Text>
             <Text style={styles.description}>
-              {service.description}
+              {service.description || 'No detailed description available.'}
             </Text>
-            <Text style={styles.description}>
-              {categoryInfo.description}
-            </Text>
-          </View>
-
-          {/* Features */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>What's Included</Text>
-            {categoryInfo.features.map((feature, index) => (
-              <View key={index} style={styles.featureItem}>
-                <Ionicons name="checkmark-circle" size={20} color={categoryInfo.color} />
-                <Text style={styles.featureText}>{feature}</Text>
-              </View>
-            ))}
           </View>
         </View>
       </ScrollView>
@@ -201,7 +145,7 @@ export const ServiceDetailScreen: React.FC<ServiceDetailScreenProps> = ({ naviga
           activeOpacity={0.8}
         >
           <LinearGradient
-            colors={[categoryInfo.color, categoryInfo.color + 'DD']}
+            colors={[theme.color, theme.color + 'DD']}
             style={styles.bookButtonGradient}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}

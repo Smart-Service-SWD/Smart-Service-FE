@@ -13,6 +13,7 @@ interface JobTabNavigatorProps {
 
 export const JobTabNavigator: React.FC<JobTabNavigatorProps> = ({ route, navigation }) => {
     const job = route?.params?.job || {};
+    const serviceRequestId = job?.serviceRequestId || job?.id;
 
     return (
         <Tab.Navigator
@@ -27,13 +28,13 @@ export const JobTabNavigator: React.FC<JobTabNavigatorProps> = ({ route, navigat
             <Tab.Screen
                 name="Overview"
                 component={JobOverviewScreen}
-                initialParams={{ jobId: job.id }}
+                initialParams={{ jobId: serviceRequestId, job }}
             />
 
             <Tab.Screen
                 name="Details"
                 component={JobDetailsScreen}
-                initialParams={{ job }}
+                initialParams={{ jobId: serviceRequestId, job }}
             />
         </Tab.Navigator>
     );

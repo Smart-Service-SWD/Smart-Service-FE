@@ -1,180 +1,86 @@
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
+  RefreshControl,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { resolveGraphQLBaseUrl } from '../../config/api.config';
-
-interface ServiceRequest {
-  addressText: string;
-  categoryId: string;
-  complexity: { level: number };
-  createdAt: string;
-  customerId: string;
-  description?: string;
-  estimatedCost?: { amount: number; currency: string };
-  id: string;
-  status: string;
-}
-
-interface GraphQLResponse {
-  data?: {
-    getServiceRequests: ServiceRequest[];
-  };
-  errors?: Array<{ message: string }>;
-}
-
-const fetchServiceRequests = async (): Promise<ServiceRequest[]> => {
-  const token = await AsyncStorage.getItem('authToken');
-  const graphqlUrl = await resolveGraphQLBaseUrl();
-
-  console.log('TOKEN:', token);
-  console.log('GRAPHQL URL:', graphqlUrl);
-
-  if (!token) {
-    throw new Error('Không tìm thấy token. Vui lòng đăng nhập lại.');
-  }
-
-  try {
-    const response = await axios.post<GraphQLResponse>(
-      graphqlUrl,
-      {
-        query: `
-          query GetServiceRequests {
-            getServiceRequests {
-              addressText
-              categoryId
-              complexity { level }
-              createdAt
-              customerId
-              description
-              estimatedCost {
-                amount
-                currency
-              }
-              id
-              status
-            }
-          }
-        `,
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        timeout: 15000,
-      }
-    );
-
-    console.log('GRAPHQL RESPONSE:', JSON.stringify(response.data, null, 2));
-
-    if (response.data.errors && response.data.errors.length > 0) {
-      throw new Error(response.data.errors.map(e => e.message).join(', '));
-    }
-
-    return response.data.data?.getServiceRequests ?? [];
-  } catch (error: any) {
-    console.log('FETCH ERROR FULL:', error?.response?.data || error.message);
-    throw new Error(
-      error?.response?.data?.errors?.[0]?.message ||
-      error.message ||
-      'Lỗi không xác định'
-    );
-  }
-};
+import { useAuth } from '../../context/AuthContext';
+import { agentGraphqlService, AssignmentWithRequest } from '../../services/agentGraphqlService';
 
 export const AvailableJobsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
-  const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([]);
+  const { user } = useAuth();
+  const [assignments, setAssignments] = useState<AssignmentWithRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const initData = useCallback(async () => {
+  const loadAssignments = useCallback(async (isRefresh = false) => {
+    if (!user?.id) return;
+    if (!isRefresh) setLoading(true);
     try {
-      setLoading(true);
-      setError(null);
-
-      const requests = await fetchServiceRequests();
-      setServiceRequests(requests);
+      const data = await agentGraphqlService.getAssignmentsWithRequestDetail(user.id);
+      setAssignments(data);
     } catch (err: any) {
-      setError(err.message);
-      Alert.alert('Lỗi', err.message);
+      Alert.alert('Lỗi', err?.message ?? 'Không tải được assignment');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
-    initData();
-  }, [initData]);
+    loadAssignments();
+  }, [loadAssignments]);
 
-  const renderJobItem = ({ item }: { item: ServiceRequest }) => (
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadAssignments(true);
+  };
+
+  const renderJobItem = ({ item }: { item: AssignmentWithRequest }) => (
     <TouchableOpacity
       style={styles.jobCard}
       onPress={() => navigation.navigate('JobTabs', { job: item })}
     >
-      <View style={styles.avatarContainer}>
-        <Ionicons name="person-circle-outline" size={50} color="#333" />
+      <View style={styles.jobHeader}>
+        <Text style={styles.jobTitle} numberOfLines={1}>
+          {item.requestDetail?.description || `Yêu cầu #${item.serviceRequestId.slice(0, 8)}`}
+        </Text>
+        <Text style={styles.status}>{item.requestDetail?.status || 'N/A'}</Text>
       </View>
 
-      <View style={styles.jobInfo}>
-        <Text style={styles.jobType}>
-          {item.description || item.categoryId || 'Không có mô tả'}
+      <View style={styles.jobMetaRow}>
+        <Ionicons name="location-outline" size={14} color="#6B7280" />
+        <Text style={styles.jobMetaText} numberOfLines={1}>
+          {item.requestDetail?.addressText || 'Chưa có địa chỉ'}
         </Text>
-
-        <Text style={styles.jobDetail}>
-          Độ khó:{' '}
-          <Text style={styles.boldText}>
-            {item.complexity?.level ?? 'Chưa xác định'}
-          </Text>
+      </View>
+      <View style={styles.jobMetaRow}>
+        <Ionicons name="cash-outline" size={14} color="#6B7280" />
+        <Text style={styles.jobMetaText}>
+          {item.estimatedCost
+            ? `${Number(item.estimatedCost.amount).toLocaleString('vi-VN')} ${item.estimatedCost.currency}`
+            : 'Chưa có chi phí ước tính'}
         </Text>
-
-        <Text style={styles.jobDetail}>
-          Địa chỉ:{' '}
-          <Text style={styles.boldText}>
-            {item.addressText || 'Chưa có'}
-          </Text>
-        </Text>
-
-        <Text style={styles.jobDetail}>
-          Trạng thái:{' '}
-          <Text style={styles.boldText}>{item.status}</Text>
-        </Text>
-
-        <Text style={styles.jobDetail}>
-          Giá ước tính:{' '}
-          <Text style={styles.boldText}>
-            {item.estimatedCost
-              ? `${item.estimatedCost.amount} ${item.estimatedCost.currency}`
-              : 'Chưa có'}
-          </Text>
+      </View>
+      <View style={styles.jobMetaRow}>
+        <Ionicons name="time-outline" size={14} color="#6B7280" />
+        <Text style={styles.jobMetaText}>
+          {new Date(item.assignedAt).toLocaleString('vi-VN')}
         </Text>
       </View>
     </TouchableOpacity>
   );
 
-  const FilterButton = ({ title }: { title: string }) => (
-    <TouchableOpacity style={styles.filterButton}>
-      <Text style={styles.filterText}>{title}</Text>
-      <Ionicons name="chevron-down" size={16} color="#333" />
-    </TouchableOpacity>
-  );
-
-  if (loading) {
+  if (loading && !refreshing) {
     return (
-      <View style={[styles.container, styles.center]}>
+      <View style={styles.center}>
         <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>
-          Đang tải danh sách đơn hàng...
-        </Text>
       </View>
     );
   }
@@ -182,30 +88,19 @@ export const AvailableJobsScreen: React.FC<{ navigation: any }> = ({ navigation 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Danh sách đơn hàng treo</Text>
-      </View>
-
-      <View style={styles.filterBar}>
-        <FilterButton title="Nghiệp vụ" />
-        <FilterButton title="Độ khó" />
-        <FilterButton title="Địa chỉ" />
+        <Text style={styles.headerTitle}>Assignment của tôi</Text>
       </View>
 
       <FlatList
-        data={serviceRequests}
+        data={assignments}
         renderItem={renderJobItem}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={assignments.length === 0 ? styles.emptyList : styles.listContainer}
         showsVerticalScrollIndicator={false}
-        refreshing={loading}
-        onRefresh={initData}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={
           <View style={styles.center}>
-            <Text style={styles.emptyText}>
-              {error
-                ? 'Lỗi tải dữ liệu. Kéo xuống để thử lại.'
-                : 'Không có đơn hàng nào'}
-            </Text>
+            <Text style={styles.emptyText}>Chưa có assignment nào được giao.</Text>
           </View>
         }
       />
@@ -214,54 +109,27 @@ export const AvailableJobsScreen: React.FC<{ navigation: any }> = ({ navigation 
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  loadingText: { marginTop: 10, fontSize: 16, color: '#666' },
-  emptyText: { fontSize: 16, color: '#999', textAlign: 'center' },
-  header: {
-    paddingTop: 50,
-    paddingBottom: 15,
-    paddingHorizontal: 20,
-    backgroundColor: '#f0f0f0',
-    alignItems: 'center',
-  },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#999' },
-  filterBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  filterButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  filterText: {
-    fontSize: 14,
-    color: '#333',
-    marginRight: 5,
-    fontWeight: '500',
-  },
-  listContent: { padding: 16 },
+  container: { flex: 1, backgroundColor: '#F8F9FA' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  header: { backgroundColor: '#fff', paddingTop: 50, paddingBottom: 16, paddingHorizontal: 20 },
+  headerTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
+  listContainer: { padding: 14, paddingBottom: 24 },
+  emptyList: { flexGrow: 1 },
+  emptyText: { color: '#9CA3AF', fontSize: 14 },
   jobCard: {
-    flexDirection: 'row',
-    backgroundColor: '#e3f2fd',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#eee',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
     elevation: 2,
   },
-  avatarContainer: { justifyContent: 'center', marginRight: 12 },
-  jobInfo: {
-    flex: 1,
-    backgroundColor: '#fff',
-    padding: 10,
-    borderRadius: 4,
-  },
-  jobType: { fontSize: 16, fontWeight: 'bold', marginBottom: 4 },
-  jobDetail: { fontSize: 13, marginBottom: 2 },
-  boldText: { fontWeight: '600' },
+  jobHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8 },
+  jobTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: '#111827' },
+  status: { fontSize: 11, color: '#007AFF', fontWeight: '700' },
+  jobMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
+  jobMetaText: { flex: 1, fontSize: 13, color: '#4B5563' },
 });

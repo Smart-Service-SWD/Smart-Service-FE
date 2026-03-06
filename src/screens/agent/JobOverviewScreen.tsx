@@ -8,235 +8,86 @@ import {
   Text,
   View,
 } from 'react-native';
-import { resolveGraphQLBaseUrl } from '../../config/api.config';
-import { useAuth } from '../../context/AuthContext';
-
-const GET_SERVICE_REQUEST = `
-query getServiceRequestById($id: UUID!) {
-  getServiceRequestById(id: $id) {
-    id
-    addressText
-    categoryId
-    complexity
-    customerId
-    description
-    estimatedCost {
-      amount
-      currency
-    }
-    status
-    createdAt
-  }
-}
-`;
-
-const GET_USER = `
-query getUserById($id: UUID!) {
-  getUserById(id: $id) {
-    id
-    fullName
-    email
-    phoneNumber
-  }
-}
-`;
-
-const GET_CATEGORY = `
-query getServiceCategoryById($id: UUID!) {
-  getServiceCategoryById(id: $id) {
-    id
-    name
-    description
-  }
-}
-`;
+import { staffGraphqlService } from '../../services/staffGraphqlService';
 
 const JobOverviewScreen = () => {
-
   const route = useRoute<any>();
-  const { jobId } = route.params || {};
+  const passedJob = route.params?.job;
+  const jobId = route.params?.jobId || passedJob?.serviceRequestId || passedJob?.id;
 
-  const { token, loading: authLoading } = useAuth();
-
-  const [job, setJob] = useState<any>(null);
-  const [customer, setCustomer] = useState<any>(null);
-  const [category, setCategory] = useState<any>(null);
-
-  const [loading, setLoading] = useState(true);
-
-  const fetchGraphQL = async (query: string, variables: any) => {
-
-    const url = await resolveGraphQLBaseUrl();
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { Authorization: `Bearer ${token}` }),
-      },
-      body: JSON.stringify({
-        query,
-        variables,
-      }),
-    });
-
-    const result = await response.json();
-
-    if (result.errors) {
-      throw new Error(result.errors[0].message);
-    }
-
-    return result.data;
-  };
+  const [job, setJob] = useState<any>(passedJob?.requestDetail ?? null);
+  const [loading, setLoading] = useState(!passedJob?.requestDetail);
 
   const fetchJobData = useCallback(async () => {
-
-    try {
-
-      console.log("JOB ID:", jobId);
-      console.log("TOKEN:", token);
-
-      // 1️⃣ ServiceRequest
-      const serviceData = await fetchGraphQL(
-        GET_SERVICE_REQUEST,
-        { id: jobId }
-      );
-
-      const request = serviceData.getServiceRequestById;
-
-      setJob(request);
-
-      // 2️⃣ Customer
-      const userData = await fetchGraphQL(
-        GET_USER,
-        { id: request.customerId }
-      );
-
-      setCustomer(userData.getUserById);
-
-      // 3️⃣ Category
-      const categoryData = await fetchGraphQL(
-        GET_CATEGORY,
-        { id: request.categoryId }
-      );
-
-      setCategory(categoryData.getServiceCategoryById);
-
-    } catch (err: any) {
-
-      console.error(err);
-
-      Alert.alert("Error", err.message);
-
-    } finally {
-
+    if (!jobId) {
       setLoading(false);
-
+      return;
     }
-
-  }, [jobId, token]);
+    try {
+      setLoading(true);
+      const data = await staffGraphqlService.getRequestDetail(jobId);
+      setJob(data);
+    } catch (err: any) {
+      Alert.alert('Lỗi', err?.message ?? 'Không tải được chi tiết yêu cầu');
+    } finally {
+      setLoading(false);
+    }
+  }, [jobId]);
 
   useEffect(() => {
-
-    if (!authLoading && token && jobId) {
-
+    if (!job) {
       fetchJobData();
-
     }
+  }, [fetchJobData, job]);
 
-  }, [authLoading, token, jobId, fetchJobData]);
-
-  if (authLoading || loading) {
-
+  if (loading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" />
       </View>
     );
-
   }
 
   if (!job) {
-
     return (
       <View style={styles.center}>
         <Text>Không có dữ liệu công việc</Text>
       </View>
     );
-
   }
 
   return (
-
     <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.title}>Tổng quan công việc</Text>
 
-      <Text style={styles.title}>Job Overview</Text>
+      <Text style={styles.label}>Mô tả</Text>
+      <Text style={styles.value}>{job.description || 'N/A'}</Text>
 
-      <Text style={styles.label}>Customer</Text>
-      <Text style={styles.value}>{customer?.fullName}</Text>
+      <Text style={styles.label}>Địa chỉ</Text>
+      <Text style={styles.value}>{job.addressText || 'N/A'}</Text>
 
-      <Text style={styles.label}>Email</Text>
-      <Text style={styles.value}>{customer?.email}</Text>
+      <Text style={styles.label}>Trạng thái</Text>
+      <Text style={styles.value}>{job.status || 'N/A'}</Text>
 
-      <Text style={styles.label}>Phone</Text>
-      <Text style={styles.value}>{customer?.phoneNumber}</Text>
+      <Text style={styles.label}>Độ phức tạp</Text>
+      <Text style={styles.value}>{job.complexity?.level ?? 'N/A'}</Text>
 
-      <Text style={styles.label}>Address</Text>
-      <Text style={styles.value}>{job.addressText}</Text>
-
-      <Text style={styles.label}>Category</Text>
-      <Text style={styles.value}>{category?.name}</Text>
-
-      <Text style={styles.label}>Complexity</Text>
-      <Text style={styles.value}>{job.complexity}</Text>
-
-      <Text style={styles.label}>Description</Text>
-      <Text style={styles.value}>{job.description}</Text>
-
-      <Text style={styles.label}>Status</Text>
-      <Text style={styles.value}>{job.status}</Text>
-
-      <Text style={styles.label}>Estimated Cost</Text>
+      <Text style={styles.label}>Chi phí ước tính</Text>
       <Text style={styles.value}>
         {job.estimatedCost
           ? `${job.estimatedCost.amount} ${job.estimatedCost.currency}`
-          : "Not set"}
+          : 'Chưa có'}
       </Text>
-
     </ScrollView>
-
   );
-
 };
 
 export default JobOverviewScreen;
 
 const styles = StyleSheet.create({
-
-  container: {
-    padding: 20,
-  },
-
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  title: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 20,
-  },
-
-  label: {
-    fontWeight: 'bold',
-    marginTop: 10,
-  },
-
-  value: {
-    marginTop: 4,
-    fontSize: 16,
-  },
-
+  container: { padding: 20 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  title: { fontSize: 22, fontWeight: 'bold', marginBottom: 20 },
+  label: { fontWeight: 'bold', marginTop: 10 },
+  value: { marginTop: 4, fontSize: 16 },
 });

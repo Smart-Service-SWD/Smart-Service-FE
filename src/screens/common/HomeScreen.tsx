@@ -13,7 +13,10 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
+import { ToastService } from '../../components/toast';
 import { useAuth } from '../../context/AuthContext';
+import * as userService from '../../services/userService';
+import { adminGraphqlService } from '../../services/adminGraphqlService';
 
 // Type Definitions
 interface Banner {
@@ -26,68 +29,30 @@ interface Banner {
 }
 
 interface ServiceCategory {
-  id: number;
+  id: string;
   name: string;
   icon: keyof typeof Ionicons.glyphMap;
   color: string;
 }
 
 interface FeaturedService {
-  id: number;
+  id: string;
   name: string;
   category: string;
-  rating: number;
   reviews: number;
   price: string;
-  image: string;
   discount?: string;
-}
-
-interface DesignToken {
-  spacing: {
-    xs: number;
-    sm: number;
-    md: number;
-    lg: number;
-    xl: number;
-  };
-  radius: {
-    sm: number;
-    md: number;
-    lg: number;
-    xl: number;
-  };
-  elevation: {
-    level1: ViewStyle;
-    level2: ViewStyle;
-    level3: ViewStyle;
-  };
-  colors: {
-    primary: string;
-    onPrimary: string;
-    primaryContainer: string;
-    onPrimaryContainer: string;
-    surface: string;
-    onSurface: string;
-    surfaceVariant: string;
-    onSurfaceVariant: string;
-    background: string;
-    outline: string;
-  };
 }
 
 type RootStackParamList = {
   HomeMain: undefined;
-  ServiceList: { category: string };
+  ServiceList: { category: string; categoryId?: string };
   ServiceDetail: { service: FeaturedService };
   Profile: undefined;
-  Camera: undefined;
-  History: undefined;
-  Promotions: undefined;
-  Support: undefined;
-  AllServices: undefined;
   CreateRequest: { service: FeaturedService };
   GraphQLDemo: undefined;
+  NewRequest: undefined;
+  MyRequests: undefined;
 };
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'HomeMain'>;
@@ -98,57 +63,32 @@ interface HomeScreenProps {
 
 const { width } = Dimensions.get('window');
 
-// Material Design 3 - Design Tokens
-const MD3: DesignToken = {
-  spacing: {
-    xs: 4,
-    sm: 8,
-    md: 16,
-    lg: 24,
-    xl: 32,
+const BANNERS: Banner[] = [
+  {
+    id: 1,
+    title: 'Professional Home Services',
+    subtitle: 'Trusted Experts',
+    description: 'Book in seconds',
+    color: '#4F46E5',
+    icon: 'home-outline',
   },
-  radius: {
-    sm: 8,
-    md: 12,
-    lg: 16,
-    xl: 28,
+  {
+    id: 2,
+    title: '20% Off First Service',
+    subtitle: 'New Customer',
+    description: 'Limited time offer',
+    color: '#EC4899',
+    icon: 'gift-outline',
   },
-  elevation: {
-    level1: {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.05,
-      shadowRadius: 3,
-      elevation: 1,
-    },
-    level2: {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.08,
-      shadowRadius: 6,
-      elevation: 2,
-    },
-    level3: {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.12,
-      shadowRadius: 8,
-      elevation: 4,
-    },
+  {
+    id: 3,
+    title: '24/7 Support Available',
+    subtitle: 'Always Here',
+    description: 'Fast response time',
+    color: '#10B981',
+    icon: 'headset-outline',
   },
-  colors: {
-    primary: '#6750A4',
-    onPrimary: '#FFFFFF',
-    primaryContainer: '#EADDFF',
-    onPrimaryContainer: '#21005D',
-    surface: '#FFFFFF',
-    onSurface: '#1C1B1F',
-    surfaceVariant: '#E7E0EC',
-    onSurfaceVariant: '#49454F',
-    background: '#FEF7FF',
-    outline: '#79747E',
-  },
-};
+];
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const { user, logout } = useAuth();
@@ -156,89 +96,48 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [currentBannerIndex, setCurrentBannerIndex] = useState<number>(0);
 
-  // Mock data for banners/promotions
-  const banners: Banner[] = [
-    {
-      id: 1,
-      title: 'Professional Home Services',
-      subtitle: 'Trusted Experts',
-      description: 'Book in seconds',
-      color: '#4F46E5',
-      icon: 'home-outline',
-    },
-    {
-      id: 2,
-      title: '20% Off First Service',
-      subtitle: 'New Customer',
-      description: 'Limited time offer',
-      color: '#EC4899',
-      icon: 'gift-outline',
-    },
-    {
-      id: 3,
-      title: '24/7 Support Available',
-      subtitle: 'Always Here',
-      description: 'Fast response time',
-      color: '#10B981',
-      icon: 'headset-outline',
-    },
-  ];
+  const [serviceCategories, setServiceCategories] = useState<ServiceCategory[]>([]);
+  const [featuredServices, setFeaturedServices] = useState<FeaturedService[]>([]);
 
-  // Mock data for service categories
-  const serviceCategories: ServiceCategory[] = [
-    { id: 1, name: 'Electronics', icon: 'phone-portrait-outline', color: '#06B6D4' },
-    { id: 2, name: 'Electrical', icon: 'flash-outline', color: '#EF4444' },
-    { id: 3, name: 'Legal', icon: 'document-text-outline', color: '#8B5CF6' },
-    { id: 4, name: 'Real Estate', icon: 'map-outline', color: '#10B981' },
-  ];
+  const fetchHomeData = async () => {
+    try {
+      const categories = await userService.getServiceCategories();
+      setServiceCategories(categories.map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        icon: 'construct-outline', // Default icon
+        color: '#4F46E5'
+      })));
 
-  // Mock data for featured services
-  const featuredServices: FeaturedService[] = [
-    {
-      id: 1,
-      name: 'Phone & Laptop Repair',
-      category: 'Electronics',
-      rating: 4.8,
-      reviews: 1250,
-      price: '150,000 VND',
-      image: 'https://via.placeholder.com/300x200/06B6D4/FFFFFF?text=Electronics',
-      discount: '20%',
-    },
-    {
-      id: 2,
-      name: 'Electrical Installation',
-      category: 'Electrical',
-      rating: 4.9,
-      reviews: 890,
-      price: '200,000 VND',
-      image: 'https://via.placeholder.com/300x200/EF4444/FFFFFF?text=Electrical',
-    },
-    {
-      id: 3,
-      name: 'Legal Consultation',
-      category: 'Legal',
-      rating: 4.7,
-      reviews: 560,
-      price: '500,000 VND',
-      image: 'https://via.placeholder.com/300x200/8B5CF6/FFFFFF?text=Legal',
-      discount: '10%',
-    },
-  ];
+      const services = await adminGraphqlService.getServiceDefinitions();
+      setFeaturedServices(services.slice(0, 5).map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        category: s.categoryName,
+        reviews: s.bookingCount || 0,
+        price: `${s.basePrice} VND`,
+      })));
+    } catch (error) {
+      console.error('Error fetching home data:', error);
+    }
+  };
 
   useEffect(() => {
+    fetchHomeData();
     const interval = setInterval(() => {
-      setCurrentBannerIndex((prevIndex) => (prevIndex + 1) % banners.length);
+      setCurrentBannerIndex((prevIndex) => (prevIndex + 1) % BANNERS.length);
     }, 5000);
     return () => clearInterval(interval);
   }, []);
 
-  const onRefresh = (): void => {
+  const onRefresh = async (): Promise<void> => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
+    await fetchHomeData();
+    setRefreshing(false);
   };
 
   const renderBanner = (): React.ReactElement => {
-    const banner = banners[currentBannerIndex];
+    const banner = BANNERS[currentBannerIndex];
     return (
       <View style={[styles.banner, { backgroundColor: banner.color }]}>
         <View style={styles.bannerContent}>
@@ -252,7 +151,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           </View>
         </View>
         <View style={styles.bannerIndicators}>
-          {banners.map((_, index) => (
+          {BANNERS.map((_, index) => (
             <View
               key={index}
               style={[
@@ -269,7 +168,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const renderCategoryItem = ({ item }: { item: ServiceCategory }): React.ReactElement => {
     const handlePress = () => {
       console.log('Category item clicked:', item.name);
-      navigation.navigate('ServiceList', { category: item.name });
+      navigation.navigate('ServiceList', { category: item.name, categoryId: item.id });
     };
 
     return (
@@ -288,8 +187,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   };
 
   const renderFeaturedService = ({ item }: { item: FeaturedService }): React.ReactElement => {
-    const serviceColor = item.image.includes('007AFF') ? '#007AFF' :
-      item.image.includes('FF9500') ? '#FF9500' : '#FF3B30';
+    const colorMap: Record<string, string> = {
+      Electronics: '#06B6D4',
+      Electrical: '#EF4444',
+      Legal: '#8B5CF6',
+      'Real Estate': '#10B981',
+    };
+    const serviceColor = colorMap[item.category] ?? '#007AFF';
 
     return (
       <TouchableOpacity
@@ -315,9 +219,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           <Text style={styles.serviceCategory}>{item.category}</Text>
           <View style={styles.serviceFooter}>
             <View style={styles.ratingContainer}>
-              <Ionicons name="star" size={16} color="#FFB800" />
-              <Text style={styles.rating}>{item.rating}</Text>
-              <Text style={styles.reviews}>({item.reviews})</Text>
+              <Ionicons name="document-text-outline" size={16} color="#6B7280" />
+              <Text style={styles.reviews}>{item.reviews} lượt đặt</Text>
             </View>
           </View>
           <Text style={styles.price}>{item.price}</Text>
@@ -403,7 +306,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         <TouchableOpacity
           style={[styles.graphqlDemoCard, { flex: 1, marginHorizontal: 0, marginTop: 0, borderColor: '#10B981' }]}
           onPress={() => {
-            const { ToastService } = require('../../components/toast');
             ToastService.show({
               type: 'success',
               title: 'Thành công!',
@@ -438,46 +340,46 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         <View style={styles.quickActions}>
           <TouchableOpacity
             style={styles.quickAction}
-            onPress={() => navigation.navigate('Camera')}
+            onPress={() => navigation.navigate('NewRequest')}
           >
             <View style={[styles.quickActionIcon, { backgroundColor: '#007AFF20' }]}>
-              <Ionicons name="camera" size={24} color="#007AFF" />
+              <Ionicons name="add-circle-outline" size={24} color="#007AFF" />
             </View>
             <View style={{ height: 8 }} />
-            <Text style={styles.quickActionText}>Scan Issue</Text>
+            <Text style={styles.quickActionText}>Tạo yêu cầu</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.quickAction}
-            onPress={() => navigation.navigate('History')}
+            onPress={() => navigation.navigate('MyRequests')}
           >
             <View style={[styles.quickActionIcon, { backgroundColor: '#34C75920' }]}>
-              <Ionicons name="time" size={24} color="#34C759" />
+              <Ionicons name="clipboard-outline" size={24} color="#34C759" />
             </View>
             <View style={{ height: 8 }} />
-            <Text style={styles.quickActionText}>My Requests</Text>
+            <Text style={styles.quickActionText}>Yêu cầu của tôi</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.quickAction}
-            onPress={() => navigation.navigate('Promotions')}
+            onPress={() => navigation.navigate('GraphQLDemo')}
           >
             <View style={[styles.quickActionIcon, { backgroundColor: '#FF950020' }]}>
-              <Ionicons name="pricetag" size={24} color="#FF9500" />
+              <Ionicons name="sparkles-outline" size={24} color="#FF9500" />
             </View>
             <View style={{ height: 8 }} />
-            <Text style={styles.quickActionText}>Promotions</Text>
+            <Text style={styles.quickActionText}>Danh mục dịch vụ</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.quickAction}
-            onPress={() => navigation.navigate('Support')}
+            onPress={() => navigation.navigate('Profile')}
           >
             <View style={[styles.quickActionIcon, { backgroundColor: '#5856D620' }]}>
-              <Ionicons name="headset" size={24} color="#5856D6" />
+              <Ionicons name="person-outline" size={24} color="#5856D6" />
             </View>
             <View style={{ height: 8 }} />
-            <Text style={styles.quickActionText}>Support</Text>
+            <Text style={styles.quickActionText}>Tài khoản</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -486,7 +388,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Featured Services</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('AllServices')}>
+          <TouchableOpacity onPress={() => navigation.navigate('ServiceList', { category: 'Tất cả' })}>
             <Text style={styles.seeAll}>See All</Text>
           </TouchableOpacity>
         </View>

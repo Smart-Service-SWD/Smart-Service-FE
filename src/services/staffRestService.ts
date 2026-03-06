@@ -31,6 +31,22 @@ export interface AnalysisResult {
   [key: string]: any;
 }
 
+export interface CreateAssignmentPayload {
+  serviceRequestId: string;
+  agentId: string;
+  estimatedCost: MoneyPayload;
+}
+
+export interface CreateMatchingResultPayload {
+  serviceRequestId: string;
+  serviceAgentId: string;
+  supportedComplexity: {
+    level: number;
+  };
+  matchingScore: number;
+  isRecommended: boolean;
+}
+
 // ─── Staff REST Service ─────────────────────────────────────────────────────────
 
 export const staffRestService = {
@@ -71,6 +87,33 @@ export const staffRestService = {
   ): Promise<AnalysisResult> => {
     const response = await apiClient.post('/service-analysis', payload);
     return response.data;
+  },
+
+  /**
+   * Tạo Assignment cho Agent.
+   * POST /api/assignments
+   */
+  createAssignment: async (payload: CreateAssignmentPayload): Promise<string> => {
+    const response = await apiClient.post('/assignments', payload);
+    return response.data?.id || response.data;
+  },
+
+  /**
+   * Tạo Matching Result thủ công.
+   * POST /api/matching-results
+   */
+  createMatchingResult: async (payload: CreateMatchingResultPayload): Promise<string> => {
+    const response = await apiClient.post('/matching-results', payload);
+    return response.data?.id || response.data;
+  },
+
+  /**
+   * Ghi Activity Log.
+   * POST /api/activity-logs
+   */
+  createActivityLog: async (serviceRequestId: string, action: string): Promise<string> => {
+    const response = await apiClient.post('/activity-logs', { serviceRequestId, action });
+    return response.data?.id || response.data;
   },
 
   /**

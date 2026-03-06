@@ -56,6 +56,14 @@ export const adminRestService = {
     return response.data;
   },
 
+  /**
+   * Khóa / mở khóa tài khoản - PATCH /api/auth/users/{id}/lock
+   */
+  lockUser: async (userId: string, isLocked: boolean): Promise<boolean> => {
+    const response = await apiClient.patch(`/auth/users/${userId}/lock`, { isLocked });
+    return response.data;
+  },
+
   // ── Service Categories ────────────────────────────────────────────────────
 
   /** Tạo mới danh mục dịch vụ - POST /api/service-categories */

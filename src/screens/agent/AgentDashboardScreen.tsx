@@ -1,335 +1,182 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TouchableOpacity,
-  View
+  View,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
+import { agentGraphqlService, AssignmentWithRequest } from '../../services/agentGraphqlService';
 
 export const AgentDashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const { user, logout } = useAuth();
-  const [loading, setLoading] = useState<boolean>(false);
-  const [refreshing, setRefreshing] = useState<boolean>(false);
-  const [isAvailable, setIsAvailable] = useState<boolean>(true);
-  const [stats, setStats] = useState<any>({
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [stats, setStats] = useState({
     pendingAssignments: 0,
     activeJobs: 0,
     completedToday: 0,
-    earnings: 0
+    earnings: 0,
   });
+  const [recentAssignments, setRecentAssignments] = useState<AssignmentWithRequest[]>([]);
 
-  useEffect(() => {
-    loadDashboardData();
-  }, []);
-
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async () => {
+    if (!user?.id) return;
     try {
       setLoading(true);
-      // Mock data
-      setTimeout(() => {
-        setStats({
-          pendingAssignments: 3,
-          activeJobs: 2,
-          completedToday: 5,
-          earnings: 1250000
-        });
-        setLoading(false);
-        setRefreshing(false);
-      }, 1000);
-    } catch (error) {
-      console.error('Error loading dashboard:', error);
+      const [statData, assignments] = await Promise.all([
+        agentGraphqlService.getAgentStats(user.id),
+        agentGraphqlService.getAssignmentsWithRequestDetail(user.id),
+      ]);
+      setStats(statData);
+      setRecentAssignments(assignments.slice(0, 3));
+    } catch (error: any) {
+      Alert.alert('Lỗi', error?.message ?? 'Không tải được dữ liệu agent');
+    } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [user?.id]);
+
+  useEffect(() => {
+    loadDashboardData();
+  }, [loadDashboardData]);
 
   const onRefresh = () => {
     setRefreshing(true);
     loadDashboardData();
   };
 
-  const toggleAvailability = async () => {
-    setIsAvailable(!isAvailable);
-  };
-
-  // 🔥 THÊM LOGOUT FUNCTION
   const handleLogout = () => {
-    Alert.alert(
-      'Đăng xuất',
-      'Bạn có chắc chắn muốn đăng xuất?',
-      [
-        { text: 'Hủy', style: 'cancel' },
-        {
-          text: 'Đăng xuất',
-          style: 'destructive',
-          onPress: () => {
-            logout();
-            // Navigate về Home sau logout
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'Home' }]
-            });
-          }
-        }
-      ]
-    );
+    Alert.alert('Đăng xuất', 'Bạn có chắc chắn muốn đăng xuất?', [
+      { text: 'Hủy', style: 'cancel' },
+      { text: 'Đăng xuất', style: 'destructive', onPress: () => logout() },
+    ]);
   };
-
-  const StatCard = ({ icon, title, value, color, suffix = '', onPress }: any) => (
-    <TouchableOpacity 
-      style={[styles.statCard, { borderLeftColor: color }]}
-      onPress={onPress}
-    >
-      <Ionicons name={icon} size={28} color={color} />
-      <View style={styles.statContent}>
-        <Text style={styles.statValue}>{value}{suffix}</Text>
-        <Text style={styles.statTitle}>{title}</Text>
-      </View>
-    </TouchableOpacity>
-  );
 
   if (loading && !refreshing) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={styles.center}>
         <ActivityIndicator size="large" color="#34C759" />
       </View>
     );
   }
 
   return (
-    <ScrollView 
+    <ScrollView
       style={styles.container}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
       <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>Hello, {user?.fullName || 'Agent'}!</Text>
-          <Text style={styles.role}>Service Provider</Text>
-        </View>
-        <View style={styles.availabilityContainer}>
-          <Text style={styles.availabilityLabel}>
-            {isAvailable ? 'Available' : 'Offline'}
-          </Text>
-          <Switch
-            value={isAvailable}
-            onValueChange={toggleAvailability}
-            trackColor={{ false: '#767577', true: '#34C759' }}
-            thumbColor={isAvailable ? '#fff' : '#f4f3f4'}
-          />
-        </View>
+        <Text style={styles.greeting}>Xin chào, {user?.fullName || 'Agent'}!</Text>
+        <Text style={styles.subTitle}>Bảng điều khiển công việc</Text>
       </View>
 
       <View style={styles.statsGrid}>
-        <StatCard
-          icon="notifications-outline"
-          title="List đơn hàng treo"
-          value={stats.pendingAssignments}
-          color="#FF9500"
-          onPress={() => navigation.navigate('AvailableJobs')}
-        />
-        
-        <StatCard
-          icon="construct-outline"
-          title="Active Jobs"
-          value={stats.activeJobs}
-          color="#007AFF"
-          onPress={() => navigation.navigate('MyAssignments', { filter: 'active' })}
-        />
+        <StatCard icon="notifications-outline" title="Đơn chờ nhận" value={stats.pendingAssignments} color="#FF9500" />
+        <StatCard icon="construct-outline" title="Đang xử lý" value={stats.activeJobs} color="#007AFF" />
       </View>
-
       <View style={styles.statsGrid}>
-        <StatCard
-          icon="checkmark-done-outline"
-          title="Completed Today"
-          value={stats.completedToday}
-          color="#34C759"
-          onPress={() => navigation.navigate('MyAssignments', { filter: 'completed' })}
-        />
-        
-        <StatCard
-          icon="cash-outline"
-          title="Today's Earnings"
-          value={stats.earnings.toLocaleString()}
-          suffix="đ"
-          color="#5856D6"
-          onPress={() => navigation.navigate('Earnings')}
-        />
+        <StatCard icon="checkmark-done-outline" title="Hoàn thành hôm nay" value={stats.completedToday} color="#34C759" />
+        <StatCard icon="cash-outline" title="Doanh thu" value={`${stats.earnings.toLocaleString('vi-VN')}đ`} color="#5856D6" />
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
-        
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => navigation.navigate('AvailableJobs')}
-        >
-          <Ionicons name="briefcase-outline" size={24} color="#34C759" />
-          <Text style={styles.actionButtonText}>Tìm việc mới (Available Jobs)</Text>
-          <Ionicons name="chevron-forward" size={20} color="#ccc" />
-        </TouchableOpacity>
+        <Text style={styles.sectionTitle}>Công việc gần đây</Text>
+        {recentAssignments.length === 0 ? (
+          <Text style={styles.emptyText}>Chưa có assignment nào.</Text>
+        ) : (
+          recentAssignments.map(item => (
+            <TouchableOpacity
+              key={item.id}
+              style={styles.assignmentItem}
+              onPress={() => navigation.navigate('JobTabs', { job: item })}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.assignmentTitle} numberOfLines={1}>
+                  {item.requestDetail?.description || `Yêu cầu #${item.serviceRequestId.slice(0, 8)}`}
+                </Text>
+                <Text style={styles.assignmentMeta}>
+                  {item.requestDetail?.status || 'N/A'} • {new Date(item.assignedAt).toLocaleDateString('vi-VN')}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+            </TouchableOpacity>
+          ))
+        )}
+      </View>
 
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => navigation.navigate('MyAssignments')}
-        >
-          <Ionicons name="list-outline" size={24} color="#34C759" />
-          <Text style={styles.actionButtonText}>View My Assignments</Text>
-          <Ionicons name="chevron-forward" size={20} color="#ccc" />
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Thao tác nhanh</Text>
+        <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('AvailableJobs')}>
+          <Ionicons name="briefcase-outline" size={22} color="#34C759" />
+          <Text style={styles.actionText}>Danh sách assignment của tôi</Text>
+          <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
         </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => navigation.navigate('ServiceHistory')}
-        >
-          <Ionicons name="time-outline" size={24} color="#34C759" />
-          <Text style={styles.actionButtonText}>Service History</Text>
-          <Ionicons name="chevron-forward" size={20} color="#ccc" />
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => navigation.navigate('Earnings')}
-        >
-          <Ionicons name="wallet-outline" size={24} color="#34C759" />
-          <Text style={styles.actionButtonText}>Earnings & Payments</Text>
-          <Ionicons name="chevron-forward" size={20} color="#ccc" />
-        </TouchableOpacity>
-
-        {/* 🔥 NÚT LOGOUT - THÊM MỚI */}
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.logoutButton]}
-          onPress={handleLogout}
-        >
-          <Ionicons name="log-out-outline" size={24} color="#FF3B30" />
-          <Text style={styles.logoutButtonText}>Đăng xuất</Text>
-          <Ionicons name="chevron-forward" size={20} color="#FF3B30" />
+        <TouchableOpacity style={[styles.actionButton, styles.logoutButton]} onPress={handleLogout}>
+          <Ionicons name="log-out-outline" size={22} color="#FF3B30" />
+          <Text style={[styles.actionText, { color: '#FF3B30' }]}>Đăng xuất</Text>
+          <Ionicons name="chevron-forward" size={18} color="#FF3B30" />
         </TouchableOpacity>
       </View>
     </ScrollView>
   );
 };
 
+const StatCard = ({
+  icon,
+  title,
+  value,
+  color,
+}: {
+  icon: any;
+  title: string;
+  value: number | string;
+  color: string;
+}) => (
+  <View style={[styles.statCard, { borderLeftColor: color }]}>
+    <Ionicons name={icon} size={24} color={color} />
+    <Text style={styles.statValue}>{value}</Text>
+    <Text style={styles.statTitle}>{title}</Text>
+  </View>
+);
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  header: {
-    backgroundColor: '#fff',
-    padding: 20,
-    paddingTop: 50,
+  container: { flex: 1, backgroundColor: '#F8F9FA' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  header: { backgroundColor: '#fff', padding: 20, paddingTop: 50, borderBottomWidth: 1, borderBottomColor: '#eee' },
+  greeting: { fontSize: 24, fontWeight: '700', color: '#111827' },
+  subTitle: { marginTop: 4, color: '#6B7280' },
+  statsGrid: { flexDirection: 'row', paddingHorizontal: 10, paddingTop: 12, gap: 10 },
+  statCard: { flex: 1, backgroundColor: '#fff', borderRadius: 12, borderLeftWidth: 4, padding: 14 },
+  statValue: { fontSize: 22, fontWeight: '700', color: '#111827', marginTop: 8 },
+  statTitle: { marginTop: 4, color: '#6B7280', fontSize: 12 },
+  section: { backgroundColor: '#fff', marginTop: 12, padding: 16 },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 10 },
+  emptyText: { color: '#9CA3AF', fontSize: 13, paddingVertical: 4 },
+  assignmentItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: '#F3F4F6',
   },
-  greeting: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  role: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 4,
-  },
-  availabilityContainer: {
-    alignItems: 'flex-end',
-  },
-  availabilityLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#34C759',
-    marginBottom: 4,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    padding: 8,
-    paddingTop: 16,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 8,
-    borderLeftWidth: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  statContent: {
-    marginTop: 12,
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  statTitle: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 4,
-  },
-  section: {
-    backgroundColor: '#fff',
-    marginTop: 8,
-    paddingVertical: 16,
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    paddingHorizontal: 16,
-    marginBottom: 12,
-  },
+  assignmentTitle: { fontSize: 14, fontWeight: '600', color: '#111827' },
+  assignmentMeta: { marginTop: 3, fontSize: 12, color: '#6B7280' },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#F3F4F6',
   },
-  actionButtonText: {
-    flex: 1,
-    fontSize: 16,
-    color: '#333',
-    marginLeft: 12,
-  },
-  // 🔥 LOGOUT BUTTON STYLES
-  logoutButton: {
-    borderBottomWidth: 0,
-    borderTopWidth: 1,
-    borderTopColor: '#FFE5E5',
-    backgroundColor: '#FFF5F5',
-    marginTop: 8,
-  },
-  logoutButtonText: {
-    flex: 1,
-    fontSize: 16,
-    color: '#FF3B30',
-    marginLeft: 12,
-    fontWeight: '600',
-  },
+  actionText: { flex: 1, marginLeft: 10, fontSize: 15, color: '#111827' },
+  logoutButton: { borderBottomWidth: 0, marginTop: 4, backgroundColor: '#FFF5F5', borderRadius: 10, paddingHorizontal: 10 },
 });
 
 export default AgentDashboardScreen;

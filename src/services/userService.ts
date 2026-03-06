@@ -1,8 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { resolveGraphQLBaseUrl } from '../config/api.config';
 import apiClient from './apiClient';
-
-// ─── Types ───────────────────────────────────────────────────────────────────
+import graphqlClient from './graphqlClient';
 
 export interface ServiceCategory {
   id: string;
@@ -14,19 +12,27 @@ export interface CreateServiceRequestDto {
   categoryId: string;
   description: string;
   addressText: string;
-  phoneNumber?: string;
+  complexityLevel?: number;
 }
 
 export interface ServiceAnalysisResult {
-  id: string;
-  serviceRequestId: string;
   complexity?: { level: number };
   estimatedCost?: { amount: number; currency: string };
+  userMessage?: {
+    summary?: string;
+    riskExplanation?: string;
+    safetyAdvice?: string;
+  };
+  dispatchRules?: {
+    requiredSkillLevel?: number;
+    minExperienceYears?: number;
+    requiresCertification?: boolean;
+    requiresSeniorTechnician?: boolean;
+    riskWeight?: number;
+  };
   suggestions?: string;
-  aiNotes?: string;
   contextDescription?: string;
   dispatchPolicy?: string;
-  createdAt?: string;
 }
 
 export interface ServiceRequestDetail {
@@ -40,8 +46,20 @@ export interface ServiceRequestDetail {
   estimatedCost?: { amount: number; currency: string };
   createdAt: string;
   addressText?: string;
-  attachments: any[];
-  matchingResults: any[];
+  attachments: {
+    id: string;
+    fileName: string;
+    fileUrl: string;
+    type: string;
+    uploadedAt: string;
+  }[];
+  matchingResults: {
+    id: string;
+    serviceAgentId: string;
+    matchingScore: number;
+    isRecommended: boolean;
+    supportedComplexity?: { level: number };
+  }[];
 }
 
 export interface SubmitFeedbackDto {
@@ -50,72 +68,134 @@ export interface SubmitFeedbackDto {
   comment?: string;
 }
 
-// ─── GraphQL helper ───────────────────────────────────────────────────────────
-
-const gql = async (query: string, variables?: Record<string, any>) => {
-  const url = await resolveGraphQLBaseUrl();
-  const token = await AsyncStorage.getItem('authToken');
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({ query, variables }),
-  });
-  const json = await res.json();
-  if (json.errors?.length) throw new Error(json.errors.map((e: any) => e.message).join(', '));
-  return json.data;
+const ensureGraphQLError = (payload: any) => {
+  if (payload?.errors?.length) {
+    throw new Error(payload.errors[0]?.message || 'GraphQL error');
+  }
 };
 
-// ─── Service Categories ───────────────────────────────────────────────────────
+const getStoredUser = async (): Promise<{ id: string } | null> => {
+  const raw = await AsyncStorage.getItem('user');
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+};
+
+const mapAnalysisResult = (raw: any): ServiceAnalysisResult => {
+  const complexityLevel =
+    typeof raw?.complexity === 'number'
+      ? raw.complexity
+      : typeof raw?.complexity?.level === 'number'
+        ? raw.complexity.level
+        : typeof raw?.complexityLevel === 'number'
+          ? raw.complexityLevel
+          : undefined;
+
+  const userMessage = raw?.userMessage;
+  const summary =
+    typeof userMessage === 'string'
+      ? userMessage
+      : userMessage?.summary ?? '';
+  const risk = userMessage?.riskExplanation ?? '';
+  const safety = userMessage?.safetyAdvice ?? '';
+  const contextDescription = [risk, safety].filter(Boolean).join('\n');
+
+  const dispatch = raw?.dispatchRules;
+
+  return {
+    complexity: complexityLevel ? { level: complexityLevel } : undefined,
+    userMessage:
+      typeof userMessage === 'object'
+        ? userMessage
+        : { summary },
+    dispatchRules: dispatch,
+    suggestions: summary || undefined,
+    contextDescription: contextDescription || undefined,
+    dispatchPolicy: dispatch ? JSON.stringify(dispatch) : undefined,
+  };
+};
 
 export const getServiceCategories = async (): Promise<ServiceCategory[]> => {
-  const data = await gql(`query { getServiceCategories { id name description } }`);
-  return data.getServiceCategories ?? [];
-};
-
-// ─── Service Requests ────────────────────────────────────────────────────────
-
-/**
- * Tạo yêu cầu dịch vụ mới → POST /api/service-requests
- */
-export const createServiceRequest = async (dto: CreateServiceRequestDto) => {
-  const res = await apiClient.post('/service-requests', dto);
-  return res.data as ServiceRequestDetail;
-};
-
-/**
- * Gửi yêu cầu phân tích AI → POST /api/service-analysis
- */
-export const analyzeServiceRequest = async (serviceRequestId: string): Promise<ServiceAnalysisResult> => {
-  const res = await apiClient.post('/service-analysis', { serviceRequestId });
-  return res.data as ServiceAnalysisResult;
-};
-
-/**
- * Yêu cầu đánh giá lại (AI phân tích lại) → POST /api/service-analysis với requestId
- */
-export const reAnalyzeServiceRequest = async (serviceRequestId: string): Promise<ServiceAnalysisResult> => {
-  return analyzeServiceRequest(serviceRequestId);
-};
-
-/**
- * Gửi yêu cầu cho staff đánh giá lại độ phức tạp
- * PATCH /api/service-requests/{id}/evaluate-complexity
- */
-export const requestStaffEvaluation = async (serviceRequestId: string, note?: string) => {
-  const res = await apiClient.patch(`/service-requests/${serviceRequestId}/evaluate-complexity`, {
-    note: note ?? 'Khách hàng yêu cầu staff đánh giá lại',
+  const { data } = await graphqlClient.post('', {
+    query: `query { getServiceCategories { id name description } }`,
   });
+  ensureGraphQLError(data);
+  return data?.data?.getServiceCategories ?? [];
+};
+
+export const createServiceRequest = async (
+  dto: CreateServiceRequestDto
+): Promise<ServiceRequestDetail> => {
+  const user = await getStoredUser();
+  if (!user?.id) {
+    throw new Error('Bạn cần đăng nhập để tạo yêu cầu dịch vụ.');
+  }
+
+  const payload = {
+    customerId: user.id,
+    categoryId: dto.categoryId,
+    description: dto.description,
+    addressText: dto.addressText,
+    complexityLevel: dto.complexityLevel,
+  };
+  const res = await apiClient.post('/service-requests', payload);
+
+  const createdId = res.data?.id || res.data;
+  if (!createdId) {
+    throw new Error('Không nhận được ID yêu cầu dịch vụ từ backend.');
+  }
+
+  return {
+    id: String(createdId),
+    customerId: user.id,
+    categoryId: dto.categoryId,
+    description: dto.description,
+    complexity: dto.complexityLevel ? { level: dto.complexityLevel } : undefined,
+    status: 'AWAITING_ANALYSIS',
+    createdAt: new Date().toISOString(),
+    addressText: dto.addressText,
+    attachments: [],
+    matchingResults: [],
+  };
+};
+
+export const analyzeServiceRequest = async (
+  description: string
+): Promise<ServiceAnalysisResult> => {
+  const res = await apiClient.post('/service-analysis', { description });
+  return mapAnalysisResult(res.data);
+};
+
+export const reAnalyzeServiceRequest = async (
+  description: string
+): Promise<ServiceAnalysisResult> => analyzeServiceRequest(description);
+
+export const requestStaffEvaluation = async (
+  serviceRequestId: string,
+  complexityLevel: number
+) => {
+  const level = Math.max(1, Math.min(5, complexityLevel || 3));
+  const res = await apiClient.patch(
+    `/service-requests/${serviceRequestId}/evaluate-complexity`,
+    { complexity: { level } }
+  );
   return res.data;
 };
 
-/**
- * Lấy danh sách yêu cầu của chính user (GraphQL)
- * getMyServiceRequests(status?: ServiceStatus): [ServiceRequest!]!
- */
-export const getMyServiceRequests = async (status?: string): Promise<ServiceRequestDetail[]> => {
+export const createActivityLog = async (
+  serviceRequestId: string,
+  action: string
+) => {
+  const res = await apiClient.post('/activity-logs', { serviceRequestId, action });
+  return res.data;
+};
+
+export const getMyServiceRequests = async (
+  status?: string
+): Promise<ServiceRequestDetail[]> => {
   const query = `
     query getMyServiceRequests($status: ServiceStatus) {
       getMyServiceRequests(status: $status) {
@@ -126,18 +206,21 @@ export const getMyServiceRequests = async (status?: string): Promise<ServiceRequ
         estimatedCost { amount currency }
         createdAt addressText
         attachments { id fileName fileUrl type uploadedAt }
-        matchingResults { id matchingScore isRecommended }
+        matchingResults { id serviceAgentId matchingScore isRecommended supportedComplexity { level } }
       }
     }
   `;
-  const data = await gql(query, status ? { status } : {});
-  return data.getMyServiceRequests ?? [];
+  const { data } = await graphqlClient.post('', {
+    query,
+    variables: status ? { status } : {},
+  });
+  ensureGraphQLError(data);
+  return data?.data?.getMyServiceRequests ?? [];
 };
 
-/**
- * Lấy chi tiết một yêu cầu dịch vụ (GraphQL)
- */
-export const getServiceRequestById = async (id: string): Promise<ServiceRequestDetail | null> => {
+export const getServiceRequestById = async (
+  id: string
+): Promise<ServiceRequestDetail | null> => {
   const query = `
     query getServiceRequestById($id: UUID!) {
       getServiceRequestById(id: $id) {
@@ -152,60 +235,106 @@ export const getServiceRequestById = async (id: string): Promise<ServiceRequestD
       }
     }
   `;
-  const data = await gql(query, { id });
-  return data.getServiceRequestById ?? null;
+  const { data } = await graphqlClient.post('', {
+    query,
+    variables: { id },
+  });
+  ensureGraphQLError(data);
+  return data?.data?.getServiceRequestById ?? null;
 };
 
-// ─── Attachments ─────────────────────────────────────────────────────────────
+const detectAttachmentType = (file: any): 'Image' | 'Video' | 'Document' | 'Other' => {
+  const mime = (file?.mimeType || file?.type || '').toLowerCase();
+  if (mime.startsWith('image/')) return 'Image';
+  if (mime.startsWith('video/')) return 'Video';
+  if (
+    mime.includes('pdf') ||
+    mime.includes('msword') ||
+    mime.includes('officedocument') ||
+    mime.includes('text/')
+  ) {
+    return 'Document';
+  }
+  return 'Other';
+};
 
-/**
- * Upload tệp đính kèm → POST /api/service-attachments
- */
 export const uploadAttachment = async (serviceRequestId: string, file: any) => {
-  const formData = new FormData();
-  formData.append('serviceRequestId', serviceRequestId);
-  formData.append('file', {
-    uri: file.uri,
-    name: file.name,
-    type: file.mimeType ?? 'application/octet-stream',
-  } as any);
-  const res = await apiClient.post('/service-attachments', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+  const payload = {
+    serviceRequestId,
+    fileName: file?.name || `attachment-${Date.now()}`,
+    fileUrl: file?.uri || '',
+    type: detectAttachmentType(file),
+  };
+  const res = await apiClient.post('/service-attachments', payload);
+  return res.data;
+};
+
+export const submitFeedback = async (dto: SubmitFeedbackDto) => {
+  const user = await getStoredUser();
+  if (!user?.id) {
+    throw new Error('Bạn cần đăng nhập để gửi đánh giá.');
+  }
+  const payload = {
+    serviceRequestId: dto.serviceRequestId,
+    createdByUserId: user.id,
+    rating: dto.rating,
+    comment: dto.comment,
+  };
+  const res = await apiClient.post('/service-feedbacks', payload);
+  return res.data;
+};
+
+export const getMyFeedbacks = async () => {
+  const { data } = await graphqlClient.post('', {
+    query: `
+      query {
+        getMyServiceFeedbacks {
+          id serviceRequestId rating comment createdAt
+        }
+      }
+    `,
+  });
+  ensureGraphQLError(data);
+  return data?.data?.getMyServiceFeedbacks ?? [];
+};
+
+export const getFeedbackByServiceRequestId = async (serviceRequestId: string) => {
+  const { data } = await graphqlClient.post('', {
+    query: `
+      query getFeedbackByServiceRequestId($serviceRequestId: UUID!) {
+        getFeedbackByServiceRequestId(serviceRequestId: $serviceRequestId) {
+          id serviceRequestId createdByUserId rating comment createdAt
+        }
+      }
+    `,
+    variables: { serviceRequestId },
+  });
+  ensureGraphQLError(data);
+  return data?.data?.getFeedbackByServiceRequestId ?? [];
+};
+
+export const getAverageRatingByServiceRequestId = async (
+  serviceRequestId: string
+): Promise<number> => {
+  const { data } = await graphqlClient.post('', {
+    query: `
+      query getAverageRatingByServiceRequestId($serviceRequestId: UUID!) {
+        getAverageRatingByServiceRequestId(serviceRequestId: $serviceRequestId)
+      }
+    `,
+    variables: { serviceRequestId },
+  });
+  ensureGraphQLError(data);
+  return Number(data?.data?.getAverageRatingByServiceRequestId ?? 0);
+};
+
+export const updateProfile = async (dto: { fullName?: string; phoneNumber?: string }) => {
+  const res = await apiClient.put('/auth/profile', {
+    fullName: dto.fullName ?? '',
+    phoneNumber: dto.phoneNumber ?? '',
   });
   return res.data;
 };
-
-// ─── Feedback ─────────────────────────────────────────────────────────────────
-
-/**
- * Gửi đánh giá dịch vụ → POST /api/service-feedbacks
- */
-export const submitFeedback = async (dto: SubmitFeedbackDto) => {
-  const res = await apiClient.post('/service-feedbacks', dto);
-  return res.data;
-};
-
-/**
- * Lấy danh sách feedback của chính user (GraphQL)
- */
-export const getMyFeedbacks = async () => {
-  const data = await gql(`
-    query { getMyServiceFeedbacks { id serviceRequestId rating comment createdAt } }
-  `);
-  return data.getMyServiceFeedbacks ?? [];
-};
-
-// ─── Profile ──────────────────────────────────────────────────────────────────
-
-/**
- * Cập nhật hồ sơ cá nhân → PUT /api/auth/profile
- */
-export const updateProfile = async (dto: { fullName?: string; phoneNumber?: string }) => {
-  const res = await apiClient.put('/auth/profile', dto);
-  return res.data;
-};
-
-// ─── Utility ──────────────────────────────────────────────────────────────────
 
 export const STATUS_LABEL: Record<string, string> = {
   AWAITING_ANALYSIS: 'Chờ phân tích AI',
@@ -216,7 +345,7 @@ export const STATUS_LABEL: Record<string, string> = {
   IN_PROGRESS: 'Đang xử lý',
   COMPLETED: 'Hoàn thành',
   CANCELLED: 'Đã hủy',
-  URGENT_DISPATCH: 'Cấp bách',
+  URGENT_DISPATCH: 'Khẩn cấp',
 };
 
 export const STATUS_COLOR: Record<string, string> = {

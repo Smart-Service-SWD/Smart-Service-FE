@@ -11,12 +11,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { adminGraphqlService, ActivityLog, DashboardSummary } from '../../services/adminGraphqlService';
 
-interface DashboardStats extends DashboardSummary {}
+type DashboardStats = DashboardSummary;
 
 export const AdminDashboardScreen: React.FC = () => {
   const { user } = useAuth();

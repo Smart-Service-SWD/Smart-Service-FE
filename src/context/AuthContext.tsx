@@ -16,6 +16,7 @@ export const useAuth = (): AuthContextType => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [refreshToken, setRefreshToken] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
@@ -25,13 +26,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loadStoredAuth = async (): Promise<void> => {
     try {
       const storedToken = await AsyncStorage.getItem('authToken');
+      const storedRefreshToken = await AsyncStorage.getItem('refreshToken');
       const storedUser = await AsyncStorage.getItem('user');
 
-      console.log('LOAD AUTH - TOKEN:', storedToken);
-      console.log('LOAD AUTH - USER:', storedUser);
-
-      if (storedToken && storedUser) {
+      if (storedToken && storedUser && storedRefreshToken) {
         setToken(storedToken);
+        setRefreshToken(storedRefreshToken);
         setUser(JSON.parse(storedUser));
       }
     } catch (error) {
@@ -44,21 +44,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const normalizeRole = (role: any): User['role'] => {
     if (typeof role === 'string') {
       const upper = role.toUpperCase();
-      if (upper === 'CUSTOMER') return 'USER';
+      if (upper === 'CUSTOMER') return 'CUSTOMER';
       if (upper === 'STAFF') return 'STAFF';
       if (upper === 'AGENT') return 'AGENT';
       if (upper === 'ADMIN') return 'ADMIN';
-      if (upper === 'USER') return 'USER';
+      if (upper === 'USER') return 'CUSTOMER';
     }
 
     if (typeof role === 'number') {
-      if (role === 0) return 'USER';
+      if (role === 0) return 'CUSTOMER';
       if (role === 1) return 'STAFF';
       if (role === 2) return 'AGENT';
       if (role === 3) return 'ADMIN';
     }
 
-    return 'USER';
+    return 'CUSTOMER';
   };
 
   const login = async (
@@ -69,11 +69,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(true);
 
       const response = await authService.login(email, password);
-
-      console.log('LOGIN RAW RESPONSE:', response);
-
       const {
         accessToken,
+        refreshToken: newRefreshToken,
         userId,
         email: userEmail,
         fullName,
@@ -82,9 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         phone,
       } = response || {};
 
-      console.log('EXTRACTED TOKEN:', accessToken);
-
-      if (!accessToken || !userId) {
+      if (!accessToken || !newRefreshToken || !userId) {
         return { success: false, error: 'Sai email hoặc mật khẩu' };
       }
 
@@ -96,15 +92,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: normalizeRole(role),
       };
 
-      // ✅ Lưu đúng key
       await AsyncStorage.setItem('authToken', accessToken);
+      await AsyncStorage.setItem('refreshToken', newRefreshToken);
       await AsyncStorage.setItem('user', JSON.stringify(userData));
 
-      // ✅ Verify lại sau khi lưu
-      const checkToken = await AsyncStorage.getItem('authToken');
-      console.log('TOKEN SAVED TO STORAGE:', checkToken);
-
       setToken(accessToken);
+      setRefreshToken(newRefreshToken);
       setUser(userData);
 
       return { success: true };
@@ -125,15 +118,82 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const register = async (
+    userData: { fullName: string; email: string; password: string; phoneNumber: string }
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      setLoading(true);
+
+      const response = await authService.register(userData);
+      const {
+        accessToken,
+        refreshToken: newRefreshToken,
+        userId,
+        email,
+        fullName,
+        role,
+        phoneNumber,
+      } = response || {};
+
+      if (!accessToken || !newRefreshToken || !userId) {
+        return { success: false, error: 'Đăng ký thất bại' };
+      }
+
+      const registeredUser: User = {
+        id: userId,
+        email,
+        fullName,
+        phoneNumber,
+        role: normalizeRole(role),
+      };
+
+      await AsyncStorage.setItem('authToken', accessToken);
+      await AsyncStorage.setItem('refreshToken', newRefreshToken);
+      await AsyncStorage.setItem('user', JSON.stringify(registeredUser));
+
+      setToken(accessToken);
+      setRefreshToken(newRefreshToken);
+      setUser(registeredUser);
+      return { success: true };
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.message ??
+        error?.message ??
+        'Đăng ký thất bại';
+      return { success: false, error: message };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateProfile = async (updatedData: Partial<User>): Promise<void> => {
+    if (!user) return;
+    const merged: User = {
+      ...user,
+      ...updatedData,
+    };
+    setUser(merged);
+    await AsyncStorage.setItem('user', JSON.stringify(merged));
+  };
+
   const logout = async (): Promise<void> => {
     try {
+      const currentRefreshToken = refreshToken ?? (await AsyncStorage.getItem('refreshToken'));
+      if (currentRefreshToken) {
+        try {
+          await authService.logout(currentRefreshToken);
+        } catch {
+          // Không block luồng logout local nếu BE trả lỗi
+        }
+      }
+
       await AsyncStorage.removeItem('authToken');
+      await AsyncStorage.removeItem('refreshToken');
       await AsyncStorage.removeItem('user');
 
       setToken(null);
+      setRefreshToken(null);
       setUser(null);
-
-      console.log('Logged out successfully');
     } catch (error) {
       console.error('Error logging out:', error);
     }
@@ -144,12 +204,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     token,
     loading,
     login,
-    register: async () => ({ success: false }), // giữ nguyên nếu chưa sửa
+    register,
     logout,
-    updateProfile: async () => {},
+    updateProfile,
     hasRole: (role: string) => user?.role === role,
     ROLES: {
-      USER: 'USER',
+      CUSTOMER: 'CUSTOMER',
       STAFF: 'STAFF',
       AGENT: 'AGENT',
       ADMIN: 'ADMIN',

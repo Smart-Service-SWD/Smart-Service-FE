@@ -14,6 +14,7 @@ import {
 import {
   analyzeServiceRequest,
   COMPLEXITY_LABEL,
+  createActivityLog,
   requestStaffEvaluation,
   ServiceAnalysisResult,
   ServiceRequestDetail,
@@ -59,7 +60,7 @@ export const AIReviewScreen: React.FC<Props> = ({ navigation, route }) => {
           onPress: async () => {
             setReanalyzing(true);
             try {
-              const newAnalysis = await analyzeServiceRequest(serviceRequest.id);
+              const newAnalysis = await analyzeServiceRequest(serviceRequest.description);
               setAnalysis(newAnalysis);
             } catch (err: any) {
               Alert.alert('Lỗi', err?.message ?? 'Không thể đánh giá lại');
@@ -73,7 +74,12 @@ export const AIReviewScreen: React.FC<Props> = ({ navigation, route }) => {
   };
 
   // ── Accept AI result ────────────────────────────────────────────────────────
-  const handleAccept = () => {
+  const handleAccept = async () => {
+    try {
+      await createActivityLog(serviceRequest.id, 'Customer accepted AI analysis result');
+    } catch {
+      // ignore log errors
+    }
     navigation.replace('RequestDetail', { requestId: serviceRequest.id });
   };
 
@@ -81,7 +87,16 @@ export const AIReviewScreen: React.FC<Props> = ({ navigation, route }) => {
   const handleSendToStaff = async () => {
     setSendingToStaff(true);
     try {
-      await requestStaffEvaluation(serviceRequest.id, staffNote.trim() || undefined);
+      const level = analysis.complexity?.level ?? 3;
+      try {
+        await requestStaffEvaluation(serviceRequest.id, level);
+      } catch {
+        // Một số status chưa cho evaluate trực tiếp; vẫn ghi log để staff theo dõi.
+      }
+      await createActivityLog(
+        serviceRequest.id,
+        `Customer requested manual review${staffNote.trim() ? `: ${staffNote.trim()}` : ''}`
+      );
       setStaffModalVisible(false);
       Alert.alert(
         'Đã gửi',
@@ -182,6 +197,17 @@ export const AIReviewScreen: React.FC<Props> = ({ navigation, route }) => {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Mô tả bổ sung</Text>
             <Text style={styles.suggestText}>{analysis.contextDescription}</Text>
+          </View>
+        )}
+        {!!analysis.dispatchRules && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Gợi ý điều phối</Text>
+            <Text style={styles.suggestText}>
+              {`Skill: ${analysis.dispatchRules.requiredSkillLevel ?? '-'} | Kinh nghiệm: ${analysis.dispatchRules.minExperienceYears ?? '-'} năm`}
+            </Text>
+            <Text style={styles.suggestText}>
+              {`Chứng chỉ: ${analysis.dispatchRules.requiresCertification ? 'Có' : 'Không'} | Senior: ${analysis.dispatchRules.requiresSeniorTechnician ? 'Có' : 'Không'}`}
+            </Text>
           </View>
         )}
 

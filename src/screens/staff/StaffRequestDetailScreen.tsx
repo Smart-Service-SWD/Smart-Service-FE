@@ -125,10 +125,19 @@ export const StaffRequestDetailScreen: React.FC<{
           onPress: async () => {
             try {
               setSubmitting(true);
+              await staffRestService.createAssignment({
+                serviceRequestId: requestId,
+                agentId: selectedAgentId,
+                estimatedCost: { amount, currency: 'VND' },
+              });
               await staffRestService.assignProvider(requestId, {
                 providerId: selectedAgentId,
                 estimatedCost: { amount, currency: 'VND' },
               });
+              await staffRestService.createActivityLog(
+                requestId,
+                `Staff assigned provider ${selectedAgentId} with estimated cost ${amount} VND`
+              );
               Alert.alert('Thành công', 'Yêu cầu đã được phê duyệt và phân công thành công', [
                 { text: 'OK', onPress: () => navigation.goBack() },
               ]);
@@ -150,6 +159,10 @@ export const StaffRequestDetailScreen: React.FC<{
       await staffRestService.evaluateComplexity(requestId, {
         complexity: { level: selectedLevel },
       });
+      await staffRestService.createActivityLog(
+        requestId,
+        `Staff re-evaluated complexity to level ${selectedLevel}`
+      );
       setComplexityModalVisible(false);
       Alert.alert('Thành công', `Đã cập nhật độ phức tạp: ${COMPLEXITY_LABEL[selectedLevel]}`);
       loadData();

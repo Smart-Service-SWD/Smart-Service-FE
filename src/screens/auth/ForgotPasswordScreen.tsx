@@ -13,13 +13,15 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-export const ForgotPasswordScreen: React.FC<{ navigation  }> = ({ navigation  }) => {
+import { authService } from '../../services/authService';
+
+export const ForgotPasswordScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const [email, setEmail] = useState<string>('');
   const [emailError, setEmailError] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [emailSent, setEmailSent] = useState<boolean>(false);
 
-  const validateEmail = (text) => {
+  const validateEmail = (text: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!text) {
       setEmailError('Email is required');
@@ -40,19 +42,15 @@ export const ForgotPasswordScreen: React.FC<{ navigation  }> = ({ navigation  })
 
     try {
       setLoading(true);
-      // TODO: Call your password reset API
-      // const response = await authService.forgotPassword(email);
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
+      await authService.forgotPassword(email);
+
       setEmailSent(true);
       Alert.alert(
         'Success',
         'Password reset instructions have been sent to your email',
         [{ text: 'OK' }]
       );
-    } catch (error) {
+    } catch {
       Alert.alert('Error', 'Failed to send reset email. Please try again.');
     } finally {
       setLoading(false);
@@ -68,21 +66,21 @@ export const ForgotPasswordScreen: React.FC<{ navigation  }> = ({ navigation  })
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.header}>
             <View style={styles.successContainer}>
-              <MaterialCommunityIcons 
-                name="check-circle" 
-                size={80} 
-                color="#34C759" 
+              <MaterialCommunityIcons
+                name="check-circle"
+                size={80}
+                color="#34C759"
               />
             </View>
             <Text style={styles.title}>Check Your Email</Text>
             <Text style={styles.subtitle}>
-              We've sent password reset instructions to {email}
+              We&apos;ve sent password reset instructions to {email}
             </Text>
           </View>
 
           <View style={styles.form}>
             <Text style={styles.instructionText}>
-              Follow the link in the email to reset your password. If you don't see the email, check your spam folder.
+              Follow the link in the email to reset your password. If you don&apos;t see the email, check your spam folder.
             </Text>
 
             <TouchableOpacity
@@ -122,15 +120,15 @@ export const ForgotPasswordScreen: React.FC<{ navigation  }> = ({ navigation  })
 
         <View style={styles.header}>
           <View style={styles.logoContainer}>
-            <MaterialCommunityIcons 
-              name="lock-reset" 
-              size={60} 
-              color="#007AFF" 
+            <MaterialCommunityIcons
+              name="lock-reset"
+              size={60}
+              color="#007AFF"
             />
           </View>
           <Text style={styles.title}>Reset Password</Text>
           <Text style={styles.subtitle}>
-            Enter your email address and we'll send you instructions to reset your password
+            Enter your email address and we&apos;ll send you instructions to reset your password
           </Text>
         </View>
 
@@ -141,10 +139,10 @@ export const ForgotPasswordScreen: React.FC<{ navigation  }> = ({ navigation  })
               styles.inputWrapper,
               emailError ? styles.inputErrorBorder : styles.inputNormalBorder
             ]}>
-              <MaterialCommunityIcons 
-                name="email-outline" 
-                size={20} 
-                color={emailError ? '#FF3B30' : '#999'} 
+              <MaterialCommunityIcons
+                name="email-outline"
+                size={20}
+                color={emailError ? '#FF3B30' : '#999'}
                 style={styles.inputIcon}
               />
               <TextInput

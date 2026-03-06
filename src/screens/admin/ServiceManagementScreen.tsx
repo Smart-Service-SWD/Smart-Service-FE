@@ -110,20 +110,6 @@ export const ServiceManagementScreen: React.FC = () => {
     bookingCount: item.bookingCount,
   });
 
-  const [categoriesLoading, setCategoriesLoading] = useState(false);
-
-  const loadCategories = useCallback(async () => {
-    setCategoriesLoading(true);
-    try {
-      const cats = await adminGraphqlService.getServiceCategories();
-      setCategories(cats);
-    } catch (e) {
-      console.warn('Lỗi tải danh mục:', e);
-    } finally {
-      setCategoriesLoading(false);
-    }
-  }, []);
-
   const loadData = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
     try {
@@ -273,7 +259,7 @@ export const ServiceManagementScreen: React.FC = () => {
   };
 
   // ─── Render item ──────────────────────────────────────────────────────────────
-  const renderServiceItem = useCallback(({ item }: { item: Service }) => (
+  const renderServiceItem = ({ item }: { item: Service }) => (
     <View style={[styles.serviceCard, !item.isActive && styles.serviceCardInactive]}>
       <View style={styles.serviceHeader}>
         <View style={styles.serviceInfo}>
@@ -320,7 +306,7 @@ export const ServiceManagementScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
     </View>
-  ), [categories]);
+  );
 
   // ─── Main render ──────────────────────────────────────────────────────────────
   return (

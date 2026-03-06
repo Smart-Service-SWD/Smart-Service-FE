@@ -12,7 +12,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useAuth } from '../../context/AuthContext';
 import {
   analyzeServiceRequest,
   createServiceRequest,
@@ -21,8 +20,9 @@ import {
   uploadAttachment,
 } from '../../services/userService';
 
-export const RequestPage = ({ navigation }: any) => {
-  const { user } = useAuth();
+export const RequestPage = ({ navigation, route }: any) => {
+  const preSelectedService = route?.params?.service;
+  const preSelectedCategoryId = route?.params?.categoryId;
 
   const [categoryId, setCategoryId] = useState('');
   const [description, setDescription] = useState('');
@@ -36,11 +36,28 @@ export const RequestPage = ({ navigation }: any) => {
   const [step, setStep] = useState<'form' | 'analyzing'>('form');
 
   useEffect(() => {
-    getServiceCategories()
-      .then(setCategories)
-      .catch(() => Alert.alert('Lỗi', 'Không tải được danh mục dịch vụ'))
-      .finally(() => setCatLoading(false));
-  }, []);
+    const init = async () => {
+      try {
+        const cats = await getServiceCategories();
+        setCategories(cats);
+
+        if (preSelectedCategoryId) {
+          setCategoryId(preSelectedCategoryId);
+        } else if (preSelectedService) {
+          // If we have a service, try to find matching category by name if ID is not directly on service
+          const matchingCat = cats.find(c => c.name === preSelectedService.categoryName || c.name === preSelectedService.category);
+          if (matchingCat) {
+            setCategoryId(matchingCat.id);
+          }
+        }
+      } catch {
+        Alert.alert('Lỗi', 'Không tải được danh mục dịch vụ');
+      } finally {
+        setCatLoading(false);
+      }
+    };
+    init();
+  }, [preSelectedCategoryId, preSelectedService]);
 
   const selectedCategory = categories.find(c => c.id === categoryId);
 
@@ -87,7 +104,7 @@ export const RequestPage = ({ navigation }: any) => {
         }
       }
 
-      const analysisResult = await analyzeServiceRequest(serviceRequest.id);
+      const analysisResult = await analyzeServiceRequest(description.trim());
 
       navigation.navigate('AIReview', {
         serviceRequest,

@@ -47,6 +47,7 @@ apiClient.interceptors.response.use(
       // Token expired or invalid - clear auth data
       try {
         await AsyncStorage.removeItem('authToken');
+        await AsyncStorage.removeItem('refreshToken');
         await AsyncStorage.removeItem('user');
         // Navigation to login will be handled by AuthContext
       } catch (err) {

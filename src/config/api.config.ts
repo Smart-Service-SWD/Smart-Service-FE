@@ -20,7 +20,7 @@ const GRAPHQL_PORT = 5268;
 const REST_PORT = 5268;
 const TIMEOUT_MS = 30000;
 const CONNECT_CHECK_TIMEOUT = 3000;
-const REST_PING_PATH = '/api/ServiceCategory/list';
+const REST_PING_PATH = '/swagger';
 
 let cachedGraphQLHost: string | null = null;
 let cachedRestHost: string | null = null;
@@ -150,16 +150,8 @@ export const API_CONFIG = {
   BASE_URL: `http://${POSSIBLE_HOSTS[0]}:${REST_PORT}/api`,
   GRAPHQL_URL: `http://${POSSIBLE_HOSTS[0]}:${GRAPHQL_PORT}/graphql`,
   ENDPOINTS: {
-    // Service Analysis
-    ANALYZE_SERVICE: '/ServiceAnalysis/analyze',
-    GET_ANALYSIS_HISTORY: '/ServiceAnalysis/history',
-    GET_ANALYSIS_DETAIL: '/ServiceAnalysis/:id',
-
-    // Service Requests
-    CREATE_REQUEST: '/ServiceRequest/create',
-    GET_REQUESTS: '/ServiceRequest/list',
-
-    // Service Categories
-    GET_CATEGORIES: '/ServiceCategory/list',
+    ANALYZE_SERVICE: '/service-analysis',
+    CREATE_REQUEST: '/service-requests',
+    GET_CATEGORIES: '/service-categories',
   },
 };

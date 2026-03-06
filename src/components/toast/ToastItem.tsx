@@ -53,7 +53,7 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, onHide, insets }) => {
             });
             scale.value = withTiming(0.9, { duration: 200 });
         }
-    }, [toast]);
+    }, [activeToast, opacity, scale, toast, translateY]);
 
     // Swipe to dismiss with Sileo-like physics resistance
     const onGestureEvent = (event: any) => {

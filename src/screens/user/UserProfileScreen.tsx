@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -27,7 +27,7 @@ interface User {
 
 interface UserResponse {
   data: { getUserById: User };
-  errors?: Array<{ message: string }>;
+  errors?: { message: string }[];
 }
 
 export const UserProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
@@ -69,7 +69,7 @@ export const UserProfileScreen: React.FC<{ navigation: any }> = ({ navigation })
   };
 
   // ✅ Load data
-  const loadProfileData = async () => {
+  const loadProfileData = useCallback(async () => {
     if (!authUser?.id) {
       setError('Không tìm thấy thông tin đăng nhập');
       setLoading(false);
@@ -87,7 +87,7 @@ export const UserProfileScreen: React.FC<{ navigation: any }> = ({ navigation })
     } finally {
       setLoading(false);
     }
-  };
+  }, [authUser?.id]);
 
   // ✅ Dynamic avatar
   const getAvatarColor = (name: string) => {
@@ -101,7 +101,7 @@ export const UserProfileScreen: React.FC<{ navigation: any }> = ({ navigation })
 
   useEffect(() => {
     loadProfileData();
-  }, [authUser?.id]);
+  }, [loadProfileData]);
 
   const handleLogout = () => {
     Alert.alert(
@@ -194,14 +194,6 @@ export const UserProfileScreen: React.FC<{ navigation: any }> = ({ navigation })
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Email</Text>
               <Text style={styles.infoValue}>{profileUser.email || 'Chưa cập nhật'}</Text>
-            </View>
-          </View>
-
-          <View style={styles.infoItem}>
-            <Ionicons name="location-outline" size={20} color="#666" />
-            <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>Địa chỉ</Text>
-              <Text style={styles.infoValue}>Hồ Chí Minh, Việt Nam</Text>
             </View>
           </View>
         </View>

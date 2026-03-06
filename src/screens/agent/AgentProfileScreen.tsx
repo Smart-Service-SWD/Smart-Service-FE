@@ -3,18 +3,27 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { adminGraphqlService } from '../../services/adminGraphqlService';
+import { authService } from '../../services/authService';
 
 export const AgentProfileScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const { user, logout, updateProfile } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [editVisible, setEditVisible] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -26,7 +35,7 @@ export const AgentProfileScreen: React.FC<{ navigation: any }> = ({ navigation }
             fullName: profile.fullName,
             email: profile.email,
             phoneNumber: profile.phoneNumber || undefined,
-            role: profile.role as any,
+            role: (profile.role as string) === 'USER' ? 'CUSTOMER' : (profile.role as any),
           });
         }
       } catch (error) {
@@ -52,6 +61,36 @@ export const AgentProfileScreen: React.FC<{ navigation: any }> = ({ navigation }
         }
       ]
     );
+  };
+
+  const openEdit = () => {
+    setEditName(user?.fullName || '');
+    setEditPhone(user?.phoneNumber || '');
+    setEditVisible(true);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!editName.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập họ tên');
+      return;
+    }
+    setSaving(true);
+    try {
+      await authService.updateProfile({
+        fullName: editName.trim(),
+        phoneNumber: editPhone.trim(),
+      });
+      await updateProfile({
+        fullName: editName.trim(),
+        phoneNumber: editPhone.trim() || undefined,
+      });
+      setEditVisible(false);
+      Alert.alert('Thành công', 'Cập nhật hồ sơ thành công');
+    } catch (error: any) {
+      Alert.alert('Lỗi', error?.response?.data?.message || error?.message || 'Không thể cập nhật hồ sơ');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -110,7 +149,7 @@ export const AgentProfileScreen: React.FC<{ navigation: any }> = ({ navigation }
 
         <TouchableOpacity
           style={styles.actionItem}
-          onPress={() => Alert.alert('Thông báo', 'Chức năng đang phát triển')}
+          onPress={openEdit}
         >
           <Ionicons name="create-outline" size={20} color="#007AFF" />
           <Text style={styles.actionText}>Chỉnh sửa thông tin</Text>
@@ -125,6 +164,41 @@ export const AgentProfileScreen: React.FC<{ navigation: any }> = ({ navigation }
           <Text style={[styles.actionText, styles.logoutText]}>Đăng xuất</Text>
         </TouchableOpacity>
       </View>
+
+      <Modal visible={editVisible} transparent animationType="slide" onRequestClose={() => setEditVisible(false)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalSheet}>
+              <Text style={styles.modalTitle}>Chỉnh sửa hồ sơ</Text>
+              <Text style={styles.fieldLabel}>Họ và tên *</Text>
+              <TextInput
+                style={styles.input}
+                value={editName}
+                onChangeText={setEditName}
+                placeholder="Nhập họ và tên"
+                placeholderTextColor="#aaa"
+              />
+              <Text style={styles.fieldLabel}>Số điện thoại</Text>
+              <TextInput
+                style={styles.input}
+                value={editPhone}
+                onChangeText={setEditPhone}
+                placeholder="Nhập số điện thoại"
+                placeholderTextColor="#aaa"
+                keyboardType="phone-pad"
+              />
+              <View style={styles.modalButtons}>
+                <TouchableOpacity style={styles.btnCancel} onPress={() => setEditVisible(false)} disabled={saving}>
+                  <Text style={styles.btnCancelText}>Hủy</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.btnSave, saving && { opacity: 0.6 }]} onPress={handleSaveProfile} disabled={saving}>
+                  {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.btnSaveText}>Lưu</Text>}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </ScrollView>
   );
 };
@@ -228,6 +302,70 @@ const styles = StyleSheet.create({
   },
   logoutText: {
     color: '#FF3B30',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 24,
+    paddingBottom: 32,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 20,
+  },
+  fieldLabel: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 6,
+    marginTop: 4,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 15,
+    color: '#333',
+    backgroundColor: '#fafafa',
+    marginBottom: 12,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  btnCancel: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    alignItems: 'center',
+  },
+  btnCancelText: {
+    fontSize: 15,
+    color: '#666',
+    fontWeight: '600',
+  },
+  btnSave: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: '#007AFF',
+    alignItems: 'center',
+  },
+  btnSaveText: {
+    fontSize: 15,
+    color: '#fff',
+    fontWeight: '700',
   },
 });
 

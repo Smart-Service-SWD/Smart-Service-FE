@@ -57,13 +57,12 @@ import { UserProfileScreen } from '../screens/user/UserProfileScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
-const AuthStack = createNativeStackNavigator();
 
 
 // Home Stack Navigator (for service browsing)
 const HomeStackNavigator = () => {
   const { user } = useAuth();
-  
+
   // If user is ADMIN, show Admin Dashboard
   if (user && user.role === 'ADMIN') {
     return (
@@ -81,7 +80,7 @@ const HomeStackNavigator = () => {
       </Stack.Navigator>
     );
   }
-  
+
   // If user is STAFF, show Staff Dashboard
   if (user && user.role === 'STAFF') {
     return (
@@ -168,23 +167,6 @@ const HomeStackNavigator = () => {
 };
 
 
-// Auth Navigator
-const AuthNavigator = () => {
-  return (
-    <AuthStack.Navigator
-      id="AuthStack"
-      screenOptions={{
-        headerShown: false,
-      }}
-    >
-      <AuthStack.Screen name="Login" component={LoginScreen} />
-      <AuthStack.Screen name="Register" component={RegisterScreen} />
-      <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
-    </AuthStack.Navigator>
-  );
-};
-
-
 // New-Request Stack (RequestPage → AIReviewScreen)
 const NewRequestStackNavigator = () => {
   return (
@@ -226,11 +208,11 @@ const MyRequestsStackNavigator = () => {
 const ProfileStackNavigator = () => {
   const { user, token } = useAuth();
   const isAuthenticated = !!user && !!token;
-  
+
   // Xác định component Profile dựa trên role
   const getProfileComponent = () => {
     if (!user) return null;
-    
+
     switch (user.role) {
       case 'ADMIN':
         return AdminProfileScreen;
@@ -238,14 +220,14 @@ const ProfileStackNavigator = () => {
         return StaffProfileScreen;
       case 'AGENT':
         return AgentProfileScreen;
-      case 'USER':
+      case 'CUSTOMER':
       default:
-        return UserProfileScreen;  // ← Component mới
+        return UserProfileScreen;
     }
   };
-  
+
   const ProfileComponent = getProfileComponent();
-  
+
   return (
     <Stack.Navigator
       id="ProfileStack"

@@ -5,7 +5,6 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
-  Dimensions,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -17,8 +16,6 @@ import {
   View
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
-
-const { width, height } = Dimensions.get('window');
 
 export const LoginScreen: React.FC<{ navigation  }> = ({ navigation  }) => {
   const { login, loading } = useAuth();
@@ -53,7 +50,7 @@ export const LoginScreen: React.FC<{ navigation  }> = ({ navigation  }) => {
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+  }, [fadeAnim, scaleAnim, slideAnim]);
 
   const validateEmail = (text) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -291,7 +288,7 @@ export const LoginScreen: React.FC<{ navigation  }> = ({ navigation  }) => {
 
                 {/* Sign Up Link */}
                 <View style={styles.signupContainer}>
-                  <Text style={styles.signupText}>Don't have an account? </Text>
+                  <Text style={styles.signupText}>Don&apos;t have an account? </Text>
                   <TouchableOpacity 
                     onPress={() => navigation.navigate('Register')}
                     activeOpacity={0.7}

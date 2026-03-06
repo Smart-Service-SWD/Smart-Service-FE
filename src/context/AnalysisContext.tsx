@@ -33,8 +33,8 @@ export const AnalysisProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setLoading(true);
     setError(null);
     try {
-      const result = await analysisService.getAnalysisHistory(page, 10);
-      setAnalysisHistory(result.items || []);
+      const result: any = await analysisService.getAnalysisHistory(page, 10);
+      setAnalysisHistory(result?.items || result || []);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch history';
       setError(errorMessage);

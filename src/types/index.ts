@@ -5,7 +5,7 @@ export interface User {
   email: string;
   phone?: string;
   phoneNumber?: string;
-  role: 'USER' | 'STAFF' | 'AGENT' | 'ADMIN';
+  role: 'CUSTOMER' | 'STAFF' | 'AGENT' | 'ADMIN';
   profileImage?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -21,7 +21,7 @@ export interface AuthContextType {
   updateProfile: (updatedData: Partial<User>) => Promise<void>;
   hasRole: (role: string) => boolean;
   ROLES: {
-    USER: 'USER';
+    CUSTOMER: 'CUSTOMER';
     STAFF: 'STAFF';
     AGENT: 'AGENT';
     ADMIN: 'ADMIN';

@@ -1,6 +1,4 @@
-import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_CONFIG, resolveGraphQLBaseUrl } from '../config/api.config';
+import graphqlClient from './graphqlClient';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -64,11 +62,11 @@ export interface ServiceAgent {
   id: string;
   fullName: string;
   isActive: boolean;
-  capabilities: Array<{
+  capabilities: {
     id: string;
     categoryId: string;
     maxComplexity: { level: number };
-  }>;
+  }[];
 }
 
 export interface StaffDashboardSummary {
@@ -83,27 +81,7 @@ export interface StaffDashboardSummary {
   monthlyRevenue: number | string;
 }
 
-// ─── GraphQL Helper ─────────────────────────────────────────────────────────────
-
-const requestGraphql = async <T,>(
-  query: string,
-  variables?: Record<string, any>
-): Promise<T> => {
-  const baseUrl = await resolveGraphQLBaseUrl();
-  const token = await AsyncStorage.getItem('authToken');
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (token) headers.Authorization = `Bearer ${token}`;
-
-  const { data } = await axios.post(
-    baseUrl,
-    { query, variables },
-    { timeout: API_CONFIG.TIMEOUT, headers }
-  );
-  if (data?.errors?.length) {
-    throw new Error(data.errors[0]?.message || 'GraphQL error');
-  }
-  return data?.data as T;
-};
+// Removed redundant requestGraphql helper, using standardized graphqlClient instead
 
 // ─── Queries ────────────────────────────────────────────────────────────────────
 
@@ -250,26 +228,29 @@ const DASHBOARD_SUMMARY_QUERY = `
 export const staffGraphqlService = {
   /** Requests in PENDING_REVIEW status (AI analyzed, awaiting staff approval) */
   getPendingReviewRequests: async (): Promise<ServiceRequestSummary[]> => {
-    const data = await requestGraphql<{
-      getServiceRequestsByStatus: ServiceRequestSummary[];
-    }>(REQUESTS_BY_STATUS_QUERY, { status: 'PENDING_REVIEW' });
-    return data.getServiceRequestsByStatus ?? [];
+    const { data: resData } = await graphqlClient.post('', {
+      query: REQUESTS_BY_STATUS_QUERY,
+      variables: { status: 'PENDING_REVIEW' }
+    });
+    return resData?.data?.getServiceRequestsByStatus ?? [];
   },
 
   /** Requests in AWAITING_ANALYSIS or CREATED status (need to trigger AI analysis) */
   getNewRequests: async (): Promise<ServiceRequestSummary[]> => {
-    const [awaiting, created] = await Promise.all([
-      requestGraphql<{ getServiceRequestsByStatus: ServiceRequestSummary[] }>(
-        REQUESTS_BY_STATUS_QUERY,
-        { status: 'AWAITING_ANALYSIS' }
-      ).then(d => d.getServiceRequestsByStatus ?? [])
-        .catch(() => []),
-      requestGraphql<{ getServiceRequestsByStatus: ServiceRequestSummary[] }>(
-        REQUESTS_BY_STATUS_QUERY,
-        { status: 'CREATED' }
-      ).then(d => d.getServiceRequestsByStatus ?? [])
-        .catch(() => []),
+    const [awaitingRes, createdRes] = await Promise.all([
+      graphqlClient.post('', {
+        query: REQUESTS_BY_STATUS_QUERY,
+        variables: { status: 'AWAITING_ANALYSIS' }
+      }).catch(() => ({ data: { data: { getServiceRequestsByStatus: [] } } })),
+      graphqlClient.post('', {
+        query: REQUESTS_BY_STATUS_QUERY,
+        variables: { status: 'CREATED' }
+      }).catch(() => ({ data: { data: { getServiceRequestsByStatus: [] } } })),
     ]);
+
+    const awaiting = awaitingRes.data?.data?.getServiceRequestsByStatus ?? [];
+    const created = createdRes.data?.data?.getServiceRequestsByStatus ?? [];
+
     return [...awaiting, ...created].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
@@ -277,57 +258,60 @@ export const staffGraphqlService = {
 
   /** All service requests (Staff/Admin view) */
   getAllRequests: async (): Promise<ServiceRequestSummary[]> => {
-    const data = await requestGraphql<{
-      getServiceRequests: ServiceRequestSummary[];
-    }>(ALL_REQUESTS_QUERY);
-    return data.getServiceRequests ?? [];
+    const { data: resData } = await graphqlClient.post('', {
+      query: ALL_REQUESTS_QUERY
+    });
+    return resData?.data?.getServiceRequests ?? [];
   },
 
   /** Full request detail with attachments and matching results */
   getRequestDetail: async (id: string): Promise<ServiceRequestDetail | null> => {
-    const data = await requestGraphql<{
-      getServiceRequestById: ServiceRequestDetail | null;
-    }>(REQUEST_DETAIL_QUERY, { id });
-    return data.getServiceRequestById ?? null;
+    const { data: resData } = await graphqlClient.post('', {
+      query: REQUEST_DETAIL_QUERY,
+      variables: { id }
+    });
+    return resData?.data?.getServiceRequestById ?? null;
   },
 
   /** Matching results for a specific request */
   getMatchingResults: async (serviceRequestId: string): Promise<MatchingResult[]> => {
-    const data = await requestGraphql<{
-      getMatchingResultsByServiceRequestId: MatchingResult[];
-    }>(MATCHING_BY_REQUEST_QUERY, { serviceRequestId });
-    return data.getMatchingResultsByServiceRequestId ?? [];
+    const { data: resData } = await graphqlClient.post('', {
+      query: MATCHING_BY_REQUEST_QUERY,
+      variables: { serviceRequestId }
+    });
+    return resData?.data?.getMatchingResultsByServiceRequestId ?? [];
   },
 
   /** Recommended (top match) providers for a request */
   getRecommendedMatches: async (serviceRequestId: string): Promise<MatchingResult[]> => {
-    const data = await requestGraphql<{
-      getRecommendedMatches: MatchingResult[];
-    }>(RECOMMENDED_MATCHES_QUERY, { serviceRequestId });
-    return data.getRecommendedMatches ?? [];
+    const { data: resData } = await graphqlClient.post('', {
+      query: RECOMMENDED_MATCHES_QUERY,
+      variables: { serviceRequestId }
+    });
+    return resData?.data?.getRecommendedMatches ?? [];
   },
 
   /** All service agents */
   getServiceAgents: async (): Promise<ServiceAgent[]> => {
-    const data = await requestGraphql<{ getServiceAgents: ServiceAgent[] }>(
-      SERVICE_AGENTS_QUERY
-    );
-    return data.getServiceAgents ?? [];
+    const { data: resData } = await graphqlClient.post('', {
+      query: SERVICE_AGENTS_QUERY
+    });
+    return resData?.data?.getServiceAgents ?? [];
   },
 
   /** Active service agents only */
   getActiveServiceAgents: async (): Promise<ServiceAgent[]> => {
-    const data = await requestGraphql<{ getActiveServiceAgents: ServiceAgent[] }>(
-      ACTIVE_SERVICE_AGENTS_QUERY
-    );
-    return data.getActiveServiceAgents ?? [];
+    const { data: resData } = await graphqlClient.post('', {
+      query: ACTIVE_SERVICE_AGENTS_QUERY
+    });
+    return resData?.data?.getActiveServiceAgents ?? [];
   },
 
   /** Dashboard statistics (Staff/Admin) */
   getDashboardSummary: async (): Promise<StaffDashboardSummary> => {
-    const data = await requestGraphql<{
-      getDashboardSummary: StaffDashboardSummary;
-    }>(DASHBOARD_SUMMARY_QUERY);
-    return data.getDashboardSummary;
+    const { data: resData } = await graphqlClient.post('', {
+      query: DASHBOARD_SUMMARY_QUERY
+    });
+    return resData?.data?.getDashboardSummary;
   },
 };

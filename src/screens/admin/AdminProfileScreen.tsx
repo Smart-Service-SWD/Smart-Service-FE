@@ -63,7 +63,7 @@ export const AdminProfileScreen: React.FC<{ navigation }> = ({ navigation }) => 
             fullName: profile.fullName,
             email: profile.email,
             phoneNumber: profile.phoneNumber || undefined,
-            role: profile.role === 'CUSTOMER' ? 'USER' : (profile.role as any),
+            role: (profile.role as string) === 'USER' ? 'CUSTOMER' : (profile.role as any),
           });
         }
       } catch (error) {
@@ -93,124 +93,124 @@ export const AdminProfileScreen: React.FC<{ navigation }> = ({ navigation }) => 
 
   return (
     <View style={{ flex: 1, backgroundColor: '#f8f9fa' }}>
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <View style={[styles.avatarContainer, { backgroundColor: '#FF3B30' }]}>
-          <Ionicons name="shield-checkmark" size={50} color="#fff" />
-        </View>
-        <Text style={styles.name}>{user?.fullName || 'Administrator'}</Text>
-        <View style={[styles.roleBadge, { backgroundColor: '#FF3B30' }]}>
-          <Text style={styles.roleText}>Quản trị viên</Text>
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Thông tin tài khoản</Text>
-
-        {loading ? (
-          <View style={styles.loadingRow}>
-            <ActivityIndicator size="small" color="#007AFF" />
-            <Text style={styles.loadingText}>Đang tải hồ sơ...</Text>
+      <ScrollView style={styles.container}>
+        <View style={styles.header}>
+          <View style={[styles.avatarContainer, { backgroundColor: '#FF3B30' }]}>
+            <Ionicons name="shield-checkmark" size={50} color="#fff" />
           </View>
-        ) : (
-          <>
-            <View style={styles.infoItem}>
-              <Ionicons name="mail-outline" size={20} color="#666" />
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Email</Text>
-                <Text style={styles.infoValue}>{user?.email || 'N/A'}</Text>
-              </View>
+          <Text style={styles.name}>{user?.fullName || 'Administrator'}</Text>
+          <View style={[styles.roleBadge, { backgroundColor: '#FF3B30' }]}>
+            <Text style={styles.roleText}>Quản trị viên</Text>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Thông tin tài khoản</Text>
+
+          {loading ? (
+            <View style={styles.loadingRow}>
+              <ActivityIndicator size="small" color="#007AFF" />
+              <Text style={styles.loadingText}>Đang tải hồ sơ...</Text>
             </View>
-
-            <View style={styles.infoItem}>
-              <Ionicons name="call-outline" size={20} color="#666" />
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Số điện thoại</Text>
-                <Text style={styles.infoValue}>{user?.phoneNumber || 'N/A'}</Text>
+          ) : (
+            <>
+              <View style={styles.infoItem}>
+                <Ionicons name="mail-outline" size={20} color="#666" />
+                <View style={styles.infoContent}>
+                  <Text style={styles.infoLabel}>Email</Text>
+                  <Text style={styles.infoValue}>{user?.email || 'N/A'}</Text>
+                </View>
               </View>
-            </View>
 
-            <View style={styles.infoItem}>
-              <Ionicons name="shield-checkmark-outline" size={20} color="#666" />
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Vai trò</Text>
-                <Text style={styles.infoValue}>Quản trị viên hệ thống</Text>
+              <View style={styles.infoItem}>
+                <Ionicons name="call-outline" size={20} color="#666" />
+                <View style={styles.infoContent}>
+                  <Text style={styles.infoLabel}>Số điện thoại</Text>
+                  <Text style={styles.infoValue}>{user?.phoneNumber || 'N/A'}</Text>
+                </View>
               </View>
-            </View>
-          </>
-        )}
-      </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Quản lý Admin</Text>
-        
-        <TouchableOpacity 
-          style={styles.actionItem}
-          onPress={() => Alert.alert('Thông báo', 'Chức năng đang phát triển')}
-        >
-          <Ionicons name="people-outline" size={20} color="#007AFF" />
-          <Text style={styles.actionText}>Quản lý Admin khác</Text>
-          <Ionicons name="chevron-forward" size={20} color="#ccc" />
-        </TouchableOpacity>
+              <View style={styles.infoItem}>
+                <Ionicons name="shield-checkmark-outline" size={20} color="#666" />
+                <View style={styles.infoContent}>
+                  <Text style={styles.infoLabel}>Vai trò</Text>
+                  <Text style={styles.infoValue}>Quản trị viên hệ thống</Text>
+                </View>
+              </View>
+            </>
+          )}
+        </View>
 
-        <TouchableOpacity 
-          style={styles.actionItem}
-          onPress={() => Alert.alert('Thông báo', 'Chức năng đang phát triển')}
-        >
-          <Ionicons name="document-text-outline" size={20} color="#007AFF" />
-          <Text style={styles.actionText}>Nhật ký hoạt động</Text>
-          <Ionicons name="chevron-forward" size={20} color="#ccc" />
-        </TouchableOpacity>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Quản lý Admin</Text>
 
-        <TouchableOpacity 
-          style={styles.actionItem}
-          onPress={() => Alert.alert('Thông báo', 'Chức năng đang phát triển')}
-        >
-          <Ionicons name="key-outline" size={20} color="#007AFF" />
-          <Text style={styles.actionText}>Quyền truy cập</Text>
-          <Ionicons name="chevron-forward" size={20} color="#ccc" />
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity
+            style={styles.actionItem}
+            onPress={() => Alert.alert('Thông báo', 'Chức năng đang phát triển')}
+          >
+            <Ionicons name="people-outline" size={20} color="#007AFF" />
+            <Text style={styles.actionText}>Quản lý Admin khác</Text>
+            <Ionicons name="chevron-forward" size={20} color="#ccc" />
+          </TouchableOpacity>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Cài đặt</Text>
-        
-        <TouchableOpacity 
-          style={styles.actionItem}
-          onPress={openEdit}
-        >
-          <Ionicons name="create-outline" size={20} color="#007AFF" />
-          <Text style={styles.actionText}>Chỉnh sửa thông tin</Text>
-          <Ionicons name="chevron-forward" size={20} color="#ccc" />
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionItem}
+            onPress={() => Alert.alert('Thông báo', 'Chức năng đang phát triển')}
+          >
+            <Ionicons name="document-text-outline" size={20} color="#007AFF" />
+            <Text style={styles.actionText}>Nhật ký hoạt động</Text>
+            <Ionicons name="chevron-forward" size={20} color="#ccc" />
+          </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={styles.actionItem}
-          onPress={() => Alert.alert('Thông báo', 'Chức năng đang phát triển')}
-        >
-          <Ionicons name="lock-closed-outline" size={20} color="#007AFF" />
-          <Text style={styles.actionText}>Đổi mật khẩu</Text>
-          <Ionicons name="chevron-forward" size={20} color="#ccc" />
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionItem}
+            onPress={() => Alert.alert('Thông báo', 'Chức năng đang phát triển')}
+          >
+            <Ionicons name="key-outline" size={20} color="#007AFF" />
+            <Text style={styles.actionText}>Quyền truy cập</Text>
+            <Ionicons name="chevron-forward" size={20} color="#ccc" />
+          </TouchableOpacity>
+        </View>
 
-        <TouchableOpacity 
-          style={styles.actionItem}
-          onPress={() => Alert.alert('Thông báo', 'Chức năng đang phát triển')}
-        >
-          <Ionicons name="notifications-outline" size={20} color="#007AFF" />
-          <Text style={styles.actionText}>Thông báo</Text>
-          <Ionicons name="chevron-forward" size={20} color="#ccc" />
-        </TouchableOpacity>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Cài đặt</Text>
 
-        <TouchableOpacity 
-          style={[styles.actionItem, styles.logoutItem]}
-          onPress={handleLogout}
-        >
-          <Ionicons name="log-out-outline" size={20} color="#FF3B30" />
-          <Text style={[styles.actionText, styles.logoutText]}>Đăng xuất</Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+          <TouchableOpacity
+            style={styles.actionItem}
+            onPress={openEdit}
+          >
+            <Ionicons name="create-outline" size={20} color="#007AFF" />
+            <Text style={styles.actionText}>Chỉnh sửa thông tin</Text>
+            <Ionicons name="chevron-forward" size={20} color="#ccc" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionItem}
+            onPress={() => Alert.alert('Thông báo', 'Chức năng đang phát triển')}
+          >
+            <Ionicons name="lock-closed-outline" size={20} color="#007AFF" />
+            <Text style={styles.actionText}>Đổi mật khẩu</Text>
+            <Ionicons name="chevron-forward" size={20} color="#ccc" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionItem}
+            onPress={() => Alert.alert('Thông báo', 'Chức năng đang phát triển')}
+          >
+            <Ionicons name="notifications-outline" size={20} color="#007AFF" />
+            <Text style={styles.actionText}>Thông báo</Text>
+            <Ionicons name="chevron-forward" size={20} color="#ccc" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionItem, styles.logoutItem]}
+            onPress={handleLogout}
+          >
+            <Ionicons name="log-out-outline" size={20} color="#FF3B30" />
+            <Text style={[styles.actionText, styles.logoutText]}>Đăng xuất</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
 
       {/* Edit Profile Modal */}
       <Modal visible={editVisible} transparent animationType="slide" onRequestClose={() => setEditVisible(false)}>

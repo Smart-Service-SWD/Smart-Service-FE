@@ -1,6 +1,4 @@
-import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_CONFIG, resolveGraphQLBaseUrl } from '../config/api.config';
+import graphqlClient from './graphqlClient';
 
 export interface DashboardSummary {
   totalUsers: number;
@@ -35,6 +33,7 @@ export interface GraphqlUser {
   email: string;
   phoneNumber?: string | null;
   role: UserRole;
+  isLocked?: boolean;
 }
 
 export interface ActivityLog {
@@ -62,25 +61,7 @@ export interface ServiceRequest {
   estimatedCost?: { amount: number; currency: string } | null;
 }
 
-const requestGraphql = async <T,>(query: string, variables?: Record<string, any>): Promise<T> => {
-  const baseUrl = await resolveGraphQLBaseUrl();
-  const token = await AsyncStorage.getItem('authToken');
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-  const { data } = await axios.post(
-    baseUrl,
-    { query, variables },
-    { timeout: API_CONFIG.TIMEOUT, headers }
-  );
-  if (data?.errors?.length) {
-    throw new Error(data.errors[0]?.message || 'GraphQL error');
-  }
-  return data?.data as T;
-};
+// Removed redundant requestGraphql helper, using standardized graphqlClient instead
 
 const DASHBOARD_SUMMARY_QUERY = `
   query GetDashboardSummary {
@@ -106,6 +87,7 @@ const USERS_QUERY = `
       email
       phoneNumber
       role
+      isLocked
     }
   }
 `;
@@ -118,6 +100,7 @@ const USERS_BY_ROLE_QUERY = `
       email
       phoneNumber
       role
+      isLocked
     }
   }
 `;
@@ -125,6 +108,23 @@ const USERS_BY_ROLE_QUERY = `
 const SERVICE_DEFINITIONS_QUERY = `
   query GetServiceDefinitions {
     getServiceDefinitions {
+      id
+      name
+      description
+      categoryName
+      basePrice
+      estimatedDuration
+      isActive
+      bookingCount
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+const SERVICE_DEFINITIONS_BY_CATEGORY_QUERY = `
+  query GetServiceDefinitionsByCategory($categoryId: UUID!) {
+    getServiceDefinitionsByCategory(categoryId: $categoryId) {
       id
       name
       description
@@ -212,55 +212,66 @@ const SERVICE_REQUESTS_BY_STATUS_QUERY = `
 
 export const adminGraphqlService = {
   getDashboardSummary: async (): Promise<DashboardSummary> => {
-    const data = await requestGraphql<{ getDashboardSummary: DashboardSummary }>(
-      DASHBOARD_SUMMARY_QUERY
-    );
-    return data.getDashboardSummary;
+    const { data: resData } = await graphqlClient.post('', {
+      query: DASHBOARD_SUMMARY_QUERY
+    });
+    return resData?.data?.getDashboardSummary;
   },
   getUsers: async (): Promise<GraphqlUser[]> => {
-    const data = await requestGraphql<{ getUsers: GraphqlUser[] }>(USERS_QUERY);
-    return data.getUsers ?? [];
+    const { data: resData } = await graphqlClient.post('', {
+      query: USERS_QUERY
+    });
+    return resData?.data?.getUsers ?? [];
   },
   getUsersByRole: async (role: UserRole): Promise<GraphqlUser[]> => {
-    const data = await requestGraphql<{ getUsersByRole: GraphqlUser[] }>(
-      USERS_BY_ROLE_QUERY,
-      { role }
-    );
-    return data.getUsersByRole ?? [];
+    const { data: resData } = await graphqlClient.post('', {
+      query: USERS_BY_ROLE_QUERY,
+      variables: { role }
+    });
+    return resData?.data?.getUsersByRole ?? [];
   },
   getServiceDefinitions: async (): Promise<ServiceListItem[]> => {
-    const data = await requestGraphql<{ getServiceDefinitions: ServiceListItem[] }>(
-      SERVICE_DEFINITIONS_QUERY
-    );
-    return data.getServiceDefinitions ?? [];
+    const { data: resData } = await graphqlClient.post('', {
+      query: SERVICE_DEFINITIONS_QUERY
+    });
+    return resData?.data?.getServiceDefinitions ?? [];
+  },
+  getServiceDefinitionsByCategory: async (categoryId: string): Promise<ServiceListItem[]> => {
+    const { data: resData } = await graphqlClient.post('', {
+      query: SERVICE_DEFINITIONS_BY_CATEGORY_QUERY,
+      variables: { categoryId }
+    });
+    return resData?.data?.getServiceDefinitionsByCategory ?? [];
   },
   getActivityLogs: async (): Promise<ActivityLog[]> => {
-    const data = await requestGraphql<{ getActivityLogs: ActivityLog[] }>(
-      ACTIVITY_LOGS_QUERY
-    );
-    return data.getActivityLogs ?? [];
+    const { data: resData } = await graphqlClient.post('', {
+      query: ACTIVITY_LOGS_QUERY
+    });
+    return resData?.data?.getActivityLogs ?? [];
   },
   getCurrentUser: async (): Promise<GraphqlUser | null> => {
-    const data = await requestGraphql<{ me: GraphqlUser | null }>(CURRENT_USER_QUERY);
-    return data.me ?? null;
+    const { data: resData } = await graphqlClient.post('', {
+      query: CURRENT_USER_QUERY
+    });
+    return resData?.data?.me ?? null;
   },
   getServiceCategories: async (): Promise<ServiceCategory[]> => {
-    const data = await requestGraphql<{ getServiceCategories: ServiceCategory[] }>(
-      SERVICE_CATEGORIES_QUERY
-    );
-    return data.getServiceCategories ?? [];
+    const { data: resData } = await graphqlClient.post('', {
+      query: SERVICE_CATEGORIES_QUERY
+    });
+    return resData?.data?.getServiceCategories ?? [];
   },
   getServiceRequests: async (): Promise<ServiceRequest[]> => {
-    const data = await requestGraphql<{ getServiceRequests: ServiceRequest[] }>(
-      SERVICE_REQUESTS_QUERY
-    );
-    return data.getServiceRequests ?? [];
+    const { data: resData } = await graphqlClient.post('', {
+      query: SERVICE_REQUESTS_QUERY
+    });
+    return resData?.data?.getServiceRequests ?? [];
   },
   getServiceRequestsByStatus: async (status: string): Promise<ServiceRequest[]> => {
-    const data = await requestGraphql<{ getServiceRequestsByStatus: ServiceRequest[] }>(
-      SERVICE_REQUESTS_BY_STATUS_QUERY,
-      { status }
-    );
-    return data.getServiceRequestsByStatus ?? [];
+    const { data: resData } = await graphqlClient.post('', {
+      query: SERVICE_REQUESTS_BY_STATUS_QUERY,
+      variables: { status }
+    });
+    return resData?.data?.getServiceRequestsByStatus ?? [];
   },
 };

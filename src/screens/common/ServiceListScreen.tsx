@@ -1,33 +1,23 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useLayoutEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import {
-    Dimensions,
-    FlatList,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-    StatusBar,
-    Platform,
+  FlatList,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  StatusBar,
+  Platform,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
-
-const { width } = Dimensions.get('window');
-
-interface Service {
-  id: number;
-  name: string;
-  category: string;
-  rating: number;
-  reviews: number;
-  price: string;
-  description: string;
-}
+import { adminGraphqlService, ServiceListItem } from '../../services/adminGraphqlService';
 
 type RootStackParamList = {
-  ServiceList: { category: string };
-  ServiceDetail: { service: Service };
+  ServiceList: { category: string; categoryId?: string };
+  ServiceDetail: { service: ServiceListItem };
 };
 
 type ServiceListScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'ServiceList'>;
@@ -39,146 +29,48 @@ interface ServiceListScreenProps {
 }
 
 export const ServiceListScreen: React.FC<ServiceListScreenProps> = ({ navigation, route }) => {
-  const { category } = route.params;
+  const { category, categoryId } = route.params;
+  const [services, setServices] = useState<ServiceListItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  console.log('ServiceListScreen received category:', category);
-
-  // Update navigation header title based on category
+  // Update navigation header title
   useLayoutEffect(() => {
     navigation.setOptions({
-      title: `${category} Services`,
+      title: category || 'Services',
     });
   }, [category, navigation]);
 
-  // Mock data based on category - using useMemo to recalculate when category changes
-  const services = useMemo(() => {
-    const baseServices: Record<string, Service[]> = {
-      Electronics: [
-        {
-          id: 1,
-          name: 'Phone Screen Repair',
-          category: 'Electronics',
-          rating: 4.8,
-          reviews: 320,
-          price: '150,000 VND',
-          description: 'Professional phone screen replacement service',
-        },
-        {
-          id: 2,
-          name: 'Laptop Hardware Repair',
-          category: 'Electronics',
-          rating: 4.7,
-          reviews: 180,
-          price: '250,000 VND',
-          description: 'Expert laptop repair and maintenance',
-        },
-        {
-          id: 3,
-          name: 'Tablet Repair',
-          category: 'Electronics',
-          rating: 4.6,
-          reviews: 95,
-          price: '180,000 VND',
-          description: 'Tablet repair and screen replacement',
-        },
-      ],
-      Electrical: [
-        {
-          id: 4,
-          name: 'Home Wiring Installation',
-          category: 'Electrical',
-          rating: 4.9,
-          reviews: 450,
-          price: '300,000 VND',
-          description: 'Safe and reliable electrical wiring',
-        },
-        {
-          id: 5,
-          name: 'Circuit Breaker Repair',
-          category: 'Electrical',
-          rating: 4.8,
-          reviews: 210,
-          price: '200,000 VND',
-          description: 'Circuit breaker installation and repair',
-        },
-        {
-          id: 6,
-          name: 'LED Lighting Installation',
-          category: 'Electrical',
-          rating: 4.7,
-          reviews: 340,
-          price: '150,000 VND',
-          description: 'Modern LED lighting solutions',
-        },
-      ],
-      Legal: [
-        {
-          id: 7,
-          name: 'Contract Review',
-          category: 'Legal',
-          rating: 4.9,
-          reviews: 280,
-          price: '500,000 VND',
-          description: 'Professional contract review and consultation',
-        },
-        {
-          id: 8,
-          name: 'Legal Consultation',
-          category: 'Legal',
-          rating: 4.8,
-          reviews: 420,
-          price: '400,000 VND',
-          description: 'General legal advice and consultation',
-        },
-        {
-          id: 9,
-          name: 'Document Preparation',
-          category: 'Legal',
-          rating: 4.7,
-          reviews: 190,
-          price: '300,000 VND',
-          description: 'Legal document drafting services',
-        },
-      ],
-      'Real Estate': [
-        {
-          id: 10,
-          name: 'Property Valuation',
-          category: 'Real Estate',
-          rating: 4.8,
-          reviews: 340,
-          price: '600,000 VND',
-          description: 'Professional property appraisal',
-        },
-        {
-          id: 11,
-          name: 'Real Estate Consultation',
-          category: 'Real Estate',
-          rating: 4.9,
-          reviews: 510,
-          price: '450,000 VND',
-          description: 'Expert advice on buying/selling property',
-        },
-        {
-          id: 12,
-          name: 'Land Survey',
-          category: 'Real Estate',
-          rating: 4.7,
-          reviews: 220,
-          price: '800,000 VND',
-          description: 'Accurate land measurement and survey',
-        },
-      ],
-    };
+  const fetchServices = useCallback(async (isRefresh = false) => {
+    if (!isRefresh) setLoading(true);
+    try {
+      if (categoryId) {
+        const byCategory = await adminGraphqlService.getServiceDefinitionsByCategory(categoryId);
+        setServices(byCategory);
+      } else {
+        const allServices = await adminGraphqlService.getServiceDefinitions();
+        const filtered = category === 'Tất cả'
+          ? allServices
+          : allServices.filter(s => s.categoryName === category);
+        setServices(filtered);
+      }
+    } catch (error) {
+      console.error('Error fetching services:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [category, categoryId]);
 
-    console.log('Available categories:', Object.keys(baseServices));
-    console.log('Looking for category:', category);
-    console.log('Found services:', baseServices[category]?.length || 0);
+  useEffect(() => {
+    fetchServices();
+  }, [fetchServices]);
 
-    return baseServices[category] || [];
-  }, [category]); // Re-run when category changes
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchServices(true);
+  };
 
-  // Get icon based on category
   const getCategoryIcon = (categoryName: string): keyof typeof Ionicons.glyphMap => {
     const iconMap: Record<string, keyof typeof Ionicons.glyphMap> = {
       'Electronics': 'hardware-chip-outline',
@@ -189,38 +81,37 @@ export const ServiceListScreen: React.FC<ServiceListScreenProps> = ({ navigation
     return iconMap[categoryName] || 'construct-outline';
   };
 
-  // Get color based on category
   const getCategoryColor = (categoryName: string): string => {
     const colorMap: Record<string, string> = {
-      'Electronics': '#FF6B6B',  // Red
-      'Electrical': '#FFB800',   // Yellow/Orange
-      'Legal': '#0066CC',        // Blue
-      'Real Estate': '#2ECC71',  // Green
+      'Electronics': '#FF6B6B',
+      'Electrical': '#FFB800',
+      'Legal': '#0066CC',
+      'Real Estate': '#2ECC71',
     };
     return colorMap[categoryName] || '#0066CC';
   };
 
-  const renderServiceItem = ({ item }: { item: Service }) => (
+  const renderServiceItem = ({ item }: { item: ServiceListItem }) => (
     <TouchableOpacity
       style={styles.serviceCard}
       onPress={() => navigation.navigate('ServiceDetail', { service: item })}
       activeOpacity={0.7}
     >
       <View style={styles.serviceIcon}>
-        <Ionicons name={getCategoryIcon(item.category)} size={32} color={getCategoryColor(item.category)} />
+        <Ionicons name={getCategoryIcon(item.categoryName)} size={32} color={getCategoryColor(item.categoryName)} />
       </View>
       <View style={styles.serviceInfo}>
         <Text style={styles.serviceName}>{item.name}</Text>
         <Text style={styles.serviceDescription} numberOfLines={2}>
-          {item.description}
+          {item.description || 'No description available'}
         </Text>
         <View style={styles.serviceFooter}>
           <View style={styles.ratingContainer}>
             <Ionicons name="star" size={16} color="#FFB800" />
-            <Text style={styles.rating}>{item.rating}</Text>
-            <Text style={styles.reviews}>({item.reviews})</Text>
+            <Text style={styles.rating}>5.0</Text>
+            <Text style={styles.reviews}>({item.bookingCount || 0})</Text>
           </View>
-          <Text style={styles.price}>{item.price}</Text>
+          <Text style={styles.price}>{item.basePrice} VND</Text>
         </View>
       </View>
       <Ionicons name="chevron-forward" size={24} color="#999" />
@@ -236,17 +127,32 @@ export const ServiceListScreen: React.FC<ServiceListScreenProps> = ({ navigation
         >
           <Ionicons name="arrow-back" size={24} color="#0066CC" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{category} Services</Text>
+        <Text style={styles.headerTitle}>{category}</Text>
         <View style={{ width: 40 }} />
       </View>
 
-      <FlatList
-        data={services}
-        renderItem={renderServiceItem}
-        keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-      />
+      {loading && !refreshing ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#0066CC" />
+        </View>
+      ) : (
+        <FlatList
+          data={services}
+          renderItem={renderServiceItem}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0066CC" />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons name="construct-outline" size={64} color="#CCC" />
+              <Text style={styles.emptyText}>No services found in this category</Text>
+            </View>
+          }
+        />
+      )}
     </View>
   );
 };
@@ -255,6 +161,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F5F7FA',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   header: {
     flexDirection: 'row',
@@ -277,6 +188,8 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
+    paddingBottom: 32,
+    flexGrow: 1,
   },
   serviceCard: {
     flexDirection: 'row',
@@ -338,5 +251,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#0066CC',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 100,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#999',
+    marginTop: 16,
   },
 });

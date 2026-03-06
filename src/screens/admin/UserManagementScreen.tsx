@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { adminGraphqlService, GraphqlUser, UserRole } from '../../services/adminGraphqlService';
 import { adminRestService } from '../../services/adminRestService';
 
-interface User extends GraphqlUser {}
+type User = GraphqlUser;
 
 export const UserManagementScreen: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -43,11 +43,7 @@ export const UserManagementScreen: React.FC = () => {
     );
   }, [users, searchQuery]);
 
-  useEffect(() => {
-    loadUsers();
-  }, [selectedRole]);
-
-  const loadUsers = async (isRefresh = false) => {
+  const loadUsers = useCallback(async (isRefresh = false) => {
     if (!isRefresh) {
       setLoading(true);
     }
@@ -63,7 +59,11 @@ export const UserManagementScreen: React.FC = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [selectedRole]);
+
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -116,7 +116,7 @@ export const UserManagementScreen: React.FC = () => {
     }
   };
 
-  const handleUserAction = (user: User, action: string) => {
+  const handleUserAction = async (user: User, action: string) => {
     setSelectedUser(user);
     switch (action) {
       case 'edit':
@@ -125,7 +125,15 @@ export const UserManagementScreen: React.FC = () => {
         setModalVisible(true);
         break;
       case 'suspend':
-        Alert.alert('Thông báo', 'Chức năng tạm khóa tài khoản chưa được hỗ trợ');
+        try {
+          await adminRestService.lockUser(user.id, !user.isLocked);
+          setUsers(prev =>
+            prev.map(u => (u.id === user.id ? { ...u, isLocked: !user.isLocked } : u))
+          );
+          Alert.alert('Thành công', user.isLocked ? 'Đã mở khóa tài khoản' : 'Đã khóa tài khoản');
+        } catch (error: any) {
+          Alert.alert('Lỗi', error?.response?.data?.message || 'Không thể cập nhật trạng thái khóa');
+        }
         break;
       case 'delete':
         Alert.alert('Thông báo', 'Chức năng xóa người dùng chưa được hỗ trợ');
@@ -153,6 +161,11 @@ export const UserManagementScreen: React.FC = () => {
               {getRoleLabel(item.role)}
             </Text>
           </View>
+          {item.isLocked ? (
+            <View style={[styles.roleBadge, { backgroundColor: '#FEE2E2' }]}>
+              <Text style={[styles.roleText, { color: '#B91C1C' }]}>Đang khóa</Text>
+            </View>
+          ) : null}
         </View>
       </View>
 
@@ -173,8 +186,8 @@ export const UserManagementScreen: React.FC = () => {
           style={[styles.actionButton, { backgroundColor: '#FF950020' }]}
           onPress={() => handleUserAction(item, 'suspend')}
         >
-          <Ionicons name="ban" size={16} color="#FF9500" />
-          <Text style={[styles.actionText, { color: '#FF9500' }]}>Khóa</Text>
+          <Ionicons name={item.isLocked ? 'lock-open-outline' : 'ban'} size={16} color="#FF9500" />
+          <Text style={[styles.actionText, { color: '#FF9500' }]}>{item.isLocked ? 'Mở khóa' : 'Khóa'}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity

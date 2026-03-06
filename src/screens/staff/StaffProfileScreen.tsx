@@ -44,7 +44,7 @@ export const StaffProfileScreen: React.FC<{ navigation: any }> = ({ navigation }
       }
     };
     loadProfile();
-  }, []);
+  }, [updateProfile]);
 
   const openEdit = () => {
     setEditName(user?.fullName || '');

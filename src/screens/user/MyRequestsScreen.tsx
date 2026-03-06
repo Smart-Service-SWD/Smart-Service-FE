@@ -53,7 +53,7 @@ export const MyRequestsScreen: React.FC<Props> = ({ navigation }) => {
   useEffect(() => {
     setLoading(true);
     loadRequests();
-  }, [filter]);
+  }, [loadRequests]);
 
   const onRefresh = () => { setRefreshing(true); loadRequests(); };
 
