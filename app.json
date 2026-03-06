@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "Smart Service Mobile",
+    "slug": "smart-service-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#f4f6f8"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#f4f6f8"
+      }
+    }
+  }
+}
+
