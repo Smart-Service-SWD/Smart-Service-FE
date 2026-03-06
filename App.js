@@ -4,10 +4,10 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { ToastProvider } from './src/components/toast';
-import { AnalysisProvider } from './src/context/AnalysisContext';
-import { AuthProvider } from './src/context/AuthContext';
-import { RootNavigator } from './src/navigation/RootNavigator';
+import { ToastProvider } from './src/shared/ui/toast';
+import { AnalysisProvider } from './src/app/providers/analysis/AnalysisContext';
+import { AuthProvider } from './src/app/providers/auth/AuthContext';
+import { RootNavigator } from './src/app/navigation/RootNavigator';
 
 // Keep splash screen visible while we're preparing the app
 SplashScreen.preventAutoHideAsync().catch(() => { });
