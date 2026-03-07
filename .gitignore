@@ -1,5 +1,6 @@
 node_modules/
 .expo/
+.edge-headless/
 dist/
 web-build/
 coverage/
@@ -11,4 +12,3 @@ yarn-error.*
 
 .env
 .env.local
-
