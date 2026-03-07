@@ -15,6 +15,7 @@ export default function LoginScreen({ navigation, route }: LoginScreenProps) {
   const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState(route.params?.notice ?? "");
@@ -72,8 +73,10 @@ export default function LoginScreen({ navigation, route }: LoginScreenProps) {
           label="Mật khẩu"
           value={password}
           onChangeText={setPassword}
-          secureTextEntry
+          secureTextEntry={!showPassword}
           placeholder="Nhập mật khẩu"
+          actionLabel={showPassword ? "Ẩn" : "Hiện"}
+          onActionPress={() => setShowPassword((prev) => !prev)}
         />
 
         {!!notice ? <Text style={styles.notice}>{notice}</Text> : null}

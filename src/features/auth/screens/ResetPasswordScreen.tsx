@@ -21,6 +21,7 @@ export default function ResetPasswordScreen({
   const [email, setEmail] = useState(route.params?.email ?? "");
   const [otp, setOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -106,8 +107,10 @@ export default function ResetPasswordScreen({
           label="Mật khẩu mới"
           value={newPassword}
           onChangeText={setNewPassword}
-          secureTextEntry
+          secureTextEntry={!showPassword}
           placeholder="Tối thiểu 6 ký tự"
+          actionLabel={showPassword ? "Ẩn" : "Hiện"}
+          onActionPress={() => setShowPassword((prev) => !prev)}
         />
 
         {!!error ? <Text style={styles.error}>{error}</Text> : null}
