@@ -47,6 +47,23 @@ export const SERVICE_DEFINITIONS_QUERY = `
   }
 `;
 
+export const SERVICE_DEFINITIONS_BY_CATEGORY_QUERY = `
+  query ServiceDefinitionsByCategory($categoryId: UUID!) {
+    getServiceDefinitionsByCategory(categoryId: $categoryId) {
+      id
+      name
+      description
+      categoryName
+      basePrice
+      estimatedDuration
+      isActive
+      bookingCount
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
 export const ME_QUERY = `
   query Me {
     me {
@@ -180,6 +197,7 @@ export const SERVICE_AGENTS_QUERY = `
   query ServiceAgents {
     getServiceAgents {
       id
+      userId
       fullName
       isActive
     }

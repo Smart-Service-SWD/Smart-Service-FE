@@ -29,10 +29,20 @@ interface LockPayload {
   isLocked: boolean;
 }
 
-interface CreateUserPayload {
+export interface CreateUserPayload {
   fullName: string;
   email: string;
   phoneNumber: string;
+}
+
+export interface CreateAgentCapabilityPayload {
+  categoryId: string;
+  maxComplexityLevel: number;
+  serviceIds: string[];
+}
+
+export interface CreateAgentUserPayload extends CreateUserPayload {
+  capabilities: CreateAgentCapabilityPayload[];
 }
 
 export const createCategory = (
@@ -120,7 +130,7 @@ export const createCustomerUser = (
 
 export const createAgentUser = (
   token: string,
-  payload: CreateUserPayload
+  payload: CreateAgentUserPayload
 ): Promise<string> =>
   httpRequest<string>({
     path: "/api/users/agents",
@@ -139,4 +149,3 @@ export const createStaffUser = (
     token,
     body: payload
   });
-

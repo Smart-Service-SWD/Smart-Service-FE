@@ -129,6 +129,10 @@ export default function ServiceAdminScreen() {
       setError("Name, price and duration are required");
       return;
     }
+    if (price < 0 || duration <= 0) {
+      setError("Base price must be >= 0 and estimated duration must be > 0");
+      return;
+    }
     setLoading(true);
     setError("");
     setSuccess("");
@@ -161,6 +165,10 @@ export default function ServiceAdminScreen() {
     const duration = Number.parseInt(estimatedDuration, 10);
     if (!serviceName.trim() || Number.isNaN(price) || Number.isNaN(duration)) {
       setError("Name, price and duration are required");
+      return;
+    }
+    if (price < 0 || duration <= 0) {
+      setError("Base price must be >= 0 and estimated duration must be > 0");
       return;
     }
     setLoading(true);
@@ -403,4 +411,3 @@ const styles = StyleSheet.create({
     fontSize: 13
   }
 });
-

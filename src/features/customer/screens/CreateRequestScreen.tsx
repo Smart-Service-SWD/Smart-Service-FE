@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useNavigation } from "@react-navigation/native";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import * as ImagePicker from "expo-image-picker";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import ScreenLayout from "../../../shared/ui/ScreenLayout";
 import { colors } from "../../../app/theme/colors";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
@@ -15,12 +16,20 @@ import {
   analyzeServiceText,
   createServiceAttachment,
   createServiceRequest,
-  type AnalyzeResult
+  type AnalyzeResult,
+  type CreateServiceRequestResult,
+  type RequestImageAsset
 } from "../api/customerApi";
 import type { CustomerTabParamList } from "../../../app/navigation/types";
 
 interface CategoriesResponse {
   getServiceCategories: ServiceCategory[];
+}
+
+interface PickedRequestImage extends RequestImageAsset {
+  width: number;
+  height: number;
+  fileSize?: number;
 }
 
 const attachmentTypeOptions = [
@@ -37,13 +46,14 @@ export default function CreateRequestScreen() {
   const [selectedCategoryId, setSelectedCategoryId] = useState("");
   const [description, setDescription] = useState("");
   const [addressText, setAddressText] = useState("");
-  const [complexityLevel, setComplexityLevel] = useState("");
+  const [selectedImage, setSelectedImage] = useState<PickedRequestImage | null>(null);
   const [attachmentFileName, setAttachmentFileName] = useState("");
   const [attachmentFileUrl, setAttachmentFileUrl] = useState("");
   const [attachmentType, setAttachmentType] = useState<number>(0);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [analysis, setAnalysis] = useState<AnalyzeResult | null>(null);
+  const [createResult, setCreateResult] = useState<CreateServiceRequestResult | null>(null);
   const [createdRequestId, setCreatedRequestId] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -63,16 +73,64 @@ export default function CreateRequestScreen() {
     void loadCategories();
   }, []);
 
-  const parsedComplexityLevel = useMemo(() => {
-    if (!complexityLevel.trim()) {
-      return null;
+  const setPickedImage = (asset: ImagePicker.ImagePickerAsset) => {
+    if (asset.type && asset.type !== "image") {
+      setError("Chỉ hỗ trợ ảnh cho nhánh OCR của BE.");
+      return;
     }
-    const num = Number.parseInt(complexityLevel, 10);
-    if (Number.isNaN(num)) {
-      return null;
+
+    setSelectedImage({
+      uri: asset.uri,
+      fileName: asset.fileName ?? "request-image.jpg",
+      mimeType: asset.mimeType ?? "image/jpeg",
+      width: asset.width,
+      height: asset.height,
+      fileSize: asset.fileSize
+    });
+    setSuccess("Đã chọn ảnh, ảnh này sẽ được gửi lên BE để OCR khi phân tích hoặc tạo request.");
+    setError("");
+  };
+
+  const pickImageFromLibrary = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      setError("FE cần quyền truy cập thư viện ảnh để gửi ảnh OCR.");
+      return;
     }
-    return Math.min(5, Math.max(1, num));
-  }, [complexityLevel]);
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: false,
+      quality: 0.8
+    });
+
+    if (result.canceled || result.assets.length === 0) {
+      return;
+    }
+
+    setPickedImage(result.assets[0]);
+  };
+
+  const takePhoto = async () => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      setError("FE cần quyền camera để chụp ảnh gửi sang BE.");
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ["images"],
+      allowsEditing: false,
+      quality: 0.8,
+      cameraType: ImagePicker.CameraType.back
+    });
+
+    if (result.canceled || result.assets.length === 0) {
+      return;
+    }
+
+    setPickedImage(result.assets[0]);
+  };
 
   const analyze = async () => {
     if (!description.trim()) {
@@ -85,9 +143,9 @@ export default function CreateRequestScreen() {
     setSuccess("");
 
     try {
-      const result = await analyzeServiceText(description);
+      const result = await analyzeServiceText(description, selectedImage);
       setAnalysis(result);
-      setComplexityLevel(String(result.complexity));
+      setCreateResult(null);
     } catch (analysisError) {
       setError(asErrorMessage(analysisError));
     } finally {
@@ -114,19 +172,20 @@ export default function CreateRequestScreen() {
     setSuccess("");
 
     try {
-      const createdId = await createServiceRequest(session.accessToken, {
+      const result = await createServiceRequest(session.accessToken, {
         customerId: session.userId,
         categoryId: selectedCategoryId,
         description,
         addressText: addressText.trim() || null,
-        complexityLevel: parsedComplexityLevel
+        image: selectedImage
       });
 
-      setSuccess(`Đã tạo yêu cầu thành công. Mã yêu cầu: ${createdId}`);
-      setCreatedRequestId(createdId);
+      setSuccess(`Đã tạo yêu cầu thành công. Mã yêu cầu: ${result.serviceRequestId}`);
+      setCreatedRequestId(result.serviceRequestId);
+      setCreateResult(result);
       setDescription("");
       setAddressText("");
-      setComplexityLevel("");
+      setSelectedImage(null);
       setAnalysis(null);
     } catch (submitError) {
       setError(asErrorMessage(submitError));
@@ -178,8 +237,10 @@ export default function CreateRequestScreen() {
         <Text style={styles.sectionTitle}>Các bước trên FE</Text>
         <Text style={styles.value}>Bước 1: Chọn danh mục phù hợp.</Text>
         <Text style={styles.value}>Bước 2: Mô tả vấn đề càng rõ càng tốt.</Text>
-        <Text style={styles.value}>Bước 3: Nhấn “Gửi yêu cầu”.</Text>
-        <Text style={styles.value}>Bước 4: Nếu cần, thêm file đính kèm.</Text>
+        <Text style={styles.value}>Bước 3: Có thể chọn hoặc chụp ảnh để BE OCR.</Text>
+        <Text style={styles.value}>Bước 4: Có thể nhấn “Phân tích bằng AI” để xem trước.</Text>
+        <Text style={styles.value}>Bước 5: Nhấn “Gửi yêu cầu”, BE sẽ OCR + AI rồi lưu kết quả trong một lần.</Text>
+        <Text style={styles.value}>Bước 6: Nếu cần, thêm file đính kèm metadata riêng.</Text>
       </View>
 
       <View style={styles.card}>
@@ -210,7 +271,7 @@ export default function CreateRequestScreen() {
           onChangeText={setDescription}
           placeholder="Ví dụ: Máy lạnh không mát, có tiếng ồn lớn..."
           multiline
-          hint="Nên mô tả tình trạng hiện tại, thời điểm phát sinh và mức độ khẩn cấp"
+          hint="BE sẽ tự phân tích AI từ mô tả này, nên không cần nhập độ phức tạp thủ công nữa"
         />
 
         <LabeledInput
@@ -220,18 +281,58 @@ export default function CreateRequestScreen() {
           placeholder="Số nhà, quận/huyện, tỉnh/thành"
         />
 
-        <LabeledInput
-          label="Độ phức tạp (1-5, tùy chọn)"
-          value={complexityLevel}
-          onChangeText={setComplexityLevel}
-          keyboardType="number-pad"
-          placeholder="Để trống nếu muốn AI/nhân viên đánh giá"
-        />
+        <View style={styles.imageCard}>
+          <Text style={styles.sectionTitle}>Ảnh cho OCR (tùy chọn)</Text>
+          <Text style={styles.value}>
+            Nếu có ảnh lỗi, ảnh thiết bị hoặc tài liệu, BE sẽ OCR ảnh này khi phân tích và tạo request.
+          </Text>
+          <View style={styles.actions}>
+            <ActionButton
+              label="Chọn ảnh từ máy"
+              onPress={() => void pickImageFromLibrary()}
+              disabled={busy}
+              variant="secondary"
+            />
+            <ActionButton
+              label="Chụp ảnh mới"
+              onPress={() => void takePhoto()}
+              disabled={busy}
+              variant="secondary"
+            />
+            {selectedImage ? (
+              <ActionButton
+                label="Bỏ ảnh đã chọn"
+                onPress={() => setSelectedImage(null)}
+                disabled={busy}
+                variant="danger"
+              />
+            ) : null}
+          </View>
+
+          {selectedImage ? (
+            <View style={styles.previewCard}>
+              <Image source={{ uri: selectedImage.uri }} style={styles.previewImage} />
+              <Text style={styles.value}>Tên file: {selectedImage.fileName || "request-image.jpg"}</Text>
+              <Text style={styles.value}>
+                Kích thước: {selectedImage.width} x {selectedImage.height}
+              </Text>
+              <Text style={styles.value}>Mime type: {selectedImage.mimeType || "image/jpeg"}</Text>
+              <Text style={styles.value}>
+                Dung lượng:{" "}
+                {selectedImage.fileSize
+                  ? `${Math.round(selectedImage.fileSize / 1024)} KB`
+                  : "Không rõ"}
+              </Text>
+            </View>
+          ) : null}
+        </View>
       </View>
 
       {!!analysis ? (
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Kết quả AI phân tích</Text>
+          <Text style={styles.sectionTitle}>
+            {selectedImage ? "Kết quả AI + OCR xem trước" : "Kết quả AI xem trước"}
+          </Text>
           <Text style={styles.value}>Độ phức tạp gợi ý: {analysis.complexity}</Text>
           <Text style={styles.value}>Tóm tắt: {analysis.userMessage.summary}</Text>
           <Text style={styles.value}>Rủi ro: {analysis.userMessage.riskExplanation}</Text>
@@ -243,6 +344,22 @@ export default function CreateRequestScreen() {
         <View style={styles.successCard}>
           <Text style={styles.sectionTitle}>Yêu cầu đã tạo</Text>
           <Text style={styles.value}>Mã yêu cầu: {createdRequestId}</Text>
+          {createResult?.wasAnalyzedByAI ? (
+            <>
+              <Text style={styles.value}>
+                Độ phức tạp từ BE: {createResult.aiComplexityLevel ?? "Chưa có"}
+              </Text>
+              {createResult.aiSummary ? (
+                <Text style={styles.value}>Tóm tắt AI: {createResult.aiSummary}</Text>
+              ) : null}
+              {createResult.aiRiskExplanation ? (
+                <Text style={styles.value}>Rủi ro AI: {createResult.aiRiskExplanation}</Text>
+              ) : null}
+              {createResult.ocrExtractedText ? (
+                <Text style={styles.value}>OCR: {createResult.ocrExtractedText}</Text>
+              ) : null}
+            </>
+          ) : null}
           <View style={styles.actions}>
             <ActionButton
               label="Xem yêu cầu của tôi"
@@ -258,7 +375,7 @@ export default function CreateRequestScreen() {
       ) : null}
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Bước 4 · Thêm tệp đính kèm (tùy chọn)</Text>
+        <Text style={styles.sectionTitle}>Bước 6 · Thêm tệp đính kèm metadata (tùy chọn)</Text>
         <LabeledInput
           label="Mã yêu cầu"
           value={createdRequestId}
@@ -360,6 +477,28 @@ const styles = StyleSheet.create({
     minHeight: 100,
     textAlignVertical: "top",
     paddingTop: 10
+  },
+  imageCard: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 12,
+    gap: 10,
+    backgroundColor: "#fff"
+  },
+  previewCard: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 10,
+    gap: 6,
+    backgroundColor: colors.surface
+  },
+  previewImage: {
+    width: "100%",
+    height: 180,
+    borderRadius: 12,
+    backgroundColor: colors.primarySoft
   },
   categoryGrid: {
     flexDirection: "row",

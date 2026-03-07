@@ -1,43 +1,40 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import ScreenLayout from "../../../shared/ui/ScreenLayout";
 import { colors } from "../../../app/theme/colors";
-import { useAuth } from "../AuthContext";
 import { asErrorMessage } from "../../../shared/utils/format";
 import type { AuthStackParamList } from "../../../app/navigation/types";
 import ActionButton from "../../../shared/ui/ActionButton";
 import LabeledInput from "../../../shared/ui/LabeledInput";
+import { forgotPasswordApi } from "../api/authApi";
 
-type LoginScreenProps = NativeStackScreenProps<AuthStackParamList, "Login">;
+type ForgotPasswordScreenProps = NativeStackScreenProps<
+  AuthStackParamList,
+  "ForgotPassword"
+>;
 
-export default function LoginScreen({ navigation, route }: LoginScreenProps) {
-  const { login } = useAuth();
+export default function ForgotPasswordScreen({
+  navigation
+}: ForgotPasswordScreenProps) {
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState(route.params?.notice ?? "");
-
-  useEffect(() => {
-    if (route.params?.notice) {
-      setNotice(route.params.notice);
-      navigation.setParams({ notice: undefined });
-    }
-  }, [navigation, route.params?.notice]);
+  const [success, setSuccess] = useState("");
 
   const onSubmit = async () => {
-    if (!email.trim() || !password.trim()) {
-      setError("Vui lòng nhập đầy đủ email và mật khẩu.");
+    if (!email.trim()) {
+      setError("Vui lòng nhập email.");
       return;
     }
 
     setBusy(true);
     setError("");
-    setNotice("");
+    setSuccess("");
 
     try {
-      await login({ email: email.trim(), password });
+      const result = await forgotPasswordApi({ email: email.trim() });
+      setSuccess(result.message);
     } catch (submissionError) {
       setError(asErrorMessage(submissionError));
     } finally {
@@ -47,14 +44,14 @@ export default function LoginScreen({ navigation, route }: LoginScreenProps) {
 
   return (
     <ScreenLayout
-      title="Đăng nhập"
-      subtitle="Sử dụng tài khoản đã có để truy cập hệ thống Smart Service"
+      title="Quên mật khẩu"
+      subtitle="Nhập email để hệ thống gửi OTP 6 số về Gmail đã đăng ký"
     >
       <View style={styles.heroCard}>
-        <Text style={styles.heroTitle}>Bắt đầu nhanh</Text>
-        <Text style={styles.heroText}>1. Nhập email đã đăng ký</Text>
-        <Text style={styles.heroText}>2. Nhập mật khẩu của bạn</Text>
-        <Text style={styles.heroText}>3. Nhấn “Đăng nhập” để vào hệ thống</Text>
+        <Text style={styles.heroTitle}>Cách dùng</Text>
+        <Text style={styles.heroText}>1. Nhập đúng email tài khoản.</Text>
+        <Text style={styles.heroText}>2. Nhấn gửi OTP.</Text>
+        <Text style={styles.heroText}>3. Mở Gmail lấy mã và sang bước đặt lại mật khẩu.</Text>
       </View>
 
       <View style={styles.card}>
@@ -65,33 +62,24 @@ export default function LoginScreen({ navigation, route }: LoginScreenProps) {
           value={email}
           onChangeText={setEmail}
           placeholder="customer@example.com"
-          hint="Ví dụ: customer@example.com"
         />
 
-        <LabeledInput
-          label="Mật khẩu"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          placeholder="Nhập mật khẩu"
-        />
-
-        {!!notice ? <Text style={styles.notice}>{notice}</Text> : null}
         {!!error ? <Text style={styles.error}>{error}</Text> : null}
+        {!!success ? <Text style={styles.success}>{success}</Text> : null}
 
         <ActionButton
-          label={busy ? "Đang đăng nhập..." : "Đăng nhập"}
+          label={busy ? "Đang gửi OTP..." : "Gửi OTP"}
           onPress={() => void onSubmit()}
           disabled={busy}
         />
         <ActionButton
-          label="Quên mật khẩu"
-          onPress={() => navigation.navigate("ForgotPassword")}
+          label="Tôi đã có OTP"
+          onPress={() => navigation.navigate("ResetPassword", { email: email.trim() || undefined })}
           variant="secondary"
         />
         <ActionButton
-          label="Tạo tài khoản mới"
-          onPress={() => navigation.navigate("Register")}
+          label="Quay lại đăng nhập"
+          onPress={() => navigation.navigate("Login")}
           variant="secondary"
         />
       </View>
@@ -130,7 +118,7 @@ const styles = StyleSheet.create({
     color: colors.danger,
     fontSize: 13
   },
-  notice: {
+  success: {
     color: colors.success,
     fontSize: 13
   }

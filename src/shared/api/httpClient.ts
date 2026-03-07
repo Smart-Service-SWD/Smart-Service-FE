@@ -4,11 +4,20 @@ type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 export class ApiError extends Error {
   readonly status: number;
+  readonly errorCode?: string;
+  readonly details?: unknown;
 
-  constructor(message: string, status: number) {
+  constructor(
+    message: string,
+    status: number,
+    errorCode?: string,
+    details?: unknown
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.errorCode = errorCode;
+    this.details = details;
   }
 }
 
@@ -52,6 +61,21 @@ const extractErrorMessage = (payload: unknown, fallback: string): string => {
 
   if (typeof payload === "object") {
     const candidate = payload as Record<string, unknown>;
+    if (
+      Array.isArray(candidate.details) &&
+      candidate.details.length > 0 &&
+      typeof candidate.message === "string" &&
+      candidate.message === "Validation failed."
+    ) {
+      const firstDetail = candidate.details[0];
+      if (
+        typeof firstDetail === "object" &&
+        firstDetail !== null &&
+        typeof (firstDetail as Record<string, unknown>).errorMessage === "string"
+      ) {
+        return (firstDetail as Record<string, string>).errorMessage;
+      }
+    }
     if (typeof candidate.message === "string") {
       return candidate.message;
     }
@@ -70,10 +94,15 @@ export const httpRequest = async <T>({
   body,
   headers
 }: RequestOptions): Promise<T> => {
+  const isFormDataBody =
+    typeof FormData !== "undefined" && body instanceof FormData;
   const requestHeaders: Record<string, string> = {
-    "Content-Type": "application/json",
     ...headers
   };
+
+  if (!isFormDataBody && !requestHeaders["Content-Type"]) {
+    requestHeaders["Content-Type"] = "application/json";
+  }
 
   if (token) {
     requestHeaders.Authorization = `Bearer ${token}`;
@@ -82,7 +111,12 @@ export const httpRequest = async <T>({
   const response = await fetch(buildUrl(path), {
     method,
     headers: requestHeaders,
-    body: body === undefined ? undefined : JSON.stringify(body)
+    body:
+      body === undefined
+        ? undefined
+        : isFormDataBody
+          ? body
+          : JSON.stringify(body)
   });
 
   const payload = await parseBody(response);
@@ -92,9 +126,18 @@ export const httpRequest = async <T>({
       payload,
       `Request failed (${response.status})`
     );
-    throw new ApiError(message, response.status);
+    const errorPayload =
+      payload && typeof payload === "object"
+        ? (payload as Record<string, unknown>)
+        : undefined;
+
+    throw new ApiError(
+      message,
+      response.status,
+      typeof errorPayload?.errorCode === "string" ? errorPayload.errorCode : undefined,
+      errorPayload?.details
+    );
   }
 
   return payload as T;
 };
-

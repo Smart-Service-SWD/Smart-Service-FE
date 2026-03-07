@@ -1,6 +1,14 @@
 export type AuthStackParamList = {
-  Login: undefined;
+  Login:
+    | {
+        notice?: string;
+      }
+    | undefined;
   Register: undefined;
+  ForgotPassword: undefined;
+  ResetPassword: {
+    email?: string;
+  } | undefined;
 };
 
 export type CustomerTabParamList = {

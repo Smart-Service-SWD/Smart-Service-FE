@@ -36,6 +36,7 @@ const statusOptions = [
   "CREATED",
   "URGENT_DISPATCH",
   "PENDING_REVIEW",
+  "APPROVED",
   "ASSIGNED",
   "IN_PROGRESS",
   "COMPLETED",
@@ -233,4 +234,3 @@ const styles = StyleSheet.create({
     fontSize: 13
   }
 });
-

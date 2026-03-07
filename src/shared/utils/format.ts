@@ -1,3 +1,5 @@
+import { ApiError } from "../api/httpClient";
+
 export const formatDateTime = (value: string): string => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -20,6 +22,37 @@ export const formatCurrency = (
   }).format(amount);
 
 export const asErrorMessage = (error: unknown): string => {
+  if (error instanceof ApiError) {
+    if (error.errorCode === "AUTH_401_INVALID_CREDENTIALS") {
+      return "Email hoặc mật khẩu không đúng.";
+    }
+
+    if (error.errorCode === "AUTH_409_EMAIL_EXISTS") {
+      return "Email này đã được đăng ký.";
+    }
+
+    if (error.errorCode === "AUTH_401_UNAUTHORIZED") {
+      const normalizedMessage = error.message.toLowerCase();
+      if (normalizedMessage.includes("locked")) {
+        return "Tài khoản này đã bị khóa bởi quản trị viên.";
+      }
+
+      if (normalizedMessage.includes("otp")) {
+        return "OTP không hợp lệ hoặc đã hết hạn. Hãy yêu cầu mã mới.";
+      }
+
+      if (normalizedMessage.includes("refresh token")) {
+        return "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.";
+      }
+    }
+
+    if (error.errorCode === "USER_404_NOT_FOUND") {
+      return "Không tìm thấy tài khoản này.";
+    }
+
+    return error.message;
+  }
+
   if (error instanceof Error) {
     return error.message;
   }
@@ -31,6 +64,7 @@ const requestStatusLabels: Record<string, string> = {
   CREATED: "Mới tạo",
   URGENT_DISPATCH: "Điều phối khẩn",
   PENDING_REVIEW: "Chờ duyệt",
+  APPROVED: "Đã duyệt",
   ASSIGNED: "Đã phân công",
   IN_PROGRESS: "Đang thực hiện",
   COMPLETED: "Hoàn thành",

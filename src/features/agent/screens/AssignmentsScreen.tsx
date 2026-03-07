@@ -6,7 +6,8 @@ import { useAuth } from "../../auth/AuthContext";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
 import {
   AGENT_ASSIGNMENTS_QUERY,
-  REQUEST_BY_ID_QUERY
+  REQUEST_BY_ID_QUERY,
+  SERVICE_AGENTS_QUERY
 } from "../../../shared/api/graphqlDocuments";
 import {
   asErrorMessage,
@@ -14,6 +15,7 @@ import {
   formatDateTime
 } from "../../../shared/utils/format";
 import type { AssignmentItem, ServiceRequestItem } from "../../../shared/types/domain";
+import type { ServiceAgentItem } from "../../../shared/types/domain";
 import LabeledInput from "../../../shared/ui/LabeledInput";
 import ActionButton from "../../../shared/ui/ActionButton";
 
@@ -25,11 +27,17 @@ interface RequestByIdResponse {
   getServiceRequestById: ServiceRequestItem | null;
 }
 
+interface ServiceAgentsResponse {
+  getServiceAgents: ServiceAgentItem[];
+}
+
 export default function AssignmentsScreen() {
   const { session } = useAuth();
   const [items, setItems] = useState<AssignmentItem[]>([]);
   const [detailRequestId, setDetailRequestId] = useState("");
   const [detail, setDetail] = useState<ServiceRequestItem | null>(null);
+  const [linkedServiceAgent, setLinkedServiceAgent] = useState<ServiceAgentItem | null>(null);
+  const [bindingMessage, setBindingMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -40,10 +48,30 @@ export default function AssignmentsScreen() {
 
     setLoading(true);
     setError("");
+    setBindingMessage("");
     try {
+      const serviceAgentData = await graphqlRequest<ServiceAgentsResponse>(
+        SERVICE_AGENTS_QUERY,
+        undefined,
+        session.accessToken
+      );
+      const linkedAgent =
+        serviceAgentData.getServiceAgents.find((agent) => agent.userId === session.userId) ??
+        null;
+
+      setLinkedServiceAgent(linkedAgent);
+
+      if (!linkedAgent) {
+        setItems([]);
+        setBindingMessage(
+          "Tài khoản này chưa được liên kết với ServiceAgent trong BE nên chưa thể tải assignment."
+        );
+        return;
+      }
+
       const data = await graphqlRequest<AssignmentResponse, { agentId: string }>(
         AGENT_ASSIGNMENTS_QUERY,
-        { agentId: session.userId },
+        { agentId: linkedAgent.id },
         session.accessToken
       );
       setItems(data.getAssignmentsByAgentId);
@@ -88,6 +116,14 @@ export default function AssignmentsScreen() {
     <ScreenLayout title="Assignments" subtitle="Agent view from GraphQL">
       {loading ? <Text style={styles.loading}>Loading...</Text> : null}
       {!!error ? <Text style={styles.error}>{error}</Text> : null}
+      {!!bindingMessage ? <Text style={styles.info}>{bindingMessage}</Text> : null}
+
+      <View style={styles.card}>
+        <Text style={styles.title}>Linked Service Agent</Text>
+        <Text style={styles.meta}>User ID: {session?.userId ?? "-"}</Text>
+        <Text style={styles.meta}>ServiceAgent ID: {linkedServiceAgent?.id ?? "-"}</Text>
+        <Text style={styles.meta}>Tên hiển thị: {linkedServiceAgent?.fullName ?? "-"}</Text>
+      </View>
 
       {items.map((item) => (
         <View key={item.id} style={styles.card}>
@@ -139,6 +175,10 @@ const styles = StyleSheet.create({
   },
   error: {
     color: colors.danger,
+    fontSize: 13
+  },
+  info: {
+    color: colors.textMuted,
     fontSize: 13
   },
   card: {

@@ -27,6 +27,20 @@ interface RefreshTokenPayload {
   refreshToken: string;
 }
 
+export interface ForgotPasswordPayload {
+  email: string;
+}
+
+export interface ResetPasswordPayload {
+  email: string;
+  otp: string;
+  newPassword: string;
+}
+
+interface MessageResponse {
+  message: string;
+}
+
 export const loginApi = (payload: LoginPayload): Promise<AuthApiResult> =>
   httpRequest<AuthApiResult>({
     path: "/api/auth/login",
@@ -60,3 +74,20 @@ export const logoutApi = async (
   });
 };
 
+export const forgotPasswordApi = (
+  payload: ForgotPasswordPayload
+): Promise<MessageResponse> =>
+  httpRequest<MessageResponse>({
+    path: "/api/auth/forgot-password",
+    method: "POST",
+    body: payload
+  });
+
+export const resetPasswordApi = (
+  payload: ResetPasswordPayload
+): Promise<MessageResponse> =>
+  httpRequest<MessageResponse>({
+    path: "/api/auth/reset-password",
+    method: "POST",
+    body: payload
+  });

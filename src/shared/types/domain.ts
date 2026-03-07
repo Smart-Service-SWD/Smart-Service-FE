@@ -69,6 +69,7 @@ export interface MatchingResultItem {
 
 export interface ServiceAgentItem {
   id: string;
+  userId?: string | null;
   fullName: string;
   isActive: boolean;
 }
@@ -88,4 +89,3 @@ export interface ActivityLogItem {
   action: string;
   createdAt: string;
 }
-

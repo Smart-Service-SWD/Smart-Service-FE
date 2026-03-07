@@ -38,6 +38,7 @@ const filters = [
   { label: "Mới tạo", value: "CREATED" },
   { label: "Khẩn cấp", value: "URGENT_DISPATCH" },
   { label: "Chờ duyệt", value: "PENDING_REVIEW" },
+  { label: "Đã duyệt", value: "APPROVED" },
   { label: "Đã phân công", value: "ASSIGNED" },
   { label: "Đang làm", value: "IN_PROGRESS" },
   { label: "Hoàn thành", value: "COMPLETED" }

@@ -22,6 +22,16 @@
         "foregroundImage": "./src/assets/adaptive-icon.png",
         "backgroundColor": "#f4f6f8"
       }
-    }
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Cho phep Smart Service truy cap thu vien anh de gui anh OCR cho yeu cau dich vu.",
+          "cameraPermission": "Cho phep Smart Service mo camera de chup anh gui kem yeu cau dich vu.",
+          "microphonePermission": false
+        }
+      ]
+    ]
   }
 }

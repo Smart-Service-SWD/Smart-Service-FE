@@ -16,12 +16,18 @@ export interface AnalyzeResult {
   };
 }
 
-interface CreateRequestPayload {
+export interface RequestImageAsset {
+  uri: string;
+  fileName?: string | null;
+  mimeType?: string | null;
+}
+
+export interface CreateRequestPayload {
   customerId: string;
   categoryId: string;
   description: string;
   addressText?: string | null;
-  complexityLevel?: number | null;
+  image?: RequestImageAsset | null;
 }
 
 interface CreateFeedbackPayload {
@@ -38,23 +44,74 @@ interface CreateAttachmentPayload {
   type: number;
 }
 
-export const analyzeServiceText = (description: string): Promise<AnalyzeResult> =>
-  httpRequest<AnalyzeResult>({
-    path: "/api/service-analysis",
+export interface CreateServiceRequestResult {
+  serviceRequestId: string;
+  aiComplexityLevel?: number | null;
+  aiSummary?: string | null;
+  aiRiskExplanation?: string | null;
+  ocrExtractedText?: string | null;
+  wasAnalyzedByAI: boolean;
+}
+
+const appendImage = (formData: FormData, image: RequestImageAsset) => {
+  const normalizedFileName = image.fileName?.trim() || "request-image.jpg";
+  const normalizedMimeType = image.mimeType?.trim() || "image/jpeg";
+
+  formData.append(
+    "image",
+    {
+      uri: image.uri,
+      name: normalizedFileName,
+      type: normalizedMimeType
+    } as unknown as Blob
+  );
+};
+
+export const analyzeServiceText = (
+  description: string,
+  image?: RequestImageAsset | null
+): Promise<AnalyzeResult> => {
+  if (!image) {
+    return httpRequest<AnalyzeResult>({
+      path: "/api/service-analysis",
+      method: "POST",
+      body: { description }
+    });
+  }
+
+  const formData = new FormData();
+  formData.append("description", description);
+  appendImage(formData, image);
+
+  return httpRequest<AnalyzeResult>({
+    path: "/api/service-analysis/analyze-with-image",
     method: "POST",
-    body: { description }
+    body: formData
   });
+};
 
 export const createServiceRequest = (
   token: string,
   payload: CreateRequestPayload
-): Promise<string> =>
-  httpRequest<string>({
+): Promise<CreateServiceRequestResult> => {
+  const formData = new FormData();
+  formData.append("customerId", payload.customerId);
+  formData.append("categoryId", payload.categoryId);
+  formData.append("description", payload.description);
+  if (payload.addressText?.trim()) {
+    formData.append("addressText", payload.addressText.trim());
+  }
+  if (payload.image) {
+    appendImage(formData, payload.image);
+  }
+
+  return httpRequest<CreateServiceRequestResult>({
     path: "/api/service-requests",
     method: "POST",
     token,
-    body: payload
+    body: formData
   });
+};
 
 export const createServiceFeedback = (
   token: string,
@@ -77,4 +134,3 @@ export const createServiceAttachment = (
     token,
     body: payload
   });
-

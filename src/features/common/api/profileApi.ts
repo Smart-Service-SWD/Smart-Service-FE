@@ -28,9 +28,8 @@ export const changePassword = async (
 ): Promise<void> => {
   await httpRequest<boolean>({
     path: "/api/auth/change-password",
-    method: "POST",
+    method: "PUT",
     token,
     body: payload
   });
 };
-
