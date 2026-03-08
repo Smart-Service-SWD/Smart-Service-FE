@@ -9,6 +9,13 @@ export interface ServiceComplexity {
   level: number;
 }
 
+export interface AgentCapabilityItem {
+  id: string;
+  categoryId: string;
+  maxComplexity?: ServiceComplexity | null;
+  serviceIds: string[];
+}
+
 export interface UserProfile {
   id: string;
   email: string;
@@ -33,6 +40,8 @@ export interface ServiceDefinition {
   estimatedDuration: number;
   isActive: boolean;
   bookingCount: number;
+  complexityRange?: number[] | null;
+  isDangerous?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -41,6 +50,7 @@ export interface ServiceRequestItem {
   id: string;
   customerId: string;
   categoryId?: string;
+  serviceDefinitionId?: string | null;
   description: string;
   addressText?: string | null;
   status: string;
@@ -48,6 +58,10 @@ export interface ServiceRequestItem {
   complexity?: ServiceComplexity | null;
   assignedProviderId?: string | null;
   estimatedCost?: Money | null;
+  estimatedPrice?: string | null;
+  estimatedDuration?: string | null;
+  ocrExtractedText?: string | null;
+  wasAnalyzedByAI?: boolean;
 }
 
 export interface AssignmentItem {
@@ -72,6 +86,7 @@ export interface ServiceAgentItem {
   userId?: string | null;
   fullName: string;
   isActive: boolean;
+  capabilities?: AgentCapabilityItem[] | null;
 }
 
 export interface ServiceFeedbackItem {

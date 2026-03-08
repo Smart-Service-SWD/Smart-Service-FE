@@ -14,6 +14,8 @@ export const HOME_BOOTSTRAP_QUERY = `
       estimatedDuration
       isActive
       bookingCount
+      complexityRange
+      isDangerous
       createdAt
       updatedAt
     }
@@ -41,6 +43,8 @@ export const SERVICE_DEFINITIONS_QUERY = `
       estimatedDuration
       isActive
       bookingCount
+      complexityRange
+      isDangerous
       createdAt
       updatedAt
     }
@@ -58,6 +62,8 @@ export const SERVICE_DEFINITIONS_BY_CATEGORY_QUERY = `
       estimatedDuration
       isActive
       bookingCount
+      complexityRange
+      isDangerous
       createdAt
       updatedAt
     }
@@ -81,6 +87,7 @@ export const MY_REQUESTS_QUERY = `
   query MyRequests($status: ServiceStatus) {
     getMyServiceRequests(status: $status) {
       id
+      serviceDefinitionId
       description
       addressText
       status
@@ -93,6 +100,10 @@ export const MY_REQUESTS_QUERY = `
         amount
         currency
       }
+      estimatedPrice
+      estimatedDuration
+      ocrExtractedText
+      wasAnalyzedByAI
     }
   }
 `;
@@ -103,6 +114,7 @@ export const REQUEST_BY_ID_QUERY = `
       id
       customerId
       categoryId
+      serviceDefinitionId
       description
       addressText
       status
@@ -115,6 +127,10 @@ export const REQUEST_BY_ID_QUERY = `
         amount
         currency
       }
+      estimatedPrice
+      estimatedDuration
+      ocrExtractedText
+      wasAnalyzedByAI
     }
   }
 `;
@@ -125,6 +141,7 @@ export const REQUESTS_BY_STATUS_QUERY = `
       id
       customerId
       categoryId
+      serviceDefinitionId
       description
       addressText
       status
@@ -137,6 +154,10 @@ export const REQUESTS_BY_STATUS_QUERY = `
         amount
         currency
       }
+      estimatedPrice
+      estimatedDuration
+      ocrExtractedText
+      wasAnalyzedByAI
     }
   }
 `;
@@ -147,6 +168,7 @@ export const ALL_REQUESTS_QUERY = `
       id
       customerId
       categoryId
+      serviceDefinitionId
       description
       addressText
       status
@@ -159,6 +181,10 @@ export const ALL_REQUESTS_QUERY = `
         amount
         currency
       }
+      estimatedPrice
+      estimatedDuration
+      ocrExtractedText
+      wasAnalyzedByAI
     }
   }
 `;
@@ -200,6 +226,14 @@ export const SERVICE_AGENTS_QUERY = `
       userId
       fullName
       isActive
+      capabilities {
+        id
+        categoryId
+        maxComplexity {
+          level
+        }
+        serviceIds
+      }
     }
   }
 `;

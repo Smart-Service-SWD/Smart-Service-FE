@@ -15,7 +15,7 @@ const tabMeta: Record<string, TabMeta> = {
   Profile: { label: "Tài khoản", icon: "👤" },
   Assignments: { label: "Phân công", icon: "🧰" },
   RequestBoard: { label: "Bảng việc", icon: "📋" },
-  ReviewQueue: { label: "Duyệt", icon: "✅" },
+  ReviewQueue: { label: "Yêu cầu", icon: "📥" },
   DispatchCenter: { label: "Điều phối", icon: "🚚" },
   ActivityMonitor: { label: "Hoạt động", icon: "📈" },
   Dashboard: { label: "Tổng quan", icon: "📊" },

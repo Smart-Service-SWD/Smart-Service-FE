@@ -1,62 +1,67 @@
 import { useEffect, useMemo, useState } from "react";
+import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
+import { useNavigation } from "@react-navigation/native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import ScreenLayout from "../../../shared/ui/ScreenLayout";
 import { colors } from "../../../app/theme/colors";
+import type { StaffTabParamList } from "../../../app/navigation/types";
 import { useAuth } from "../../auth/AuthContext";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
 import {
-  ALL_REQUESTS_QUERY
+  ALL_REQUESTS_QUERY,
+  SERVICE_DEFINITIONS_QUERY
 } from "../../../shared/api/graphqlDocuments";
 import {
   asErrorMessage,
   formatDateTime,
-  formatRequestStatus
+  formatRequestStatus,
+  formatShortId
 } from "../../../shared/utils/format";
 import type { ServiceRequestItem } from "../../../shared/types/domain";
-import LabeledInput from "../../../shared/ui/LabeledInput";
+import type { ServiceDefinition } from "../../../shared/types/domain";
 import ActionButton from "../../../shared/ui/ActionButton";
-import { createActivityLog, evaluateComplexity } from "../api/staffApi";
 
 interface AllRequestsResponse {
   getServiceRequests: ServiceRequestItem[];
 }
 
+interface ServiceDefinitionsResponse {
+  getServiceDefinitions: ServiceDefinition[];
+}
+
 const statusOptions = [
   "ALL",
-  "AWAITING_ANALYSIS",
   "CREATED",
   "URGENT_DISPATCH",
   "PENDING_REVIEW",
-  "APPROVED",
   "ASSIGNED",
-  "IN_PROGRESS",
-  "COMPLETED",
-  "CANCELLED"
+  "COMPLETED"
 ] as const;
 
 const statusLabels: Record<(typeof statusOptions)[number], string> = {
   ALL: "Tất cả",
-  AWAITING_ANALYSIS: "Chờ AI phân tích",
   CREATED: "Mới tạo",
   URGENT_DISPATCH: "Khẩn cấp",
-  PENDING_REVIEW: "Chờ duyệt",
-  APPROVED: "Đã duyệt",
+  PENDING_REVIEW: "Sẵn sàng điều phối",
   ASSIGNED: "Đã phân công",
-  IN_PROGRESS: "Đang thực hiện",
-  COMPLETED: "Hoàn thành",
-  CANCELLED: "Đã hủy"
+  COMPLETED: "Hoàn thành"
 };
 
+const canOpenDispatch = (request: ServiceRequestItem | null) =>
+  request?.status === "CREATED" ||
+  request?.status === "URGENT_DISPATCH" ||
+  request?.status === "PENDING_REVIEW";
+
 export default function ReviewQueueScreen() {
+  const navigation = useNavigation<BottomTabNavigationProp<StaffTabParamList>>();
   const { session } = useAuth();
   const [selectedStatus, setSelectedStatus] =
     useState<(typeof statusOptions)[number]>("ALL");
   const [items, setItems] = useState<ServiceRequestItem[]>([]);
-  const [requestId, setRequestId] = useState("");
-  const [complexityLevel, setComplexityLevel] = useState("3");
+  const [serviceNamesById, setServiceNamesById] = useState<Record<string, string>>({});
+  const [selectedRequestId, setSelectedRequestId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
 
   const filteredItems = useMemo(() => {
     if (selectedStatus === "ALL") {
@@ -67,8 +72,19 @@ export default function ReviewQueueScreen() {
   }, [items, selectedStatus]);
 
   const selectedRequest = useMemo(
-    () => items.find((item) => item.id === requestId.trim()) ?? null,
-    [items, requestId]
+    () => items.find((item) => item.id === selectedRequestId) ?? null,
+    [items, selectedRequestId]
+  );
+
+  const actionableCount = useMemo(
+    () =>
+      items.filter(
+        (item) =>
+          item.status === "CREATED" ||
+          item.status === "URGENT_DISPATCH" ||
+          item.status === "PENDING_REVIEW"
+      ).length,
+    [items]
   );
 
   const load = async () => {
@@ -79,54 +95,20 @@ export default function ReviewQueueScreen() {
     setLoading(true);
     setError("");
     try {
-      const data = await graphqlRequest<AllRequestsResponse>(
-        ALL_REQUESTS_QUERY,
-        undefined,
-        session.accessToken
+      const [requestData, serviceData] = await Promise.all([
+        graphqlRequest<AllRequestsResponse>(
+          ALL_REQUESTS_QUERY,
+          undefined,
+          session.accessToken
+        ),
+        graphqlRequest<ServiceDefinitionsResponse>(SERVICE_DEFINITIONS_QUERY)
+      ]);
+      setItems(requestData.getServiceRequests);
+      setServiceNamesById(
+        Object.fromEntries(serviceData.getServiceDefinitions.map((service) => [service.id, service.name]))
       );
-      setItems(data.getServiceRequests);
     } catch (loadError) {
       setError(asErrorMessage(loadError));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleEvaluate = async () => {
-    if (!session) {
-      return;
-    }
-    if (!requestId.trim()) {
-      setError("Vui lòng chọn hoặc nhập mã yêu cầu");
-      return;
-    }
-    if (selectedRequest && selectedRequest.status !== "CREATED") {
-      setError(
-        `Chỉ có thể đánh giá khi yêu cầu ở trạng thái "Mới tạo". Trạng thái hiện tại: ${formatRequestStatus(
-          selectedRequest.status
-        )}.`
-      );
-      return;
-    }
-    const level = Number.parseInt(complexityLevel, 10);
-    if (Number.isNaN(level) || level < 1 || level > 5) {
-      setError("Độ phức tạp phải từ 1 đến 5");
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-    setSuccess("");
-    try {
-      await evaluateComplexity(session.accessToken, requestId.trim(), level);
-      await createActivityLog(session.accessToken, {
-        serviceRequestId: requestId.trim(),
-        action: `Staff evaluated complexity to ${level}`
-      });
-      setSuccess("Đã đánh giá độ phức tạp và ghi log hoạt động");
-      await load();
-    } catch (actionError) {
-      setError(asErrorMessage(actionError));
     } finally {
       setLoading(false);
     }
@@ -135,19 +117,32 @@ export default function ReviewQueueScreen() {
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedStatus, session?.accessToken]);
+  }, [session?.accessToken]);
+
+  useEffect(() => {
+    const nextSelected = filteredItems.find((item) => item.id === selectedRequestId);
+    if (nextSelected) {
+      return;
+    }
+
+    setSelectedRequestId(filteredItems[0]?.id ?? "");
+  }, [filteredItems, selectedRequestId]);
 
   return (
     <ScreenLayout
-      title="Duyệt yêu cầu"
-      subtitle="Staff xem danh sách service request tại đây, rồi nhấn vào thẻ để tự điền mã yêu cầu"
+      title="Yêu cầu chờ xử lý"
+      subtitle="Staff chọn đơn từ đây rồi sang tab Điều phối để chốt độ phức tạp và gán thợ"
     >
       <View style={styles.helperCard}>
-        <Text style={styles.helperTitle}>Cách dùng màn này</Text>
-        <Text style={styles.helperText}>1. Chọn bộ lọc trạng thái ở bên dưới.</Text>
-        <Text style={styles.helperText}>2. Nhấn vào một thẻ yêu cầu để tự điền mã.</Text>
-        <Text style={styles.helperText}>
-          3. Chỉ yêu cầu ở trạng thái “Mới tạo” mới chấm độ phức tạp được.
+        <Text style={styles.helperTitle}>Luồng staff</Text>
+        <Text style={styles.helperText}>1. Xem các yêu cầu mới hoặc khẩn cấp.</Text>
+        <Text style={styles.helperText}>2. Chọn đơn cần xử lý.</Text>
+        <Text style={styles.helperText}>3. Mở tab Điều phối để chốt độ phức tạp và gán thợ.</Text>
+      </View>
+
+      <View style={styles.summaryCard}>
+        <Text style={styles.summaryText}>
+          Đơn staff cần xử lý: {actionableCount} • Tổng số đơn: {items.length}
         </Text>
       </View>
 
@@ -170,70 +165,87 @@ export default function ReviewQueueScreen() {
 
       {loading ? <Text style={styles.loading}>Đang tải danh sách yêu cầu...</Text> : null}
       {!!error ? <Text style={styles.error}>{error}</Text> : null}
-      {!!success ? <Text style={styles.success}>{success}</Text> : null}
-
-      <View style={styles.summaryCard}>
-        <Text style={styles.summaryText}>
-          Đang hiển thị: {filteredItems.length} yêu cầu • Bộ lọc: {statusLabels[selectedStatus]}
-        </Text>
-      </View>
-
-      {filteredItems.map((item) => (
-        <Pressable
-          key={item.id}
-          style={[styles.card, requestId === item.id && styles.cardSelected]}
-          onPress={() => {
-            setRequestId(item.id);
-            setError("");
-            setSuccess("");
-          }}
-        >
-          <Text style={styles.title}>{item.description}</Text>
-          <Text style={styles.meta}>Mã yêu cầu: {item.id}</Text>
-          <Text style={styles.meta}>Khách hàng: {item.customerId}</Text>
-          <Text style={styles.meta}>Trạng thái: {formatRequestStatus(item.status)}</Text>
-          <Text style={styles.meta}>Tạo lúc: {formatDateTime(item.createdAt)}</Text>
-          <Text style={styles.meta}>
-            Độ phức tạp hiện tại: {item.complexity?.level ?? "Chưa có"}
-          </Text>
-          <Text style={styles.tapHint}>Nhấn để tự điền mã yêu cầu bên dưới</Text>
-        </Pressable>
-      ))}
-
-      {!loading && filteredItems.length === 0 ? (
-        <Text style={styles.empty}>
-          Không có service request ở bộ lọc này. Hãy thử chuyển sang “Tất cả”, “Chờ AI
-          phân tích” hoặc “Khẩn cấp”.
-        </Text>
-      ) : null}
 
       <View style={styles.card}>
-        <Text style={styles.title}>Đánh giá độ phức tạp</Text>
-        <LabeledInput
-          label="Mã yêu cầu dịch vụ"
-          value={requestId}
-          onChangeText={setRequestId}
-          placeholder="Nhấn một thẻ ở trên hoặc dán mã thủ công"
-          autoCapitalize="none"
-          hint="Nếu danh sách đang trống thì request đó có thể đang ở trạng thái khác"
-        />
-        <LabeledInput
-          label="Độ phức tạp (1-5)"
-          value={complexityLevel}
-          onChangeText={setComplexityLevel}
-          keyboardType="number-pad"
-        />
-        {selectedRequest ? (
-          <Text style={styles.selectionText}>
-            Yêu cầu đang chọn: {formatRequestStatus(selectedRequest.status)}
-          </Text>
+        <Text style={styles.title}>Danh sách yêu cầu</Text>
+        {filteredItems.map((item) => (
+          <Pressable
+            key={item.id}
+            style={[
+              styles.requestCard,
+              selectedRequestId === item.id && styles.requestCardActive
+            ]}
+            onPress={() => setSelectedRequestId(item.id)}
+          >
+            <Text style={styles.requestTitle}>{item.description}</Text>
+            <Text style={styles.meta}>Mã: {formatShortId(item.id)}</Text>
+            {item.serviceDefinitionId ? (
+              <Text style={styles.meta}>
+                Dịch vụ:{" "}
+                {serviceNamesById[item.serviceDefinitionId] ??
+                  formatShortId(item.serviceDefinitionId)}
+              </Text>
+            ) : null}
+            <Text style={styles.meta}>Trạng thái: {formatRequestStatus(item.status)}</Text>
+            <Text style={styles.meta}>Tạo lúc: {formatDateTime(item.createdAt)}</Text>
+            <Text style={styles.meta}>
+              Độ phức tạp hiện tại: {item.complexity?.level ?? "Chưa có"}
+            </Text>
+            {item.estimatedPrice ? (
+              <Text style={styles.meta}>AI báo giá: {item.estimatedPrice}</Text>
+            ) : null}
+            {item.estimatedDuration ? (
+              <Text style={styles.meta}>AI dự kiến: {item.estimatedDuration}</Text>
+            ) : null}
+          </Pressable>
+        ))}
+        {!loading && filteredItems.length === 0 ? (
+          <Text style={styles.empty}>Không có yêu cầu ở bộ lọc này.</Text>
         ) : null}
-        <ActionButton
-          label={loading ? "Đang đánh giá..." : "Đánh giá + ghi log"}
-          onPress={() => void handleEvaluate()}
-          disabled={loading}
-        />
       </View>
+
+      {selectedRequest ? (
+        <View style={styles.card}>
+          <Text style={styles.title}>Yêu cầu đang chọn</Text>
+          <Text style={styles.requestTitle}>{selectedRequest.description}</Text>
+          <Text style={styles.meta}>Mã: {formatShortId(selectedRequest.id)}</Text>
+          {selectedRequest.serviceDefinitionId ? (
+            <Text style={styles.meta}>
+              Dịch vụ:{" "}
+              {serviceNamesById[selectedRequest.serviceDefinitionId] ??
+                formatShortId(selectedRequest.serviceDefinitionId)}
+            </Text>
+          ) : null}
+          <Text style={styles.meta}>
+            Trạng thái: {formatRequestStatus(selectedRequest.status)}
+          </Text>
+          <Text style={styles.meta}>
+            Nếu đơn còn mới, staff sẽ chốt độ phức tạp ngay trong tab Điều phối.
+          </Text>
+          <View style={styles.actions}>
+            {canOpenDispatch(selectedRequest) ? (
+              <ActionButton
+                label="Mở điều phối cho đơn này"
+                onPress={() =>
+                  navigation.navigate("DispatchCenter", { requestId: selectedRequest.id })
+                }
+              />
+            ) : (
+              <Text style={styles.meta}>
+                Đơn này không còn ở bước điều phối. Staff nên xem lịch sử hoặc theo dõi tiến độ
+                thay vì mở tab điều phối.
+              </Text>
+            )}
+            <ActionButton
+              label="Xem lịch sử của đơn"
+              onPress={() =>
+                navigation.navigate("ActivityMonitor", { requestId: selectedRequest.id })
+              }
+              variant="secondary"
+            />
+          </View>
+        </View>
+      ) : null}
     </ScreenLayout>
   );
 }
@@ -256,6 +268,18 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 13,
     lineHeight: 19
+  },
+  summaryCard: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10
+  },
+  summaryText: {
+    color: colors.textMuted,
+    fontSize: 13
   },
   filterRow: {
     flexDirection: "row",
@@ -282,62 +306,53 @@ const styles = StyleSheet.create({
   filterTextActive: {
     color: colors.primary
   },
-  loading: {
-    color: colors.textMuted
-  },
-  summaryCard: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10
-  },
-  summaryText: {
-    color: colors.textMuted,
-    fontSize: 13
-  },
-  error: {
-    color: colors.danger,
-    fontSize: 13
-  },
-  success: {
-    color: colors.success,
-    fontSize: 13
-  },
   card: {
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 14,
     padding: 14,
-    gap: 5
-  },
-  cardSelected: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySoft
+    gap: 10
   },
   title: {
     color: colors.text,
-    fontWeight: "700"
+    fontWeight: "700",
+    fontSize: 15
+  },
+  requestCard: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 14,
+    padding: 12,
+    gap: 4,
+    backgroundColor: "#fff"
+  },
+  requestCardActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft
+  },
+  requestTitle: {
+    color: colors.text,
+    fontWeight: "700",
+    fontSize: 14
   },
   meta: {
     color: colors.textMuted,
-    fontSize: 12
-  },
-  tapHint: {
-    color: colors.primary,
     fontSize: 12,
-    fontWeight: "600",
-    marginTop: 4
+    lineHeight: 18
   },
-  selectionText: {
-    color: colors.textMuted,
-    fontSize: 12
+  loading: {
+    color: colors.textMuted
+  },
+  error: {
+    color: colors.danger,
+    fontSize: 13
   },
   empty: {
     color: colors.textMuted,
-    textAlign: "center",
-    marginTop: 20
+    textAlign: "center"
+  },
+  actions: {
+    gap: 10
   }
 });

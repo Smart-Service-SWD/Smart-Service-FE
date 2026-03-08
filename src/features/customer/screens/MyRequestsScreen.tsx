@@ -1,22 +1,33 @@
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
+import { useNavigation } from "@react-navigation/native";
 import ScreenLayout from "../../../shared/ui/ScreenLayout";
 import { colors } from "../../../app/theme/colors";
+import type { CustomerTabParamList } from "../../../app/navigation/types";
 import { useAuth } from "../../auth/AuthContext";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
 import {
+  ACTIVITY_LOGS_BY_REQUEST_QUERY,
   FEEDBACK_BY_REQUEST_QUERY,
+  MY_FEEDBACKS_QUERY,
   MY_REQUESTS_QUERY,
-  REQUEST_BY_ID_QUERY
+  REQUEST_BY_ID_QUERY,
+  SERVICE_DEFINITIONS_QUERY
 } from "../../../shared/api/graphqlDocuments";
 import {
   asErrorMessage,
   formatCurrency,
   formatDateTime,
-  formatRequestStatus
+  formatRequestStatus,
+  formatShortId
 } from "../../../shared/utils/format";
-import type { ServiceFeedbackItem, ServiceRequestItem } from "../../../shared/types/domain";
-import LabeledInput from "../../../shared/ui/LabeledInput";
+import type {
+  ActivityLogItem,
+  ServiceFeedbackItem,
+  ServiceDefinition,
+  ServiceRequestItem
+} from "../../../shared/types/domain";
 import ActionButton from "../../../shared/ui/ActionButton";
 
 interface MyRequestsResponse {
@@ -30,6 +41,18 @@ interface RequestByIdResponse {
 interface FeedbackByRequestResponse {
   getFeedbackByServiceRequestId: ServiceFeedbackItem[];
   getAverageRatingByServiceRequestId: number;
+}
+
+interface MyFeedbacksResponse {
+  getMyServiceFeedbacks: ServiceFeedbackItem[];
+}
+
+interface ActivityByRequestResponse {
+  getActivityLogsByServiceRequestId: ActivityLogItem[];
+}
+
+interface ServiceDefinitionsResponse {
+  getServiceDefinitions: ServiceDefinition[];
 }
 
 const filters = [
@@ -46,11 +69,15 @@ const filters = [
 
 export default function MyRequestsScreen() {
   const { session } = useAuth();
+  const navigation = useNavigation<BottomTabNavigationProp<CustomerTabParamList>>();
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [items, setItems] = useState<ServiceRequestItem[]>([]);
   const [detailRequestId, setDetailRequestId] = useState("");
   const [detail, setDetail] = useState<ServiceRequestItem | null>(null);
   const [detailFeedbacks, setDetailFeedbacks] = useState<ServiceFeedbackItem[]>([]);
+  const [activityLogs, setActivityLogs] = useState<ActivityLogItem[]>([]);
+  const [serviceNamesById, setServiceNamesById] = useState<Record<string, string>>({});
+  const [reviewedRequestIds, setReviewedRequestIds] = useState<string[]>([]);
   const [averageRating, setAverageRating] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -62,12 +89,29 @@ export default function MyRequestsScreen() {
     setLoading(true);
     setError("");
     try {
-      const data = await graphqlRequest<MyRequestsResponse, { status?: string | null }>(
-        MY_REQUESTS_QUERY,
-        { status: statusFilter },
-        session.accessToken
+      const [requestData, serviceData, feedbackData] = await Promise.all([
+        graphqlRequest<MyRequestsResponse, { status?: string | null }>(
+          MY_REQUESTS_QUERY,
+          { status: statusFilter },
+          session.accessToken
+        ),
+        graphqlRequest<ServiceDefinitionsResponse>(SERVICE_DEFINITIONS_QUERY),
+        graphqlRequest<MyFeedbacksResponse>(
+          MY_FEEDBACKS_QUERY,
+          undefined,
+          session.accessToken
+        )
+      ]);
+
+      setItems(requestData.getMyServiceRequests);
+      setServiceNamesById(
+        Object.fromEntries(serviceData.getServiceDefinitions.map((service) => [service.id, service.name]))
       );
-      setItems(data.getMyServiceRequests);
+      setReviewedRequestIds(
+        Array.from(
+          new Set(feedbackData.getMyServiceFeedbacks.map((feedback) => feedback.serviceRequestId))
+        )
+      );
     } catch (loadError) {
       setError(asErrorMessage(loadError));
     } finally {
@@ -82,14 +126,14 @@ export default function MyRequestsScreen() {
     const requestId = requestedId ?? detailRequestId;
 
     if (!requestId.trim()) {
-      setError("Vui lòng nhập mã yêu cầu");
+      setError("Hãy chọn một yêu cầu từ danh sách phía trên");
       return;
     }
 
     setLoading(true);
     setError("");
     try {
-      const [requestData, feedbackData] = await Promise.all([
+      const [requestData, feedbackData, activityData] = await Promise.all([
         graphqlRequest<RequestByIdResponse, { id: string }>(
           REQUEST_BY_ID_QUERY,
           { id: requestId.trim() },
@@ -99,6 +143,11 @@ export default function MyRequestsScreen() {
           FEEDBACK_BY_REQUEST_QUERY,
           { serviceRequestId: requestId.trim() },
           session.accessToken
+        ),
+        graphqlRequest<ActivityByRequestResponse, { serviceRequestId: string }>(
+          ACTIVITY_LOGS_BY_REQUEST_QUERY,
+          { serviceRequestId: requestId.trim() },
+          session.accessToken
         )
       ]);
 
@@ -106,6 +155,7 @@ export default function MyRequestsScreen() {
       setDetail(requestData.getServiceRequestById);
       setDetailFeedbacks(feedbackData.getFeedbackByServiceRequestId);
       setAverageRating(feedbackData.getAverageRatingByServiceRequestId);
+      setActivityLogs(activityData.getActivityLogsByServiceRequestId);
     } catch (loadError) {
       setError(asErrorMessage(loadError));
     } finally {
@@ -117,6 +167,23 @@ export default function MyRequestsScreen() {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter, session?.accessToken]);
+
+  useEffect(() => {
+    if (items.length === 0) {
+      setDetailRequestId("");
+      setDetail(null);
+      setDetailFeedbacks([]);
+      setActivityLogs([]);
+      setAverageRating(null);
+      return;
+    }
+
+    const stillVisible = items.some((item) => item.id === detailRequestId);
+    if (!stillVisible) {
+      void loadRequestDetail(items[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items]);
 
   return (
     <ScreenLayout
@@ -148,11 +215,17 @@ export default function MyRequestsScreen() {
       {items.map((item) => (
         <Pressable
           key={item.id}
-          style={styles.card}
+          style={[styles.card, detailRequestId === item.id && styles.cardSelected]}
           onPress={() => void loadRequestDetail(item.id)}
         >
           <Text style={styles.cardTitle}>{item.description}</Text>
           <Text style={styles.meta}>Trạng thái: {formatRequestStatus(item.status)}</Text>
+          {item.serviceDefinitionId ? (
+            <Text style={styles.meta}>
+              Dịch vụ:{" "}
+              {serviceNamesById[item.serviceDefinitionId] ?? formatShortId(item.serviceDefinitionId)}
+            </Text>
+          ) : null}
           <Text style={styles.meta}>Tạo lúc: {formatDateTime(item.createdAt)}</Text>
           <Text style={styles.meta}>
             Độ phức tạp: {item.complexity?.level ?? "Chưa đánh giá"}
@@ -163,8 +236,29 @@ export default function MyRequestsScreen() {
               ? formatCurrency(item.estimatedCost.amount, item.estimatedCost.currency)
               : "Chưa có"}
           </Text>
+          {item.estimatedPrice ? (
+            <Text style={styles.meta}>AI báo giá: {item.estimatedPrice}</Text>
+          ) : null}
+          {item.estimatedDuration ? (
+            <Text style={styles.meta}>AI dự kiến: {item.estimatedDuration}</Text>
+          ) : null}
           {item.addressText ? <Text style={styles.meta}>Địa chỉ: {item.addressText}</Text> : null}
-          <Text style={styles.tapHint}>Nhấn để xem chi tiết và phản hồi</Text>
+          {item.status === "COMPLETED" ? (
+            reviewedRequestIds.includes(item.id) ? (
+              <Text style={styles.feedbackDone}>Đã gửi đánh giá</Text>
+            ) : (
+              <Text
+                style={styles.feedbackHint}
+                onPress={() => {
+                  navigation.navigate("Feedback", { requestId: item.id });
+                }}
+              >
+                ★ Gửi đánh giá →
+              </Text>
+            )
+          ) : (
+            <Text style={styles.tapHint}>Nhấn để xem chi tiết</Text>
+          )}
         </Pressable>
       ))}
 
@@ -174,29 +268,53 @@ export default function MyRequestsScreen() {
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Chi tiết yêu cầu & đánh giá</Text>
-        <LabeledInput
-          label="Mã yêu cầu"
-          value={detailRequestId}
-          onChangeText={setDetailRequestId}
-          placeholder="Dán mã yêu cầu"
-          autoCapitalize="none"
-          hint="Bạn có thể nhấn trực tiếp vào một thẻ ở trên để tự điền mã"
-        />
+        {detailRequestId ? (
+          <Text style={styles.tapHint}>Đang xem: {formatShortId(detailRequestId)}</Text>
+        ) : (
+          <Text style={styles.meta}>Nhấn vào một yêu cầu phía trên để xem chi tiết.</Text>
+        )}
         <ActionButton
-          label={loading ? "Đang tải..." : "Xem chi tiết"}
-          onPress={() => void loadRequestDetail()}
-          disabled={loading}
+          label={loading ? "Đang tải..." : "Tải lại chi tiết đang chọn"}
+          onPress={() => void loadRequestDetail(detailRequestId)}
+          disabled={loading || !detailRequestId}
           variant="secondary"
         />
         {detail ? (
           <View style={styles.detailBox}>
             <Text style={styles.meta}>Trạng thái: {formatRequestStatus(detail.status)}</Text>
+            {detail.serviceDefinitionId ? (
+              <Text style={styles.meta}>
+                Dịch vụ:{" "}
+                {serviceNamesById[detail.serviceDefinitionId] ??
+                  formatShortId(detail.serviceDefinitionId)}
+              </Text>
+            ) : null}
             <Text style={styles.meta}>Mô tả: {detail.description}</Text>
             <Text style={styles.meta}>
               Độ phức tạp: {detail.complexity?.level ?? "Chưa đánh giá"}
             </Text>
+            {detail.estimatedPrice ? (
+              <Text style={styles.meta}>AI báo giá: {detail.estimatedPrice}</Text>
+            ) : null}
+            {detail.estimatedDuration ? (
+              <Text style={styles.meta}>AI dự kiến: {detail.estimatedDuration}</Text>
+            ) : null}
+            {detail.ocrExtractedText ? (
+              <Text style={styles.meta}>OCR: {detail.ocrExtractedText}</Text>
+            ) : null}
             <Text style={styles.meta}>Điểm trung bình: {averageRating ?? 0}</Text>
             <Text style={styles.meta}>Số lượt đánh giá: {detailFeedbacks.length}</Text>
+            <View style={styles.logBox}>
+              <Text style={styles.metaStrong}>Nhật ký gần nhất</Text>
+              {activityLogs.slice(0, 4).map((log) => (
+                <Text key={log.id} style={styles.meta}>
+                  • {formatDateTime(log.createdAt)} · {log.action}
+                </Text>
+              ))}
+              {activityLogs.length === 0 ? (
+                <Text style={styles.meta}>Chưa có nhật ký nào cho yêu cầu này</Text>
+              ) : null}
+            </View>
           </View>
         ) : null}
       </View>
@@ -245,6 +363,10 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 6
   },
+  cardSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft
+  },
   cardTitle: {
     color: colors.text,
     fontWeight: "700"
@@ -257,10 +379,34 @@ const styles = StyleSheet.create({
     gap: 3,
     marginTop: 8
   },
+  logBox: {
+    gap: 4,
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.border
+  },
+  metaStrong: {
+    color: colors.text,
+    fontSize: 12,
+    fontWeight: "700"
+  },
   tapHint: {
     color: colors.primary,
     fontSize: 12,
     fontWeight: "600",
+    marginTop: 6
+  },
+  feedbackHint: {
+    color: colors.success,
+    fontSize: 13,
+    fontWeight: "700",
+    marginTop: 6
+  },
+  feedbackDone: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: "700",
     marginTop: 6
   },
   empty: {

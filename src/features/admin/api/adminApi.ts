@@ -11,6 +11,8 @@ interface CreateServicePayload {
   description?: string | null;
   basePrice: number;
   estimatedDuration: number;
+  complexityRange: number[];
+  isDangerous: boolean;
 }
 
 interface UpdateServicePayload {
@@ -19,6 +21,8 @@ interface UpdateServicePayload {
   basePrice: number;
   estimatedDuration: number;
   isActive: boolean;
+  complexityRange?: number[];
+  isDangerous?: boolean;
 }
 
 interface UpdateRolePayload {

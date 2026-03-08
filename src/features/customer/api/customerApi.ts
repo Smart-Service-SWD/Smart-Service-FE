@@ -1,21 +1,5 @@
 import { httpRequest } from "../../../shared/api/httpClient";
 
-export interface AnalyzeResult {
-  complexity: number;
-  userMessage: {
-    summary: string;
-    riskExplanation: string;
-    safetyAdvice: string;
-  };
-  dispatchRules: {
-    requiredSkillLevel: number;
-    minExperienceYears: number;
-    requiresCertification: boolean;
-    requiresSeniorTechnician: boolean;
-    riskWeight: number;
-  };
-}
-
 export interface RequestImageAsset {
   uri: string;
   fileName?: string | null;
@@ -25,6 +9,7 @@ export interface RequestImageAsset {
 export interface CreateRequestPayload {
   customerId: string;
   categoryId: string;
+  serviceDefinitionId: string;
   description: string;
   addressText?: string | null;
   image?: RequestImageAsset | null;
@@ -47,10 +32,16 @@ interface CreateAttachmentPayload {
 export interface CreateServiceRequestResult {
   serviceRequestId: string;
   aiComplexityLevel?: number | null;
+  aiUrgencyLevel?: number | null;
   aiSummary?: string | null;
+  aiProblemDiagnosis?: string | null;
   aiRiskExplanation?: string | null;
+  aiSafetyAdvice?: string | null;
+  estimatedPrice?: string | null;
+  estimatedDuration?: string | null;
   ocrExtractedText?: string | null;
   wasAnalyzedByAI: boolean;
+  isDangerFlagged: boolean;
 }
 
 const appendImage = (formData: FormData, image: RequestImageAsset) => {
@@ -67,29 +58,6 @@ const appendImage = (formData: FormData, image: RequestImageAsset) => {
   );
 };
 
-export const analyzeServiceText = (
-  description: string,
-  image?: RequestImageAsset | null
-): Promise<AnalyzeResult> => {
-  if (!image) {
-    return httpRequest<AnalyzeResult>({
-      path: "/api/service-analysis",
-      method: "POST",
-      body: { description }
-    });
-  }
-
-  const formData = new FormData();
-  formData.append("description", description);
-  appendImage(formData, image);
-
-  return httpRequest<AnalyzeResult>({
-    path: "/api/service-analysis/analyze-with-image",
-    method: "POST",
-    body: formData
-  });
-};
-
 export const createServiceRequest = (
   token: string,
   payload: CreateRequestPayload
@@ -97,6 +65,7 @@ export const createServiceRequest = (
   const formData = new FormData();
   formData.append("customerId", payload.customerId);
   formData.append("categoryId", payload.categoryId);
+  formData.append("serviceDefinitionId", payload.serviceDefinitionId);
   formData.append("description", payload.description);
   if (payload.addressText?.trim()) {
     formData.append("addressText", payload.addressText.trim());

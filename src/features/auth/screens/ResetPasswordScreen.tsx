@@ -47,11 +47,23 @@ export default function ResetPasswordScreen({
   }, [navigation, success]);
 
   const onSubmit = async () => {
-    if (!email.trim() || !otp.trim() || !newPassword.trim()) {
+    const normalizedEmail = email.trim();
+    const normalizedOtp = otp.trim();
+    const normalizedNewPassword = newPassword.trim();
+
+    if (!normalizedEmail || !normalizedOtp || !normalizedNewPassword) {
       setError("Vui lòng nhập đủ email, OTP và mật khẩu mới.");
       return;
     }
-    if (newPassword.trim().length < 6) {
+    if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
+      setError("Email không hợp lệ.");
+      return;
+    }
+    if (!/^\d{6}$/.test(normalizedOtp)) {
+      setError("OTP phải gồm đúng 6 chữ số.");
+      return;
+    }
+    if (normalizedNewPassword.length < 6) {
       setError("Mật khẩu mới phải có ít nhất 6 ký tự.");
       return;
     }
@@ -62,8 +74,8 @@ export default function ResetPasswordScreen({
 
     try {
       const result = await resetPasswordApi({
-        email: email.trim(),
-        otp: otp.trim(),
+        email: normalizedEmail,
+        otp: normalizedOtp,
         newPassword
       });
       setSuccess(`${result.message} Đang quay lại màn hình đăng nhập...`);
@@ -102,6 +114,7 @@ export default function ResetPasswordScreen({
           onChangeText={setOtp}
           keyboardType="number-pad"
           placeholder="6 chữ số"
+          maxLength={6}
         />
         <LabeledInput
           label="Mật khẩu mới"
@@ -123,7 +136,9 @@ export default function ResetPasswordScreen({
         />
         <ActionButton
           label="Gửi lại OTP"
-          onPress={() => navigation.navigate("ForgotPassword")}
+          onPress={() =>
+            navigation.navigate("ForgotPassword", { email: email.trim() || undefined })
+          }
           variant="secondary"
         />
         <ActionButton

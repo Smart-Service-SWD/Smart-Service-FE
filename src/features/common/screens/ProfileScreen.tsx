@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from "react-native";
 import ScreenLayout from "../../../shared/ui/ScreenLayout";
 import { colors } from "../../../app/theme/colors";
 import { useAuth } from "../../auth/AuthContext";
+import { ApiError } from "../../../shared/api/httpClient";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
 import { ME_QUERY } from "../../../shared/api/graphqlDocuments";
 import {
@@ -29,6 +30,7 @@ export default function ProfileScreen() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
 
   const load = async () => {
     if (!session) {
@@ -69,13 +71,22 @@ export default function ProfileScreen() {
     if (!session) {
       return;
     }
+
+    const normalizedFullName = fullName.trim();
+    const normalizedPhoneNumber = phoneNumber.trim();
+
+    if (!normalizedFullName || !normalizedPhoneNumber) {
+      setError("Họ tên và số điện thoại không được để trống.");
+      return;
+    }
+
     setBusy(true);
     setError("");
     setSuccess("");
     try {
       await updateProfile(session.accessToken, {
-        fullName,
-        phoneNumber
+        fullName: normalizedFullName,
+        phoneNumber: normalizedPhoneNumber
       });
       setSuccess("Đã cập nhật hồ sơ");
       await load();
@@ -90,6 +101,25 @@ export default function ProfileScreen() {
     if (!session) {
       return;
     }
+
+    if (!currentPassword || !newPassword) {
+      setError("Vui lòng nhập cả mật khẩu hiện tại và mật khẩu mới.");
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setError("Mật khẩu mới phải có ít nhất 6 ký tự.");
+      return;
+    }
+    if (newPassword === currentPassword) {
+      setError("Mật khẩu mới cần khác mật khẩu hiện tại.");
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setError("Mật khẩu nhập lại chưa khớp.");
+      return;
+    }
+
     setBusy(true);
     setError("");
     setSuccess("");
@@ -100,8 +130,16 @@ export default function ProfileScreen() {
       });
       setCurrentPassword("");
       setNewPassword("");
+      setConfirmNewPassword("");
       setSuccess("Đã đổi mật khẩu");
     } catch (passwordError) {
+      if (
+        passwordError instanceof ApiError &&
+        passwordError.errorCode === "AUTH_401_INVALID_CREDENTIALS"
+      ) {
+        setError("Mật khẩu hiện tại không đúng.");
+        return;
+      }
       setError(asErrorMessage(passwordError));
     } finally {
       setBusy(false);
@@ -160,6 +198,13 @@ export default function ProfileScreen() {
           label="Mật khẩu mới"
           value={newPassword}
           onChangeText={setNewPassword}
+          secureTextEntry
+          hint="Ít nhất 6 ký tự và nên khác mật khẩu hiện tại."
+        />
+        <LabeledInput
+          label="Nhập lại mật khẩu mới"
+          value={confirmNewPassword}
+          onChangeText={setConfirmNewPassword}
           secureTextEntry
         />
         <ActionButton

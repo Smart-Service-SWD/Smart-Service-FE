@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import ScreenLayout from "../../../shared/ui/ScreenLayout";
@@ -15,16 +15,29 @@ type ForgotPasswordScreenProps = NativeStackScreenProps<
 >;
 
 export default function ForgotPasswordScreen({
+  route,
   navigation
 }: ForgotPasswordScreenProps) {
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(route.params?.email ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  useEffect(() => {
+    if (route.params?.email) {
+      setEmail(route.params.email);
+    }
+  }, [route.params?.email]);
+
   const onSubmit = async () => {
-    if (!email.trim()) {
+    const normalizedEmail = email.trim();
+
+    if (!normalizedEmail) {
       setError("Vui lòng nhập email.");
+      return;
+    }
+    if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
+      setError("Email không hợp lệ.");
       return;
     }
 
@@ -33,7 +46,7 @@ export default function ForgotPasswordScreen({
     setSuccess("");
 
     try {
-      const result = await forgotPasswordApi({ email: email.trim() });
+      const result = await forgotPasswordApi({ email: normalizedEmail });
       setSuccess(result.message);
     } catch (submissionError) {
       setError(asErrorMessage(submissionError));
@@ -74,7 +87,9 @@ export default function ForgotPasswordScreen({
         />
         <ActionButton
           label="Tôi đã có OTP"
-          onPress={() => navigation.navigate("ResetPassword", { email: email.trim() || undefined })}
+          onPress={() =>
+            navigation.navigate("ResetPassword", { email: email.trim() || undefined })
+          }
           variant="secondary"
         />
         <ActionButton

@@ -23,6 +23,15 @@ export const formatCurrency = (
 
 export const asErrorMessage = (error: unknown): string => {
   if (error instanceof ApiError) {
+    const normalizedMessage = error.message.toLowerCase();
+
+    if (
+      normalizedMessage.includes("valueobjects.money") ||
+      normalizedMessage.includes("$.estimatedcost")
+    ) {
+      return "Hệ thống đang lỗi khi nhận chi phí ước tính. Hãy cập nhật/restart BE rồi thử phân công lại.";
+    }
+
     if (error.errorCode === "AUTH_401_INVALID_CREDENTIALS") {
       return "Email hoặc mật khẩu không đúng.";
     }
@@ -32,7 +41,6 @@ export const asErrorMessage = (error: unknown): string => {
     }
 
     if (error.errorCode === "AUTH_401_UNAUTHORIZED") {
-      const normalizedMessage = error.message.toLowerCase();
       if (normalizedMessage.includes("locked")) {
         return "Tài khoản này đã bị khóa bởi quản trị viên.";
       }
@@ -99,3 +107,15 @@ export const formatBooleanLabel = (
   truthyLabel: string = "Có",
   falsyLabel: string = "Không"
 ): string => (value ? truthyLabel : falsyLabel);
+
+export const formatShortId = (value?: string | null): string => {
+  if (!value) {
+    return "-";
+  }
+
+  if (value.length <= 12) {
+    return value;
+  }
+
+  return `${value.slice(0, 8)}…${value.slice(-4)}`;
+};

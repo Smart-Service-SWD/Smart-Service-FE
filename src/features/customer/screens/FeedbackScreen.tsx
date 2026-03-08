@@ -1,41 +1,104 @@
-import { useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
+import type { RouteProp } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import ScreenLayout from "../../../shared/ui/ScreenLayout";
 import { colors } from "../../../app/theme/colors";
 import { useAuth } from "../../auth/AuthContext";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
-import { MY_FEEDBACKS_QUERY } from "../../../shared/api/graphqlDocuments";
-import { asErrorMessage, formatDateTime } from "../../../shared/utils/format";
-import type { ServiceFeedbackItem } from "../../../shared/types/domain";
+import { MY_FEEDBACKS_QUERY, MY_REQUESTS_QUERY } from "../../../shared/api/graphqlDocuments";
+import { asErrorMessage, formatDateTime, formatShortId } from "../../../shared/utils/format";
+import type { ServiceFeedbackItem, ServiceRequestItem } from "../../../shared/types/domain";
 import LabeledInput from "../../../shared/ui/LabeledInput";
 import ActionButton from "../../../shared/ui/ActionButton";
 import { createServiceFeedback } from "../api/customerApi";
+import type { CustomerTabParamList } from "../../../app/navigation/types";
 
 interface MyFeedbackResponse {
   getMyServiceFeedbacks: ServiceFeedbackItem[];
 }
 
+interface CompletedRequestsResponse {
+  getMyServiceRequests: ServiceRequestItem[];
+}
+
 export default function FeedbackScreen() {
   const { session } = useAuth();
-  const [requestId, setRequestId] = useState("");
+  const route = useRoute<RouteProp<CustomerTabParamList, "Feedback">>();
+  const navigation = useNavigation<BottomTabNavigationProp<CustomerTabParamList>>();
+  const [requestId, setRequestId] = useState(route.params?.requestId ?? "");
   const [rating, setRating] = useState("5");
   const [comment, setComment] = useState("");
   const [items, setItems] = useState<ServiceFeedbackItem[]>([]);
+  const [completedRequests, setCompletedRequests] = useState<ServiceRequestItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  const reviewedRequestIds = useMemo(
+    () => new Set(items.map((item) => item.serviceRequestId)),
+    [items]
+  );
+
+  const availableRequests = useMemo(
+    () => completedRequests.filter((item) => !reviewedRequestIds.has(item.id)),
+    [completedRequests, reviewedRequestIds]
+  );
+
+  const requestLabelsById = useMemo(
+    () =>
+      Object.fromEntries(
+        completedRequests.map((item) => [item.id, item.description])
+      ),
+    [completedRequests]
+  );
+
+  const selectedRequest =
+    availableRequests.find((item) => item.id === requestId) ?? null;
 
   const load = async () => {
     if (!session) {
       return;
     }
     try {
-      const data = await graphqlRequest<MyFeedbackResponse>(
-        MY_FEEDBACKS_QUERY,
-        undefined,
-        session.accessToken
-      );
-      setItems(data.getMyServiceFeedbacks);
+      const [feedbackData, requestData] = await Promise.all([
+        graphqlRequest<MyFeedbackResponse>(
+          MY_FEEDBACKS_QUERY,
+          undefined,
+          session.accessToken
+        ),
+        graphqlRequest<CompletedRequestsResponse, { status?: string | null }>(
+          MY_REQUESTS_QUERY,
+          { status: "COMPLETED" },
+          session.accessToken
+        )
+      ]);
+
+      setItems(feedbackData.getMyServiceFeedbacks);
+      setCompletedRequests(requestData.getMyServiceRequests);
+      const availableRequestIds = requestData.getMyServiceRequests
+        .filter(
+          (request) =>
+            !feedbackData.getMyServiceFeedbacks.some(
+              (feedback) => feedback.serviceRequestId === request.id
+            )
+        )
+        .map((request) => request.id);
+
+      setRequestId((current) => {
+        const routeRequestId = route.params?.requestId;
+
+        if (current && availableRequestIds.includes(current)) {
+          return current;
+        }
+
+        if (routeRequestId && availableRequestIds.includes(routeRequestId)) {
+          return routeRequestId;
+        }
+
+        return availableRequestIds[0] ?? "";
+      });
     } catch (loadError) {
       setError(asErrorMessage(loadError));
     }
@@ -45,6 +108,24 @@ export default function FeedbackScreen() {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.accessToken]);
+
+  // Sync requestId when navigated with params (e.g. from MyRequests)
+  useEffect(() => {
+    if (route.params?.requestId) {
+      const nextRequestId = route.params.requestId;
+      if (availableRequests.some((item) => item.id === nextRequestId)) {
+        setRequestId(nextRequestId);
+        setError("");
+      } else if (reviewedRequestIds.has(nextRequestId)) {
+        setError("Yêu cầu này đã được đánh giá rồi.");
+      } else {
+        setError("Chỉ có thể đánh giá các yêu cầu đã hoàn thành.");
+      }
+      // Reset param to avoid re-setting on subsequent focus
+      navigation.setParams({ requestId: undefined });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableRequests, navigation, reviewedRequestIds, route.params?.requestId]);
 
   const handleCreate = async () => {
     if (!session) {
@@ -57,7 +138,11 @@ export default function FeedbackScreen() {
       return;
     }
     if (!requestId.trim()) {
-      setError("Vui lòng nhập mã yêu cầu dịch vụ");
+      setError("Hãy chọn một yêu cầu đã hoàn thành để đánh giá");
+      return;
+    }
+    if (reviewedRequestIds.has(requestId.trim())) {
+      setError("Yêu cầu này đã được đánh giá rồi.");
       return;
     }
 
@@ -95,13 +180,36 @@ export default function FeedbackScreen() {
 
       <View style={styles.card}>
         <Text style={styles.title}>Tạo đánh giá mới</Text>
-        <LabeledInput
-          label="Mã yêu cầu dịch vụ"
-          value={requestId}
-          onChangeText={setRequestId}
-          placeholder="Dán mã yêu cầu đã hoàn thành"
-          autoCapitalize="none"
-        />
+        <Text style={styles.rowMeta}>Chọn yêu cầu đã hoàn thành và chưa đánh giá.</Text>
+        {availableRequests.map((item) => {
+          const active = item.id === requestId;
+
+          return (
+            <Pressable
+              key={item.id}
+              style={[styles.row, active && styles.rowActive]}
+              onPress={() => setRequestId(item.id)}
+            >
+              <Text style={styles.rowTitle}>{item.description}</Text>
+              <Text style={styles.rowMeta}>Mã: {formatShortId(item.id)}</Text>
+              <Text style={styles.rowMeta}>
+                Tạo yêu cầu lúc: {formatDateTime(item.createdAt)}
+              </Text>
+            </Pressable>
+          );
+        })}
+        {!completedRequests.length ? (
+          <Text style={styles.rowMeta}>Chưa có yêu cầu hoàn thành nào để đánh giá.</Text>
+        ) : !availableRequests.length ? (
+          <Text style={styles.rowMeta}>
+            Tất cả yêu cầu hoàn thành của bạn đã được đánh giá.
+          </Text>
+        ) : null}
+        {selectedRequest ? (
+          <Text style={styles.selectedText}>
+            Đang đánh giá: {selectedRequest.description}
+          </Text>
+        ) : null}
         <LabeledInput
           label="Điểm đánh giá (1-5)"
           value={rating}
@@ -119,7 +227,7 @@ export default function FeedbackScreen() {
         <ActionButton
           label={busy ? "Đang gửi..." : "Gửi đánh giá"}
           onPress={() => void handleCreate()}
-          disabled={busy}
+          disabled={busy || !requestId}
         />
       </View>
 
@@ -130,7 +238,10 @@ export default function FeedbackScreen() {
         <Text style={styles.title}>Đánh giá của tôi ({items.length})</Text>
         {items.map((item) => (
           <View key={item.id} style={styles.row}>
-            <Text style={styles.rowTitle}>Yêu cầu: {item.serviceRequestId}</Text>
+            <Text style={styles.rowTitle}>
+              Yêu cầu: {requestLabelsById[item.serviceRequestId] ?? formatShortId(item.serviceRequestId)}
+            </Text>
+            <Text style={styles.rowMeta}>Mã: {formatShortId(item.serviceRequestId)}</Text>
             <Text style={styles.rowMeta}>Điểm: {item.rating}/5</Text>
             <Text style={styles.rowMeta}>Nhận xét: {item.comment || "-"}</Text>
             <Text style={styles.rowMeta}>Tạo lúc: {formatDateTime(item.createdAt)}</Text>
@@ -185,6 +296,10 @@ const styles = StyleSheet.create({
     gap: 2,
     backgroundColor: "#fff"
   },
+  rowActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft
+  },
   rowTitle: {
     color: colors.text,
     fontWeight: "700",
@@ -193,5 +308,10 @@ const styles = StyleSheet.create({
   rowMeta: {
     color: colors.textMuted,
     fontSize: 12
+  },
+  selectedText: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: "700"
   }
 });

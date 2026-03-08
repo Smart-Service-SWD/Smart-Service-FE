@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import ScreenLayout from "../../../shared/ui/ScreenLayout";
 import { colors } from "../../../app/theme/colors";
 import { useAuth } from "../../auth/AuthContext";
@@ -7,17 +7,24 @@ import { graphqlRequest } from "../../../shared/api/graphqlClient";
 import {
   AGENT_ASSIGNMENTS_QUERY,
   REQUEST_BY_ID_QUERY,
-  SERVICE_AGENTS_QUERY
+  SERVICE_AGENTS_QUERY,
+  SERVICE_DEFINITIONS_QUERY
 } from "../../../shared/api/graphqlDocuments";
 import {
   asErrorMessage,
   formatCurrency,
-  formatDateTime
+  formatDateTime,
+  formatRequestStatus,
+  formatShortId
 } from "../../../shared/utils/format";
 import type { AssignmentItem, ServiceRequestItem } from "../../../shared/types/domain";
-import type { ServiceAgentItem } from "../../../shared/types/domain";
-import LabeledInput from "../../../shared/ui/LabeledInput";
+import type { ServiceAgentItem, ServiceDefinition } from "../../../shared/types/domain";
 import ActionButton from "../../../shared/ui/ActionButton";
+import {
+  completeInProgressRequest,
+  createActivityLog,
+  startAssignedRequest
+} from "../api/agentApi";
 
 interface AssignmentResponse {
   getAssignmentsByAgentId: AssignmentItem[];
@@ -31,15 +38,21 @@ interface ServiceAgentsResponse {
   getServiceAgents: ServiceAgentItem[];
 }
 
+interface ServiceDefinitionsResponse {
+  getServiceDefinitions: ServiceDefinition[];
+}
+
 export default function AssignmentsScreen() {
   const { session } = useAuth();
   const [items, setItems] = useState<AssignmentItem[]>([]);
   const [detailRequestId, setDetailRequestId] = useState("");
   const [detail, setDetail] = useState<ServiceRequestItem | null>(null);
   const [linkedServiceAgent, setLinkedServiceAgent] = useState<ServiceAgentItem | null>(null);
+  const [serviceNamesById, setServiceNamesById] = useState<Record<string, string>>({});
   const [bindingMessage, setBindingMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const load = async () => {
     if (!session) {
@@ -50,21 +63,30 @@ export default function AssignmentsScreen() {
     setError("");
     setBindingMessage("");
     try {
-      const serviceAgentData = await graphqlRequest<ServiceAgentsResponse>(
-        SERVICE_AGENTS_QUERY,
-        undefined,
-        session.accessToken
-      );
+      const [serviceAgentData, serviceDefinitionData] = await Promise.all([
+        graphqlRequest<ServiceAgentsResponse>(
+          SERVICE_AGENTS_QUERY,
+          undefined,
+          session.accessToken
+        ),
+        graphqlRequest<ServiceDefinitionsResponse>(SERVICE_DEFINITIONS_QUERY)
+      ]);
       const linkedAgent =
         serviceAgentData.getServiceAgents.find((agent) => agent.userId === session.userId) ??
         null;
+
+      setServiceNamesById(
+        Object.fromEntries(
+          serviceDefinitionData.getServiceDefinitions.map((service) => [service.id, service.name])
+        )
+      );
 
       setLinkedServiceAgent(linkedAgent);
 
       if (!linkedAgent) {
         setItems([]);
         setBindingMessage(
-          "Tài khoản này chưa được liên kết với ServiceAgent trong BE nên chưa thể tải assignment."
+          "Tài khoản này chưa được gắn với hồ sơ thợ kỹ thuật, nên chưa thể tải danh sách công việc."
         );
         return;
       }
@@ -82,12 +104,14 @@ export default function AssignmentsScreen() {
     }
   };
 
-  const loadRequestDetail = async () => {
+  const loadRequestDetail = async (requestedId?: string) => {
     if (!session) {
       return;
     }
-    if (!detailRequestId.trim()) {
-      setError("Request ID is required");
+
+    const requestId = requestedId ?? detailRequestId;
+    if (!requestId.trim()) {
+      setError("Hãy chọn một công việc từ danh sách phía trên");
       return;
     }
 
@@ -96,12 +120,62 @@ export default function AssignmentsScreen() {
     try {
       const data = await graphqlRequest<RequestByIdResponse, { id: string }>(
         REQUEST_BY_ID_QUERY,
-        { id: detailRequestId.trim() },
+        { id: requestId.trim() },
         session.accessToken
       );
+      setDetailRequestId(requestId.trim());
       setDetail(data.getServiceRequestById);
     } catch (loadError) {
       setError(asErrorMessage(loadError));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStatusChange = async (targetStatus: "IN_PROGRESS" | "COMPLETED") => {
+    if (!session || !detail) {
+      setError("Hãy chọn công việc cần cập nhật.");
+      return;
+    }
+
+    if (targetStatus === "IN_PROGRESS" && detail.status !== "ASSIGNED") {
+      setError("Chỉ có thể bắt đầu khi công việc đang ở trạng thái Đã phân công.");
+      return;
+    }
+
+    if (targetStatus === "COMPLETED" && detail.status !== "IN_PROGRESS") {
+      setError("Chỉ có thể hoàn thành khi công việc đang ở trạng thái Đang thực hiện.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    setSuccess("");
+    try {
+      const successMessage =
+        targetStatus === "IN_PROGRESS"
+          ? "Đã chuyển công việc sang trạng thái Đang thực hiện."
+          : "Đã hoàn thành công việc.";
+
+      if (targetStatus === "IN_PROGRESS") {
+        await startAssignedRequest(session.accessToken, detail.id);
+        await createActivityLog(session.accessToken, {
+          serviceRequestId: detail.id,
+          action: `Agent ${linkedServiceAgent?.id ?? session.userId} started work`
+        });
+      } else {
+        await completeInProgressRequest(session.accessToken, detail.id);
+        await createActivityLog(session.accessToken, {
+          serviceRequestId: detail.id,
+          action: `Agent ${linkedServiceAgent?.id ?? session.userId} completed work`
+        });
+      }
+
+      await load();
+      await loadRequestDetail(detail.id);
+      setSuccess(successMessage);
+    } catch (actionError) {
+      setError(asErrorMessage(actionError));
     } finally {
       setLoading(false);
     }
@@ -112,56 +186,109 @@ export default function AssignmentsScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.accessToken]);
 
+  useEffect(() => {
+    if (!items.length) {
+      setDetailRequestId("");
+      setDetail(null);
+      return;
+    }
+
+    const stillExists = items.some((item) => item.serviceRequestId === detailRequestId);
+    if (!stillExists) {
+      void loadRequestDetail(items[0].serviceRequestId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items]);
+
   return (
-    <ScreenLayout title="Assignments" subtitle="Agent view from GraphQL">
-      {loading ? <Text style={styles.loading}>Loading...</Text> : null}
+    <ScreenLayout title="Công việc của tôi" subtitle="Danh sách công việc được phân công">
+      {loading ? <Text style={styles.loading}>Đang tải...</Text> : null}
       {!!error ? <Text style={styles.error}>{error}</Text> : null}
+      {!!success ? <Text style={styles.success}>{success}</Text> : null}
       {!!bindingMessage ? <Text style={styles.info}>{bindingMessage}</Text> : null}
 
       <View style={styles.card}>
-        <Text style={styles.title}>Linked Service Agent</Text>
-        <Text style={styles.meta}>User ID: {session?.userId ?? "-"}</Text>
-        <Text style={styles.meta}>ServiceAgent ID: {linkedServiceAgent?.id ?? "-"}</Text>
-        <Text style={styles.meta}>Tên hiển thị: {linkedServiceAgent?.fullName ?? "-"}</Text>
+        <Text style={styles.title}>Thông tin nhận việc</Text>
+        <Text style={styles.meta}>Thợ đang đăng nhập: {linkedServiceAgent?.fullName ?? "-"}</Text>
+        <Text style={styles.meta}>
+          Trạng thái: {linkedServiceAgent ? "Sẵn sàng nhận công việc" : "Chưa có hồ sơ thợ"}
+        </Text>
       </View>
 
       {items.map((item) => (
-        <View key={item.id} style={styles.card}>
-          <Text style={styles.title}>Request: {item.serviceRequestId}</Text>
-          <Text style={styles.meta}>Assigned: {formatDateTime(item.assignedAt)}</Text>
+        <Pressable
+          key={item.id}
+          style={[styles.card, detailRequestId === item.serviceRequestId && styles.cardSelected]}
+          onPress={() => void loadRequestDetail(item.serviceRequestId)}
+        >
+          <Text style={styles.title}>Công việc {formatShortId(item.serviceRequestId)}</Text>
+          <Text style={styles.meta}>Phân công lúc: {formatDateTime(item.assignedAt)}</Text>
           <Text style={styles.meta}>
-            Estimated: {formatCurrency(item.estimatedCost.amount, item.estimatedCost.currency)}
+            Ước tính: {formatCurrency(item.estimatedCost.amount, item.estimatedCost.currency)}
           </Text>
-        </View>
+        </Pressable>
       ))}
 
       {!loading && items.length === 0 ? (
-        <Text style={styles.empty}>No assignments available</Text>
+        <Text style={styles.empty}>Chưa có công việc nào</Text>
       ) : null}
 
       <View style={styles.card}>
-        <Text style={styles.title}>Request Detail Lookup</Text>
-        <LabeledInput
-          label="Request ID"
-          value={detailRequestId}
-          onChangeText={setDetailRequestId}
-          placeholder="Paste request ID from assignment"
-          autoCapitalize="none"
-        />
+        <Text style={styles.title}>Chi tiết công việc</Text>
+        {detailRequestId ? (
+          <Text style={styles.selected}>Đang xem công việc: {formatShortId(detailRequestId)}</Text>
+        ) : (
+          <Text style={styles.hint}>Nhấn vào một công việc phía trên để xem chi tiết</Text>
+        )}
         <ActionButton
-          label={loading ? "Loading..." : "Load Request Detail"}
-          onPress={() => void loadRequestDetail()}
-          disabled={loading}
+          label={loading ? "Đang tải..." : "Tải lại yêu cầu đang chọn"}
+          onPress={() => void loadRequestDetail(detailRequestId)}
+          disabled={loading || !detailRequestId}
           variant="secondary"
         />
         {detail ? (
           <View style={styles.detail}>
-            <Text style={styles.meta}>Status: {detail.status}</Text>
-            <Text style={styles.meta}>Description: {detail.description}</Text>
             <Text style={styles.meta}>
-              Complexity: {detail.complexity?.level ?? "Not evaluated"}
+              Trạng thái: {formatRequestStatus(detail.status)}
             </Text>
-            <Text style={styles.meta}>Address: {detail.addressText || "-"}</Text>
+            {detail.serviceDefinitionId ? (
+              <Text style={styles.meta}>
+                Dịch vụ:{" "}
+                {serviceNamesById[detail.serviceDefinitionId] ??
+                  formatShortId(detail.serviceDefinitionId)}
+              </Text>
+            ) : null}
+            <Text style={styles.meta}>Mô tả: {detail.description}</Text>
+            <Text style={styles.meta}>
+              Độ phức tạp: {detail.complexity?.level ?? "Chưa đánh giá"}
+            </Text>
+            <Text style={styles.meta}>Địa chỉ: {detail.addressText || "-"}</Text>
+            <View style={styles.actionGroup}>
+              {detail.status === "ASSIGNED" ? (
+                <ActionButton
+                  label={loading ? "Đang bắt đầu..." : "Bắt đầu làm việc"}
+                  onPress={() => void handleStatusChange("IN_PROGRESS")}
+                  disabled={loading}
+                />
+              ) : null}
+              {detail.status === "IN_PROGRESS" ? (
+                <ActionButton
+                  label={loading ? "Đang hoàn thành..." : "Hoàn thành công việc"}
+                  onPress={() => void handleStatusChange("COMPLETED")}
+                  disabled={loading}
+                />
+              ) : null}
+              {detail.status === "COMPLETED" ? (
+                <Text style={styles.info}>Công việc này đã hoàn thành.</Text>
+              ) : null}
+              {detail.status !== "ASSIGNED" &&
+              detail.status !== "IN_PROGRESS" &&
+              detail.status !== "COMPLETED" ? (
+                <Text style={styles.hint}>
+                  Nút thao tác chỉ hiện khi công việc đã được phân công hoặc đang thực hiện.
+                </Text>
+              ) : null}
+            </View>
           </View>
         ) : null}
       </View>
@@ -179,6 +306,10 @@ const styles = StyleSheet.create({
   },
   info: {
     color: colors.textMuted,
+    fontSize: 13
+  },
+  success: {
+    color: colors.success,
     fontSize: 13
   },
   card: {
@@ -201,9 +332,27 @@ const styles = StyleSheet.create({
     marginTop: 8,
     gap: 3
   },
+  actionGroup: {
+    gap: 10,
+    marginTop: 10
+  },
   empty: {
     color: colors.textMuted,
     textAlign: "center",
     marginTop: 20
+  },
+  cardSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft
+  },
+  selected: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: "700"
+  },
+  hint: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontStyle: "italic"
   }
 });

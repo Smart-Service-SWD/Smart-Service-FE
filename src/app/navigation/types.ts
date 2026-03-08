@@ -5,7 +5,11 @@ export type AuthStackParamList = {
       }
     | undefined;
   Register: undefined;
-  ForgotPassword: undefined;
+  ForgotPassword:
+    | {
+        email?: string;
+      }
+    | undefined;
   ResetPassword: {
     email?: string;
   } | undefined;
@@ -15,7 +19,7 @@ export type CustomerTabParamList = {
   Home: undefined;
   CreateRequest: undefined;
   MyRequests: undefined;
-  Feedback: undefined;
+  Feedback: { requestId?: string } | undefined;
   Profile: undefined;
 };
 
@@ -27,8 +31,8 @@ export type AgentTabParamList = {
 
 export type StaffTabParamList = {
   ReviewQueue: undefined;
-  DispatchCenter: undefined;
-  ActivityMonitor: undefined;
+  DispatchCenter: { requestId?: string } | undefined;
+  ActivityMonitor: { requestId?: string } | undefined;
   Profile: undefined;
 };
 

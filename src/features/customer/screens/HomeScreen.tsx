@@ -23,6 +23,14 @@ interface ActiveAgentResponse {
   getActiveServiceAgents: ServiceAgentItem[];
 }
 
+const formatComplexityRange = (range?: number[] | null): string => {
+  if (!range || range.length < 2) {
+    return "1-3";
+  }
+
+  return `${range[0]}-${range[1]}`;
+};
+
 export default function HomeScreen() {
   const navigation = useNavigation<BottomTabNavigationProp<CustomerTabParamList>>();
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
@@ -40,7 +48,7 @@ export default function HomeScreen() {
         graphqlRequest<ActiveAgentResponse>(ACTIVE_SERVICE_AGENTS_QUERY)
       ]);
       setCategories(homeData.getServiceCategories);
-      setServices(homeData.getServiceDefinitions);
+      setServices(homeData.getServiceDefinitions.filter((service) => service.isActive));
       setActiveAgents(agentData.getActiveServiceAgents);
     } catch (loadError) {
       setError(asErrorMessage(loadError));
@@ -56,13 +64,13 @@ export default function HomeScreen() {
   return (
     <ScreenLayout
       title="Trung tâm dịch vụ"
-      subtitle="Theo dõi dịch vụ, tạo yêu cầu mới và thao tác nhanh ngay trên FE"
+      subtitle="Theo dõi dịch vụ, tạo yêu cầu mới và thao tác nhanh trên ứng dụng"
     >
       {loading ? <ActivityIndicator color={colors.primary} /> : null}
       {!!error ? <Text style={styles.error}>{error}</Text> : null}
 
       <View style={styles.heroCard}>
-        <Text style={styles.sectionTitle}>Hướng dẫn thao tác trên FE</Text>
+        <Text style={styles.sectionTitle}>Hướng dẫn sử dụng nhanh</Text>
         <Text style={styles.heroText}>1. Vào mục “Tạo mới” để gửi yêu cầu dịch vụ.</Text>
         <Text style={styles.heroText}>2. Theo dõi trạng thái tại mục “Yêu cầu”.</Text>
         <Text style={styles.heroText}>3. Khi hoàn thành, vào “Đánh giá” để phản hồi.</Text>
@@ -127,6 +135,10 @@ export default function HomeScreen() {
             <Text style={styles.rowSubtitle}>Số lượt đặt: {service.bookingCount}</Text>
             <Text style={styles.rowSubtitle}>
               Trạng thái: {service.isActive ? "Đang mở" : "Tạm ngưng"}
+            </Text>
+            <Text style={styles.rowSubtitle}>
+              Baseline AI: {formatComplexityRange(service.complexityRange)} •{" "}
+              {service.isDangerous ? "Có rủi ro cao" : "Thông thường"}
             </Text>
           </View>
         ))}

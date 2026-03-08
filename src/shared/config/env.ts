@@ -12,6 +12,7 @@ export const KNOWN_API_HOSTS_FROM_GIT_HISTORY = [
   "10.60.23.255",
   "10.87.25.38",
   "172.20.10.4",
+  "192.168.123.6",
   "192.168.1.14",
   "192.168.1.26",
   "192.168.1.100",
@@ -19,6 +20,7 @@ export const KNOWN_API_HOSTS_FROM_GIT_HISTORY = [
   "192.168.1.102",
   "192.168.1.103",
   "192.168.123.188",
+  "192.168.123.189",
 ] as const;
 
 export const KNOWN_API_BASE_URLS = [

@@ -21,11 +21,35 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   const [error, setError] = useState("");
 
   const onSubmit = async () => {
+    const normalizedFullName = fullName.trim();
+    const normalizedEmail = email.trim();
+    const normalizedPhoneNumber = phoneNumber.trim();
+
+    if (!normalizedFullName || !normalizedEmail || !normalizedPhoneNumber || !password) {
+      setError("Vui lòng nhập đầy đủ họ tên, email, số điện thoại và mật khẩu.");
+      return;
+    }
+
+    if (!normalizedEmail.includes("@")) {
+      setError("Email không hợp lệ.");
+      return;
+    }
+
+    if (password.length < 6) {
+      setError("Mật khẩu phải có ít nhất 6 ký tự.");
+      return;
+    }
+
     setBusy(true);
     setError("");
 
     try {
-      await register({ fullName, email, phoneNumber, password });
+      await register({
+        fullName: normalizedFullName,
+        email: normalizedEmail,
+        phoneNumber: normalizedPhoneNumber,
+        password
+      });
     } catch (submissionError) {
       setError(asErrorMessage(submissionError));
     } finally {

@@ -89,11 +89,11 @@ export default function AdminDashboardScreen() {
   }, [session?.accessToken]);
 
   return (
-    <ScreenLayout title="Admin Dashboard" subtitle="GraphQL summary metrics">
-      {loading ? <Text style={styles.loading}>Loading...</Text> : null}
+    <ScreenLayout title="Bảng điều khiển Admin" subtitle="Tổng quan hệ thống">
+      {loading ? <Text style={styles.loading}>Đang tải...</Text> : null}
       {!!error ? <Text style={styles.error}>{error}</Text> : null}
       <ActionButton
-        label={loading ? "Refreshing..." : "Refresh Dashboard"}
+        label={loading ? "Đang làm mới..." : "Làm mới"}
         onPress={() => void load()}
         disabled={loading}
         variant="secondary"
@@ -101,36 +101,56 @@ export default function AdminDashboardScreen() {
 
       {summary ? (
         <View style={styles.card}>
-          <Text style={styles.title}>System Summary</Text>
-          <Text style={styles.meta}>Total Users: {summary.totalUsers}</Text>
-          <Text style={styles.meta}>Total Staff: {summary.totalStaff}</Text>
-          <Text style={styles.meta}>Total Agents: {summary.totalAgents}</Text>
-          <Text style={styles.meta}>Total Services: {summary.totalServices}</Text>
-          <Text style={styles.meta}>Total Requests: {summary.totalRequests}</Text>
-          <Text style={styles.meta}>Pending Requests: {summary.pendingRequests}</Text>
-          <Text style={styles.meta}>Completed Requests: {summary.completedRequests}</Text>
+          <Text style={styles.title}>Tổng quan hệ thống</Text>
+          <Text style={styles.meta}>Tổng người dùng: {summary.totalUsers}</Text>
+          <Text style={styles.meta}>Tổng nhân viên: {summary.totalStaff}</Text>
+          <Text style={styles.meta}>Tổng thợ kỹ thuật: {summary.totalAgents}</Text>
+          <Text style={styles.meta}>Tổng dịch vụ: {summary.totalServices}</Text>
+          <Text style={styles.meta}>Tổng yêu cầu: {summary.totalRequests}</Text>
+          <Text style={styles.meta}>Yêu cầu chờ xử lý: {summary.pendingRequests}</Text>
+          <Text style={styles.meta}>Yêu cầu hoàn thành: {summary.completedRequests}</Text>
           <Text style={styles.meta}>
-            Today Revenue: {formatCurrency(summary.todayRevenue)}
+            Doanh thu hôm nay: {formatCurrency(summary.todayRevenue)}
           </Text>
           <Text style={styles.meta}>
-            Monthly Revenue: {formatCurrency(summary.monthlyRevenue)}
+            Doanh thu tháng: {formatCurrency(summary.monthlyRevenue)}
           </Text>
         </View>
       ) : null}
 
       <View style={styles.card}>
-        <Text style={styles.title}>Role Distribution</Text>
-        <Text style={styles.meta}>Agents: {agents.length}</Text>
-        <Text style={styles.meta}>Staff: {staffs.length}</Text>
-        <Text style={styles.meta}>Customers: {customers.length}</Text>
+        <Text style={styles.title}>Phân bổ vai trò</Text>
+        <Text style={styles.meta}>Thợ kỹ thuật: {agents.length}</Text>
+        <Text style={styles.meta}>Nhân viên: {staffs.length}</Text>
+        <Text style={styles.meta}>Khách hàng: {customers.length}</Text>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.title}>Agents ({agents.length})</Text>
+        <Text style={styles.title}>Thợ kỹ thuật ({agents.length})</Text>
         {agents.map((agent) => (
           <View key={agent.id} style={styles.agentRow}>
             <Text style={styles.agentName}>{agent.fullName}</Text>
             <Text style={styles.agentMeta}>{agent.email}</Text>
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.title}>Nhân viên ({staffs.length})</Text>
+        {staffs.map((staff) => (
+          <View key={staff.id} style={styles.agentRow}>
+            <Text style={styles.agentName}>{staff.fullName}</Text>
+            <Text style={styles.agentMeta}>{staff.email}</Text>
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.title}>Khách hàng ({customers.length})</Text>
+        {customers.map((customer) => (
+          <View key={customer.id} style={styles.agentRow}>
+            <Text style={styles.agentName}>{customer.fullName}</Text>
+            <Text style={styles.agentMeta}>{customer.email}</Text>
           </View>
         ))}
       </View>

@@ -1,4 +1,5 @@
 import { httpRequest } from "../../../shared/api/httpClient";
+export { createActivityLog } from "../../../shared/api/activityApi";
 import type { Money } from "../../../shared/types/domain";
 
 interface EvaluateComplexityPayload {
@@ -26,11 +27,6 @@ interface CreateMatchingResultPayload {
   };
   matchingScore: number;
   isRecommended: boolean;
-}
-
-interface CreateActivityLogPayload {
-  serviceRequestId: string;
-  action: string;
 }
 
 export const evaluateComplexity = async (
@@ -84,15 +80,3 @@ export const createMatchingResult = (
     token,
     body: payload
   });
-
-export const createActivityLog = (
-  token: string,
-  payload: CreateActivityLogPayload
-): Promise<string> =>
-  httpRequest<string>({
-    path: "/api/activity-logs",
-    method: "POST",
-    token,
-    body: payload
-  });
-

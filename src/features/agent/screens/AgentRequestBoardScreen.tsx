@@ -7,15 +7,21 @@ import { graphqlRequest } from "../../../shared/api/graphqlClient";
 import {
   ALL_REQUESTS_QUERY,
   ASSIGNMENTS_BY_REQUEST_QUERY,
-  MATCHING_RESULTS_BY_REQUEST_QUERY
+  MATCHING_RESULTS_BY_REQUEST_QUERY,
+  SERVICE_DEFINITIONS_QUERY
 } from "../../../shared/api/graphqlDocuments";
-import { asErrorMessage, formatDateTime } from "../../../shared/utils/format";
+import {
+  asErrorMessage,
+  formatDateTime,
+  formatRequestStatus,
+  formatShortId
+} from "../../../shared/utils/format";
 import type {
   AssignmentItem,
   MatchingResultItem,
+  ServiceDefinition,
   ServiceRequestItem
 } from "../../../shared/types/domain";
-import LabeledInput from "../../../shared/ui/LabeledInput";
 import ActionButton from "../../../shared/ui/ActionButton";
 
 interface AllRequestsResponse {
@@ -28,6 +34,10 @@ interface AssignmentByRequestResponse {
 
 interface MatchingByRequestResponse {
   getMatchingResultsByServiceRequestId: MatchingResultItem[];
+}
+
+interface ServiceDefinitionsResponse {
+  getServiceDefinitions: ServiceDefinition[];
 }
 
 const statusOptions = [
@@ -48,6 +58,7 @@ export default function AgentRequestBoardScreen() {
   const [items, setItems] = useState<ServiceRequestItem[]>([]);
   const [statusFilter, setStatusFilter] = useState<(typeof statusOptions)[number]>("ALL");
   const [selectedRequestId, setSelectedRequestId] = useState("");
+  const [serviceNamesById, setServiceNamesById] = useState<Record<string, string>>({});
   const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
   const [matches, setMatches] = useState<MatchingResultItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -60,6 +71,11 @@ export default function AgentRequestBoardScreen() {
     return items.filter((item) => item.status === statusFilter);
   }, [items, statusFilter]);
 
+  const selectedRequest = useMemo(
+    () => items.find((item) => item.id === selectedRequestId) ?? null,
+    [items, selectedRequestId]
+  );
+
   const loadBoard = async () => {
     if (!session) {
       return;
@@ -67,12 +83,18 @@ export default function AgentRequestBoardScreen() {
     setLoading(true);
     setError("");
     try {
-      const data = await graphqlRequest<AllRequestsResponse>(
-        ALL_REQUESTS_QUERY,
-        undefined,
-        session.accessToken
+      const [requestData, serviceData] = await Promise.all([
+        graphqlRequest<AllRequestsResponse>(
+          ALL_REQUESTS_QUERY,
+          undefined,
+          session.accessToken
+        ),
+        graphqlRequest<ServiceDefinitionsResponse>(SERVICE_DEFINITIONS_QUERY)
+      ]);
+      setItems(requestData.getServiceRequests);
+      setServiceNamesById(
+        Object.fromEntries(serviceData.getServiceDefinitions.map((service) => [service.id, service.name]))
       );
-      setItems(data.getServiceRequests);
     } catch (loadError) {
       setError(asErrorMessage(loadError));
     } finally {
@@ -80,12 +102,14 @@ export default function AgentRequestBoardScreen() {
     }
   };
 
-  const loadLinkedData = async () => {
+  const loadLinkedData = async (requestedId?: string) => {
     if (!session) {
       return;
     }
-    if (!selectedRequestId.trim()) {
-      setError("Request ID is required");
+
+    const requestId = requestedId ?? selectedRequestId;
+    if (!requestId.trim()) {
+      setError("Hãy chọn một yêu cầu từ danh sách");
       return;
     }
     setLoading(true);
@@ -94,15 +118,16 @@ export default function AgentRequestBoardScreen() {
       const [assignmentData, matchingData] = await Promise.all([
         graphqlRequest<AssignmentByRequestResponse, { serviceRequestId: string }>(
           ASSIGNMENTS_BY_REQUEST_QUERY,
-          { serviceRequestId: selectedRequestId.trim() },
+          { serviceRequestId: requestId.trim() },
           session.accessToken
         ),
         graphqlRequest<MatchingByRequestResponse, { serviceRequestId: string }>(
           MATCHING_RESULTS_BY_REQUEST_QUERY,
-          { serviceRequestId: selectedRequestId.trim() },
+          { serviceRequestId: requestId.trim() },
           session.accessToken
         )
       ]);
+      setSelectedRequestId(requestId.trim());
       setAssignments(assignmentData.getAssignmentsByServiceRequestId);
       setMatches(matchingData.getMatchingResultsByServiceRequestId);
     } catch (loadError) {
@@ -118,7 +143,7 @@ export default function AgentRequestBoardScreen() {
   }, [session?.accessToken]);
 
   return (
-    <ScreenLayout title="Request Board" subtitle="Agent view: all visible requests">
+    <ScreenLayout title="Bảng yêu cầu" subtitle="Danh sách yêu cầu dịch vụ">
       <View style={styles.filterRow}>
         {statusOptions.map((option) => {
           const active = statusFilter === option;
@@ -129,7 +154,7 @@ export default function AgentRequestBoardScreen() {
               onPress={() => setStatusFilter(option)}
             >
               <Text style={[styles.filterText, active && styles.filterTextActive]}>
-                {option}
+                {option === "ALL" ? "Tất cả" : formatRequestStatus(option)}
               </Text>
             </Pressable>
           );
@@ -137,37 +162,62 @@ export default function AgentRequestBoardScreen() {
       </View>
 
       {!!error ? <Text style={styles.error}>{error}</Text> : null}
-      {loading ? <Text style={styles.meta}>Loading...</Text> : null}
+      {loading ? <Text style={styles.meta}>Đang tải...</Text> : null}
 
       <View style={styles.card}>
-        <Text style={styles.title}>Requests ({filteredItems.length})</Text>
+        <Text style={styles.title}>Yêu cầu ({filteredItems.length})</Text>
         {filteredItems.slice(0, 25).map((item) => (
-          <View key={item.id} style={styles.row}>
+          <Pressable
+            key={item.id}
+            style={[styles.row, selectedRequestId === item.id && styles.rowSelected]}
+            onPress={() => void loadLinkedData(item.id)}
+          >
             <Text style={styles.rowTitle}>{item.description}</Text>
-            <Text style={styles.meta}>ID: {item.id}</Text>
-            <Text style={styles.meta}>Status: {item.status}</Text>
-            <Text style={styles.meta}>Created: {formatDateTime(item.createdAt)}</Text>
-          </View>
+            <Text style={styles.meta}>Mã: {formatShortId(item.id)}</Text>
+            {item.serviceDefinitionId ? (
+              <Text style={styles.meta}>
+                Dịch vụ:{" "}
+                {serviceNamesById[item.serviceDefinitionId] ??
+                  formatShortId(item.serviceDefinitionId)}
+              </Text>
+            ) : null}
+            <Text style={styles.meta}>Trạng thái: {formatRequestStatus(item.status)}</Text>
+            <Text style={styles.meta}>Tạo lúc: {formatDateTime(item.createdAt)}</Text>
+          </Pressable>
         ))}
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.title}>Lookup Assignments + Matching</Text>
-        <LabeledInput
-          label="Request ID"
-          value={selectedRequestId}
-          onChangeText={setSelectedRequestId}
-          placeholder="Paste request ID"
-          autoCapitalize="none"
-        />
+        <Text style={styles.title}>Tra cứu công việc &amp; matching</Text>
+        {selectedRequest ? (
+          <Text style={styles.selected}>Đã chọn: {selectedRequest.description}</Text>
+        ) : (
+          <Text style={styles.hint}>Nhấn vào yêu cầu phía trên để chọn</Text>
+        )}
+        {selectedRequest ? (
+          <>
+            <Text style={styles.meta}>Mã: {formatShortId(selectedRequest.id)}</Text>
+            {selectedRequest.serviceDefinitionId ? (
+              <Text style={styles.meta}>
+                Dịch vụ:{" "}
+                {serviceNamesById[selectedRequest.serviceDefinitionId] ??
+                  formatShortId(selectedRequest.serviceDefinitionId)}
+              </Text>
+            ) : null}
+            <Text style={styles.meta}>
+              Trạng thái: {formatRequestStatus(selectedRequest.status)}
+            </Text>
+            <Text style={styles.meta}>Tạo lúc: {formatDateTime(selectedRequest.createdAt)}</Text>
+          </>
+        ) : null}
         <ActionButton
-          label={loading ? "Loading..." : "Load Linked Data"}
-          onPress={() => void loadLinkedData()}
-          disabled={loading}
+          label={loading ? "Đang tải..." : "Tải dữ liệu liên kết"}
+          onPress={() => void loadLinkedData(selectedRequestId)}
+          disabled={loading || !selectedRequestId}
           variant="secondary"
         />
-        <Text style={styles.meta}>Assignments: {assignments.length}</Text>
-        <Text style={styles.meta}>Matching Results: {matches.length}</Text>
+        <Text style={styles.meta}>Công việc: {assignments.length}</Text>
+        <Text style={styles.meta}>Kết quả matching: {matches.length}</Text>
       </View>
     </ScreenLayout>
   );
@@ -220,6 +270,10 @@ const styles = StyleSheet.create({
     gap: 2,
     backgroundColor: "#fff"
   },
+  rowSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft
+  },
   rowTitle: {
     color: colors.text,
     fontWeight: "700",
@@ -228,6 +282,16 @@ const styles = StyleSheet.create({
   meta: {
     color: colors.textMuted,
     fontSize: 12
+  },
+  selected: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: "700"
+  },
+  hint: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontStyle: "italic"
   },
   error: {
     color: colors.danger,
