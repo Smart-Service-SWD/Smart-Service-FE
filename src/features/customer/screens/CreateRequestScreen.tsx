@@ -75,7 +75,8 @@ export default function CreateRequestScreen() {
     !servicesLoading &&
     !!selectedCategoryId &&
     !!selectedServiceDefinitionId &&
-    !!description.trim();
+    !!description.trim() &&
+    !!addressText.trim();
 
   useEffect(() => {
     const loadCategories = async () => {
@@ -220,6 +221,10 @@ export default function CreateRequestScreen() {
     }
     if (!selectedServiceDefinitionId) {
       setError("Vui lòng chọn dịch vụ cụ thể");
+      return;
+    }
+    if (!addressText.trim()) {
+      setError("Vui lòng nhập địa chỉ để kỹ thuật viên có thể đến đúng nơi.");
       return;
     }
 
@@ -382,10 +387,11 @@ export default function CreateRequestScreen() {
         />
 
         <LabeledInput
-          label="Địa chỉ (tùy chọn)"
+          label="Địa chỉ"
           value={addressText}
           onChangeText={setAddressText}
           placeholder="Số nhà, quận/huyện, tỉnh/thành"
+          hint="Địa chỉ này sẽ hiển thị cho staff và kỹ thuật viên khi xử lý yêu cầu."
         />
 
         <View style={styles.imageCard}>
@@ -587,6 +593,8 @@ export default function CreateRequestScreen() {
                 ? "Đang tải dịch vụ..."
                 : !selectedServiceDefinitionId
                   ? "Chọn dịch vụ trước"
+                  : !addressText.trim()
+                    ? "Nhập địa chỉ trước"
                   : "Gửi yêu cầu"
           }
           onPress={() => void submit()}

@@ -13,7 +13,8 @@ import {
   ASSIGNMENTS_BY_REQUEST_QUERY,
   MATCHING_RESULTS_BY_REQUEST_QUERY,
   SERVICE_AGENTS_QUERY,
-  SERVICE_DEFINITIONS_BY_CATEGORY_QUERY
+  SERVICE_DEFINITIONS_BY_CATEGORY_QUERY,
+  USERS_QUERY
 } from "../../../shared/api/graphqlDocuments";
 import {
   asErrorMessage,
@@ -29,7 +30,8 @@ import type {
   MatchingResultItem,
   ServiceAgentItem,
   ServiceDefinition,
-  ServiceRequestItem
+  ServiceRequestItem,
+  UserProfile
 } from "../../../shared/types/domain";
 import LabeledInput from "../../../shared/ui/LabeledInput";
 import ActionButton from "../../../shared/ui/ActionButton";
@@ -55,6 +57,10 @@ interface ServiceAgentsResponse {
 
 interface AllRequestsResponse {
   getServiceRequests: ServiceRequestItem[];
+}
+
+interface UsersResponse {
+  getUsers: UserProfile[];
 }
 
 interface ServicesByCategoryResponse {
@@ -156,6 +162,7 @@ export default function DispatchCenterScreen() {
   const [currency, setCurrency] = useState("VND");
   const [agents, setAgents] = useState<ServiceAgentItem[]>([]);
   const [requests, setRequests] = useState<ServiceRequestItem[]>([]);
+  const [customerNamesById, setCustomerNamesById] = useState<Record<string, string>>({});
   const [services, setServices] = useState<ServiceDefinition[]>([]);
   const [matches, setMatches] = useState<MatchingResultItem[]>([]);
   const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
@@ -259,8 +266,24 @@ export default function DispatchCenterScreen() {
     [activeAgents]
   );
 
+  const getCustomerName = (customerId?: string | null) =>
+    customerId ? customerNamesById[customerId] ?? formatShortId(customerId) : "-";
+
   const getAgentName = (agentId?: string | null) =>
-    agents.find((agent) => agent.id === agentId)?.fullName ?? formatShortId(agentId);
+    agentId
+      ? agents.find((agent) => agent.id === agentId)?.fullName ?? formatShortId(agentId)
+      : "Chưa gán";
+
+  const getAiValueLabel = (
+    value?: string | null,
+    wasAnalyzedByAI?: boolean
+  ) => {
+    if (value?.trim()) {
+      return value;
+    }
+
+    return wasAnalyzedByAI ? "AI chưa trả về" : "Chưa phân tích AI";
+  };
 
   const loadInitialData = async () => {
     if (!session) {
@@ -268,7 +291,7 @@ export default function DispatchCenterScreen() {
     }
 
     try {
-      const [agentData, requestData] = await Promise.all([
+      const [agentData, requestData, userData] = await Promise.all([
         graphqlRequest<ServiceAgentsResponse>(
           SERVICE_AGENTS_QUERY,
           undefined,
@@ -278,9 +301,13 @@ export default function DispatchCenterScreen() {
           ALL_REQUESTS_QUERY,
           undefined,
           session.accessToken
-        )
+        ),
+        graphqlRequest<UsersResponse>(USERS_QUERY, undefined, session.accessToken)
       ]);
 
+      setCustomerNamesById(
+        Object.fromEntries(userData.getUsers.map((user) => [user.id, user.fullName]))
+      );
       setAgents(agentData.getServiceAgents);
       setRequests(requestData.getServiceRequests);
     } catch (loadError) {
@@ -651,6 +678,12 @@ export default function DispatchCenterScreen() {
               <Text style={styles.selectionTitle}>{request.description}</Text>
               <Text style={styles.meta}>Mã: {formatShortId(request.id)}</Text>
               <Text style={styles.meta}>
+                Khách hàng: {getCustomerName(request.customerId)}
+              </Text>
+              <Text style={styles.meta}>
+                Thợ đã gán: {getAgentName(request.assignedProviderId)}
+              </Text>
+              <Text style={styles.meta}>
                 Trạng thái: {formatRequestStatus(request.status)}
               </Text>
               <Text style={styles.meta}>Tạo lúc: {formatDateTime(request.createdAt)}</Text>
@@ -670,7 +703,17 @@ export default function DispatchCenterScreen() {
           <Text style={styles.selectionTitle}>{selectedRequest.description}</Text>
           <Text style={styles.meta}>Mã: {formatShortId(selectedRequest.id)}</Text>
           <Text style={styles.meta}>
+            Khách hàng: {getCustomerName(selectedRequest.customerId)}
+          </Text>
+          <Text style={styles.meta}>
             Trạng thái: {formatRequestStatus(selectedRequest.status)}
+          </Text>
+          <Text style={styles.meta}>
+            Thợ đã gán: {getAgentName(selectedRequest.assignedProviderId)}
+          </Text>
+          <Text style={styles.meta}>
+            Địa chỉ:{" "}
+            {selectedRequest.addressText || "Khách hàng chưa nhập địa chỉ cho yêu cầu này."}
           </Text>
           {selectedRequest.serviceDefinitionId ? (
             <Text style={styles.meta}>
@@ -679,12 +722,17 @@ export default function DispatchCenterScreen() {
                 formatShortId(selectedRequest.serviceDefinitionId)}
             </Text>
           ) : null}
-          {selectedRequest.estimatedPrice ? (
-            <Text style={styles.meta}>AI báo giá: {selectedRequest.estimatedPrice}</Text>
-          ) : null}
-          {selectedRequest.estimatedDuration ? (
-            <Text style={styles.meta}>AI dự kiến: {selectedRequest.estimatedDuration}</Text>
-          ) : null}
+          <Text style={styles.meta}>
+            AI báo giá:{" "}
+            {getAiValueLabel(selectedRequest.estimatedPrice, selectedRequest.wasAnalyzedByAI)}
+          </Text>
+          <Text style={styles.meta}>
+            AI dự kiến:{" "}
+            {getAiValueLabel(
+              selectedRequest.estimatedDuration,
+              selectedRequest.wasAnalyzedByAI
+            )}
+          </Text>
           {selectedRequest.ocrExtractedText ? (
             <Text style={styles.meta}>Nội dung từ ảnh: {selectedRequest.ocrExtractedText}</Text>
           ) : null}

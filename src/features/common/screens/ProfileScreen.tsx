@@ -5,7 +5,7 @@ import { colors } from "../../../app/theme/colors";
 import { useAuth } from "../../auth/AuthContext";
 import { ApiError } from "../../../shared/api/httpClient";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
-import { ME_QUERY } from "../../../shared/api/graphqlDocuments";
+import { ME_QUERY, USER_BY_ID_QUERY } from "../../../shared/api/graphqlDocuments";
 import {
   asErrorMessage,
   formatBooleanLabel,
@@ -18,6 +18,10 @@ import type { UserProfile } from "../../../shared/types/domain";
 
 interface MeResponse {
   me: UserProfile | null;
+}
+
+interface UserByIdResponse {
+  getUserById: UserProfile | null;
 }
 
 export default function ProfileScreen() {
@@ -36,13 +40,48 @@ export default function ProfileScreen() {
     if (!session) {
       return;
     }
+
+    const sessionProfile: UserProfile = {
+      id: session.userId,
+      email: session.email,
+      fullName: session.fullName,
+      phoneNumber: "",
+      role: session.role,
+      isLocked: false
+    };
+
     try {
       setError("");
-      const data = await graphqlRequest<MeResponse>(ME_QUERY, undefined, session.accessToken);
-      setProfile(data.me);
-      setFullName(data.me?.fullName ?? "");
-      setPhoneNumber(data.me?.phoneNumber ?? "");
+      let nextProfile: UserProfile | null = null;
+
+      try {
+        const meData = await graphqlRequest<MeResponse>(
+          ME_QUERY,
+          undefined,
+          session.accessToken
+        );
+        nextProfile = meData.me;
+      } catch {
+        nextProfile = null;
+      }
+
+      if (!nextProfile) {
+        const userData = await graphqlRequest<UserByIdResponse, { id: string }>(
+          USER_BY_ID_QUERY,
+          { id: session.userId },
+          session.accessToken
+        );
+        nextProfile = userData.getUserById;
+      }
+
+      const resolvedProfile = nextProfile ?? sessionProfile;
+      setProfile(resolvedProfile);
+      setFullName(resolvedProfile.fullName ?? session.fullName ?? "");
+      setPhoneNumber(resolvedProfile.phoneNumber ?? "");
     } catch (loadError) {
+      setProfile(sessionProfile);
+      setFullName(sessionProfile.fullName);
+      setPhoneNumber(sessionProfile.phoneNumber);
       setError(asErrorMessage(loadError));
     }
   };

@@ -8,7 +8,8 @@ import {
   AGENT_ASSIGNMENTS_QUERY,
   REQUEST_BY_ID_QUERY,
   SERVICE_AGENTS_QUERY,
-  SERVICE_DEFINITIONS_QUERY
+  SERVICE_DEFINITIONS_QUERY,
+  USER_BY_ID_QUERY
 } from "../../../shared/api/graphqlDocuments";
 import {
   asErrorMessage,
@@ -17,8 +18,13 @@ import {
   formatRequestStatus,
   formatShortId
 } from "../../../shared/utils/format";
-import type { AssignmentItem, ServiceRequestItem } from "../../../shared/types/domain";
-import type { ServiceAgentItem, ServiceDefinition } from "../../../shared/types/domain";
+import type {
+  AssignmentItem,
+  ServiceAgentItem,
+  ServiceDefinition,
+  ServiceRequestItem,
+  UserProfile
+} from "../../../shared/types/domain";
 import ActionButton from "../../../shared/ui/ActionButton";
 import {
   completeInProgressRequest,
@@ -42,11 +48,16 @@ interface ServiceDefinitionsResponse {
   getServiceDefinitions: ServiceDefinition[];
 }
 
+interface UserByIdResponse {
+  getUserById: UserProfile | null;
+}
+
 export default function AssignmentsScreen() {
   const { session } = useAuth();
   const [items, setItems] = useState<AssignmentItem[]>([]);
   const [detailRequestId, setDetailRequestId] = useState("");
   const [detail, setDetail] = useState<ServiceRequestItem | null>(null);
+  const [customerProfile, setCustomerProfile] = useState<UserProfile | null>(null);
   const [linkedServiceAgent, setLinkedServiceAgent] = useState<ServiceAgentItem | null>(null);
   const [serviceNamesById, setServiceNamesById] = useState<Record<string, string>>({});
   const [bindingMessage, setBindingMessage] = useState("");
@@ -123,8 +134,20 @@ export default function AssignmentsScreen() {
         { id: requestId.trim() },
         session.accessToken
       );
+      let nextCustomerProfile: UserProfile | null = null;
+
+      if (data.getServiceRequestById?.customerId) {
+        const userData = await graphqlRequest<UserByIdResponse, { id: string }>(
+          USER_BY_ID_QUERY,
+          { id: data.getServiceRequestById.customerId },
+          session.accessToken
+        );
+        nextCustomerProfile = userData.getUserById;
+      }
+
       setDetailRequestId(requestId.trim());
       setDetail(data.getServiceRequestById);
+      setCustomerProfile(nextCustomerProfile);
     } catch (loadError) {
       setError(asErrorMessage(loadError));
     } finally {
@@ -190,6 +213,7 @@ export default function AssignmentsScreen() {
     if (!items.length) {
       setDetailRequestId("");
       setDetail(null);
+      setCustomerProfile(null);
       return;
     }
 
@@ -251,6 +275,12 @@ export default function AssignmentsScreen() {
             <Text style={styles.meta}>
               Trạng thái: {formatRequestStatus(detail.status)}
             </Text>
+            <Text style={styles.meta}>
+              Khách hàng: {customerProfile?.fullName ?? formatShortId(detail.customerId)}
+            </Text>
+            <Text style={styles.meta}>
+              Số điện thoại: {customerProfile?.phoneNumber || "-"}
+            </Text>
             {detail.serviceDefinitionId ? (
               <Text style={styles.meta}>
                 Dịch vụ:{" "}
@@ -262,7 +292,9 @@ export default function AssignmentsScreen() {
             <Text style={styles.meta}>
               Độ phức tạp: {detail.complexity?.level ?? "Chưa đánh giá"}
             </Text>
-            <Text style={styles.meta}>Địa chỉ: {detail.addressText || "-"}</Text>
+            <Text style={styles.meta}>
+              Địa chỉ: {detail.addressText || "Khách hàng chưa nhập địa chỉ cho yêu cầu này."}
+            </Text>
             <View style={styles.actionGroup}>
               {detail.status === "ASSIGNED" ? (
                 <ActionButton

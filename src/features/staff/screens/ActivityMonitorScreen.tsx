@@ -9,7 +9,8 @@ import { graphqlRequest } from "../../../shared/api/graphqlClient";
 import {
   ACTIVITY_LOGS_BY_REQUEST_QUERY,
   ACTIVITY_LOGS_QUERY,
-  ALL_REQUESTS_QUERY
+  ALL_REQUESTS_QUERY,
+  SERVICE_AGENTS_QUERY
 } from "../../../shared/api/graphqlDocuments";
 import {
   asErrorMessage,
@@ -17,7 +18,11 @@ import {
   formatRequestStatus,
   formatShortId
 } from "../../../shared/utils/format";
-import type { ActivityLogItem, ServiceRequestItem } from "../../../shared/types/domain";
+import type {
+  ActivityLogItem,
+  ServiceAgentItem,
+  ServiceRequestItem
+} from "../../../shared/types/domain";
 import ActionButton from "../../../shared/ui/ActionButton";
 
 interface ActivityLogsResponse {
@@ -32,6 +37,10 @@ interface AllRequestsResponse {
   getServiceRequests: ServiceRequestItem[];
 }
 
+interface ServiceAgentsResponse {
+  getServiceAgents: ServiceAgentItem[];
+}
+
 export default function ActivityMonitorScreen() {
   const route = useRoute<RouteProp<StaffTabParamList, "ActivityMonitor">>();
   const { session } = useAuth();
@@ -39,6 +48,7 @@ export default function ActivityMonitorScreen() {
   const [allLogs, setAllLogs] = useState<ActivityLogItem[]>([]);
   const [requestLogs, setRequestLogs] = useState<ActivityLogItem[]>([]);
   const [requests, setRequests] = useState<ServiceRequestItem[]>([]);
+  const [agentNamesById, setAgentNamesById] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -64,6 +74,9 @@ export default function ActivityMonitorScreen() {
     return request?.description || `Yêu cầu ${formatShortId(requestId)}`;
   };
 
+  const getAssignedAgentName = (agentId?: string | null) =>
+    agentId ? agentNamesById[agentId] ?? formatShortId(agentId) : "Chưa gán";
+
   const loadAll = async () => {
     if (!session) {
       return;
@@ -71,7 +84,7 @@ export default function ActivityMonitorScreen() {
     setLoading(true);
     setError("");
     try {
-      const [logData, requestData] = await Promise.all([
+      const [logData, requestData, agentData] = await Promise.all([
         graphqlRequest<ActivityLogsResponse>(
           ACTIVITY_LOGS_QUERY,
           undefined,
@@ -81,11 +94,19 @@ export default function ActivityMonitorScreen() {
           ALL_REQUESTS_QUERY,
           undefined,
           session.accessToken
+        ),
+        graphqlRequest<ServiceAgentsResponse>(
+          SERVICE_AGENTS_QUERY,
+          undefined,
+          session.accessToken
         )
       ]);
 
       setAllLogs(logData.getActivityLogs);
       setRequests(requestData.getServiceRequests);
+      setAgentNamesById(
+        Object.fromEntries(agentData.getServiceAgents.map((agent) => [agent.id, agent.fullName]))
+      );
     } catch (loadError) {
       setError(asErrorMessage(loadError));
     } finally {
@@ -167,6 +188,9 @@ export default function ActivityMonitorScreen() {
             <Text style={styles.meta}>
               Trạng thái: {formatRequestStatus(request.status)}
             </Text>
+            <Text style={styles.meta}>
+              Thợ đã gán: {getAssignedAgentName(request.assignedProviderId)}
+            </Text>
           </Pressable>
         ))}
       </View>
@@ -179,6 +203,9 @@ export default function ActivityMonitorScreen() {
             <Text style={styles.meta}>Mã: {formatShortId(selectedRequest.id)}</Text>
             <Text style={styles.meta}>
               Trạng thái: {formatRequestStatus(selectedRequest.status)}
+            </Text>
+            <Text style={styles.meta}>
+              Thợ đã gán: {getAssignedAgentName(selectedRequest.assignedProviderId)}
             </Text>
           </>
         ) : (

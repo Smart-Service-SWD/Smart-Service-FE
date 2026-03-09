@@ -9,7 +9,9 @@ import { useAuth } from "../../auth/AuthContext";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
 import {
   ALL_REQUESTS_QUERY,
-  SERVICE_DEFINITIONS_QUERY
+  SERVICE_AGENTS_QUERY,
+  SERVICE_DEFINITIONS_QUERY,
+  USERS_QUERY
 } from "../../../shared/api/graphqlDocuments";
 import {
   asErrorMessage,
@@ -17,8 +19,12 @@ import {
   formatRequestStatus,
   formatShortId
 } from "../../../shared/utils/format";
-import type { ServiceRequestItem } from "../../../shared/types/domain";
-import type { ServiceDefinition } from "../../../shared/types/domain";
+import type {
+  ServiceAgentItem,
+  ServiceDefinition,
+  ServiceRequestItem,
+  UserProfile
+} from "../../../shared/types/domain";
 import ActionButton from "../../../shared/ui/ActionButton";
 
 interface AllRequestsResponse {
@@ -27,6 +33,14 @@ interface AllRequestsResponse {
 
 interface ServiceDefinitionsResponse {
   getServiceDefinitions: ServiceDefinition[];
+}
+
+interface ServiceAgentsResponse {
+  getServiceAgents: ServiceAgentItem[];
+}
+
+interface UsersResponse {
+  getUsers: UserProfile[];
 }
 
 const statusOptions = [
@@ -59,6 +73,8 @@ export default function ReviewQueueScreen() {
     useState<(typeof statusOptions)[number]>("ALL");
   const [items, setItems] = useState<ServiceRequestItem[]>([]);
   const [serviceNamesById, setServiceNamesById] = useState<Record<string, string>>({});
+  const [customerNamesById, setCustomerNamesById] = useState<Record<string, string>>({});
+  const [agentNamesById, setAgentNamesById] = useState<Record<string, string>>({});
   const [selectedRequestId, setSelectedRequestId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -87,6 +103,23 @@ export default function ReviewQueueScreen() {
     [items]
   );
 
+  const getCustomerName = (customerId?: string | null) =>
+    customerId ? customerNamesById[customerId] ?? formatShortId(customerId) : "-";
+
+  const getAssignedAgentName = (agentId?: string | null) =>
+    agentId ? agentNamesById[agentId] ?? formatShortId(agentId) : "Chưa gán";
+
+  const getAiValueLabel = (
+    value?: string | null,
+    wasAnalyzedByAI?: boolean
+  ) => {
+    if (value?.trim()) {
+      return value;
+    }
+
+    return wasAnalyzedByAI ? "AI chưa trả về" : "Chưa phân tích AI";
+  };
+
   const load = async () => {
     if (!session) {
       return;
@@ -95,17 +128,31 @@ export default function ReviewQueueScreen() {
     setLoading(true);
     setError("");
     try {
-      const [requestData, serviceData] = await Promise.all([
+      const [requestData, serviceData, userData, agentData] = await Promise.all([
         graphqlRequest<AllRequestsResponse>(
           ALL_REQUESTS_QUERY,
           undefined,
           session.accessToken
         ),
-        graphqlRequest<ServiceDefinitionsResponse>(SERVICE_DEFINITIONS_QUERY)
+        graphqlRequest<ServiceDefinitionsResponse>(SERVICE_DEFINITIONS_QUERY),
+        graphqlRequest<UsersResponse>(USERS_QUERY, undefined, session.accessToken),
+        graphqlRequest<ServiceAgentsResponse>(
+          SERVICE_AGENTS_QUERY,
+          undefined,
+          session.accessToken
+        )
       ]);
       setItems(requestData.getServiceRequests);
       setServiceNamesById(
-        Object.fromEntries(serviceData.getServiceDefinitions.map((service) => [service.id, service.name]))
+        Object.fromEntries(
+          serviceData.getServiceDefinitions.map((service) => [service.id, service.name])
+        )
+      );
+      setCustomerNamesById(
+        Object.fromEntries(userData.getUsers.map((user) => [user.id, user.fullName]))
+      );
+      setAgentNamesById(
+        Object.fromEntries(agentData.getServiceAgents.map((agent) => [agent.id, agent.fullName]))
       );
     } catch (loadError) {
       setError(asErrorMessage(loadError));
@@ -186,17 +233,21 @@ export default function ReviewQueueScreen() {
                   formatShortId(item.serviceDefinitionId)}
               </Text>
             ) : null}
+            <Text style={styles.meta}>Khách hàng: {getCustomerName(item.customerId)}</Text>
+            <Text style={styles.meta}>
+              Thợ đã gán: {getAssignedAgentName(item.assignedProviderId)}
+            </Text>
             <Text style={styles.meta}>Trạng thái: {formatRequestStatus(item.status)}</Text>
             <Text style={styles.meta}>Tạo lúc: {formatDateTime(item.createdAt)}</Text>
             <Text style={styles.meta}>
               Độ phức tạp hiện tại: {item.complexity?.level ?? "Chưa có"}
             </Text>
-            {item.estimatedPrice ? (
-              <Text style={styles.meta}>AI báo giá: {item.estimatedPrice}</Text>
-            ) : null}
-            {item.estimatedDuration ? (
-              <Text style={styles.meta}>AI dự kiến: {item.estimatedDuration}</Text>
-            ) : null}
+            <Text style={styles.meta}>
+              AI báo giá: {getAiValueLabel(item.estimatedPrice, item.wasAnalyzedByAI)}
+            </Text>
+            <Text style={styles.meta}>
+              AI dự kiến: {getAiValueLabel(item.estimatedDuration, item.wasAnalyzedByAI)}
+            </Text>
           </Pressable>
         ))}
         {!loading && filteredItems.length === 0 ? (
@@ -217,7 +268,24 @@ export default function ReviewQueueScreen() {
             </Text>
           ) : null}
           <Text style={styles.meta}>
+            Khách hàng: {getCustomerName(selectedRequest.customerId)}
+          </Text>
+          <Text style={styles.meta}>
+            Thợ đã gán: {getAssignedAgentName(selectedRequest.assignedProviderId)}
+          </Text>
+          <Text style={styles.meta}>
             Trạng thái: {formatRequestStatus(selectedRequest.status)}
+          </Text>
+          <Text style={styles.meta}>
+            AI báo giá:{" "}
+            {getAiValueLabel(selectedRequest.estimatedPrice, selectedRequest.wasAnalyzedByAI)}
+          </Text>
+          <Text style={styles.meta}>
+            AI dự kiến:{" "}
+            {getAiValueLabel(
+              selectedRequest.estimatedDuration,
+              selectedRequest.wasAnalyzedByAI
+            )}
           </Text>
           <Text style={styles.meta}>
             Nếu đơn còn mới, staff sẽ chốt độ phức tạp ngay trong tab Điều phối.

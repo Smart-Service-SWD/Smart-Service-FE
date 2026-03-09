@@ -83,6 +83,19 @@ export const ME_QUERY = `
   }
 `;
 
+export const USER_BY_ID_QUERY = `
+  query UserById($id: UUID!) {
+    getUserById(id: $id) {
+      id
+      email
+      fullName
+      phoneNumber
+      role
+      isLocked
+    }
+  }
+`;
+
 export const MY_REQUESTS_QUERY = `
   query MyRequests($status: ServiceStatus) {
     getMyServiceRequests(status: $status) {

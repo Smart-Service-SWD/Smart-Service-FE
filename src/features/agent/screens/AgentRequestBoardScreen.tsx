@@ -8,7 +8,8 @@ import {
   ALL_REQUESTS_QUERY,
   ASSIGNMENTS_BY_REQUEST_QUERY,
   MATCHING_RESULTS_BY_REQUEST_QUERY,
-  SERVICE_DEFINITIONS_QUERY
+  SERVICE_DEFINITIONS_QUERY,
+  USER_BY_ID_QUERY
 } from "../../../shared/api/graphqlDocuments";
 import {
   asErrorMessage,
@@ -20,7 +21,8 @@ import type {
   AssignmentItem,
   MatchingResultItem,
   ServiceDefinition,
-  ServiceRequestItem
+  ServiceRequestItem,
+  UserProfile
 } from "../../../shared/types/domain";
 import ActionButton from "../../../shared/ui/ActionButton";
 
@@ -38,6 +40,10 @@ interface MatchingByRequestResponse {
 
 interface ServiceDefinitionsResponse {
   getServiceDefinitions: ServiceDefinition[];
+}
+
+interface UserByIdResponse {
+  getUserById: UserProfile | null;
 }
 
 const statusOptions = [
@@ -59,6 +65,7 @@ export default function AgentRequestBoardScreen() {
   const [statusFilter, setStatusFilter] = useState<(typeof statusOptions)[number]>("ALL");
   const [selectedRequestId, setSelectedRequestId] = useState("");
   const [serviceNamesById, setServiceNamesById] = useState<Record<string, string>>({});
+  const [customerProfile, setCustomerProfile] = useState<UserProfile | null>(null);
   const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
   const [matches, setMatches] = useState<MatchingResultItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -115,7 +122,8 @@ export default function AgentRequestBoardScreen() {
     setLoading(true);
     setError("");
     try {
-      const [assignmentData, matchingData] = await Promise.all([
+      const request = items.find((item) => item.id === requestId.trim()) ?? null;
+      const [assignmentData, matchingData, userData] = await Promise.all([
         graphqlRequest<AssignmentByRequestResponse, { serviceRequestId: string }>(
           ASSIGNMENTS_BY_REQUEST_QUERY,
           { serviceRequestId: requestId.trim() },
@@ -125,17 +133,33 @@ export default function AgentRequestBoardScreen() {
           MATCHING_RESULTS_BY_REQUEST_QUERY,
           { serviceRequestId: requestId.trim() },
           session.accessToken
-        )
+        ),
+        request?.customerId
+          ? graphqlRequest<UserByIdResponse, { id: string }>(
+              USER_BY_ID_QUERY,
+              { id: request.customerId },
+              session.accessToken
+            )
+          : Promise.resolve<UserByIdResponse | null>(null)
       ]);
       setSelectedRequestId(requestId.trim());
       setAssignments(assignmentData.getAssignmentsByServiceRequestId);
       setMatches(matchingData.getMatchingResultsByServiceRequestId);
+      setCustomerProfile(userData?.getUserById ?? null);
     } catch (loadError) {
       setError(asErrorMessage(loadError));
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (selectedRequest) {
+      return;
+    }
+
+    setCustomerProfile(null);
+  }, [selectedRequest]);
 
   useEffect(() => {
     void loadBoard();
@@ -197,6 +221,16 @@ export default function AgentRequestBoardScreen() {
         {selectedRequest ? (
           <>
             <Text style={styles.meta}>Mã: {formatShortId(selectedRequest.id)}</Text>
+            <Text style={styles.meta}>
+              Khách hàng: {customerProfile?.fullName ?? formatShortId(selectedRequest.customerId)}
+            </Text>
+            <Text style={styles.meta}>
+              Số điện thoại: {customerProfile?.phoneNumber || "-"}
+            </Text>
+            <Text style={styles.meta}>
+              Địa chỉ:{" "}
+              {selectedRequest.addressText || "Khách hàng chưa nhập địa chỉ cho yêu cầu này."}
+            </Text>
             {selectedRequest.serviceDefinitionId ? (
               <Text style={styles.meta}>
                 Dịch vụ:{" "}

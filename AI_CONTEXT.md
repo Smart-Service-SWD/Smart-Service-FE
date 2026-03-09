@@ -1,6 +1,6 @@
 # FE Context Notes
 
-Updated: 2026-03-08
+Updated: 2026-03-09
 
 Purpose: quick memory file for future AI/dev sessions working on `Service_FE`.
 
@@ -99,6 +99,43 @@ Purpose: quick memory file for future AI/dev sessions working on `Service_FE`.
   - can assign provider only when request is `PendingReview`
 - Urgent requests are still visible in FE, but BE still does not provide a clean staff action path from `UrgentDispatch` to assignment.
 
+### Profile / account flow
+
+- FE profile screen no longer depends only on GraphQL `me`.
+- Profile load order is now:
+  - try `me`
+  - if `me` is `null` or query fails, fallback to `getUserById(session.userId)`
+  - if both fail, keep showing basic info already stored in auth session
+- This fixes the case where customer profile screen showed:
+  - empty full name
+  - empty phone number
+  - while login/session data was still valid
+
+### Staff visibility sync
+
+- Staff review queue now shows:
+  - customer full name
+  - assigned technician name
+- Staff dispatch screen now shows:
+  - customer full name
+  - assigned technician name
+  - request address text
+- Staff screens now hydrate customer names from `getUsers`.
+- Staff screens still hydrate technician names from `getServiceAgents`.
+
+### Agent visibility sync
+
+- Agent assignment detail now loads customer profile via `getUserById(customerId)`.
+- Agent request board now also loads customer profile for the selected request.
+- Agent can now see:
+  - customer full name
+  - customer phone number
+  - customer address
+- This was added because request read models already expose:
+  - `customerId`
+  - `addressText`
+  - but not embedded customer contact info
+
 ### ServiceDefinition / admin flow
 
 - FE still requests and displays:
@@ -135,6 +172,10 @@ Purpose: quick memory file for future AI/dev sessions working on `Service_FE`.
   - FE can show assignments
   - no clear start / progress / complete REST actions were found during audit
 
+- GraphQL `me` may still be unreliable in some environments:
+  - FE now has a fallback to `getUserById(session.userId)`
+  - but if profile data still looks wrong after login, BE auth / GraphQL user context should still be checked
+
 ## Files touched in FE for the 2026-03-08 sync
 
 - `src/features/customer/api/customerApi.ts`
@@ -144,9 +185,19 @@ Purpose: quick memory file for future AI/dev sessions working on `Service_FE`.
 - `src/shared/types/domain.ts`
 - `src/features/admin/screens/ServiceAdminScreen.tsx`
 
+## Files touched in FE for the 2026-03-09 sync
+
+- `src/shared/api/graphqlDocuments.ts`
+- `src/features/common/screens/ProfileScreen.tsx`
+- `src/features/staff/screens/ReviewQueueScreen.tsx`
+- `src/features/staff/screens/DispatchCenterScreen.tsx`
+- `src/features/agent/screens/AssignmentsScreen.tsx`
+- `src/features/agent/screens/AgentRequestBoardScreen.tsx`
+
 ## Validation already done
 
 - `npm run typecheck` passed on 2026-03-08 after FE contract updates.
+- `npm run typecheck` passed on 2026-03-09 after profile + staff/agent visibility updates.
 
 ## Quick manual FE smoke test
 
@@ -184,11 +235,39 @@ Purpose: quick memory file for future AI/dev sessions working on `Service_FE`.
   - if request is `Created`, FE allows evaluating complexity
   - if request is `PendingReview`, FE allows reevaluating complexity
   - FE preselects the original service when `serviceDefinitionId` is available
+  - FE shows customer full name
+  - FE shows assigned technician name if any
+  - FE shows request address in dispatch context
 - Choose technician.
 - Create matching result.
 - Assign provider.
 - Expected:
   - assignment only works when request status is `PendingReview`
+
+### Profile fallback
+
+- Login as customer.
+- Open `Tài khoản`.
+- Expected:
+  - full name and phone number load from `me` when available
+  - if `me` is broken/null, FE still reloads them from `getUserById(session.userId)`
+  - page should no longer show only `-` for profile fields in the common failure case
+
+### Agent customer info
+
+- Login as agent.
+- Open `Công việc của tôi`.
+- Select one assignment.
+- Expected:
+  - FE shows customer name
+  - FE shows customer phone number
+  - FE shows address
+- Open `Bảng yêu cầu`.
+- Select one request.
+- Expected:
+  - FE shows customer name
+  - FE shows customer phone number
+  - FE shows address
 
 ### Admin service warning
 
