@@ -287,12 +287,6 @@ export default function MyRequestsScreen() {
               ? formatCurrency(item.estimatedCost.amount, item.estimatedCost.currency)
               : "Chưa có"}
           </Text>
-          {item.estimatedPrice ? (
-            <Text style={styles.meta}>AI báo giá: {item.estimatedPrice}</Text>
-          ) : null}
-          {item.estimatedDuration ? (
-            <Text style={styles.meta}>AI dự kiến: {item.estimatedDuration}</Text>
-          ) : null}
           {item.addressText ? <Text style={styles.meta}>Địa chỉ: {item.addressText}</Text> : null}
           {item.assignedProviderId ? (
             <Text style={styles.meta}>Thợ sửa chữa: {getAgentName(item.assignedProviderId)}</Text>
@@ -347,12 +341,12 @@ export default function MyRequestsScreen() {
             <Text style={styles.meta}>
               Độ phức tạp: {detail.complexity?.level ?? "Chưa đánh giá"}
             </Text>
-            {detail.estimatedPrice ? (
-              <Text style={styles.meta}>AI báo giá: {detail.estimatedPrice}</Text>
-            ) : null}
-            {detail.estimatedDuration ? (
-              <Text style={styles.meta}>AI dự kiến: {detail.estimatedDuration}</Text>
-            ) : null}
+            <Text style={styles.meta}>
+              Chi phí ước tính:{" "}
+              {detail.estimatedCost
+                ? formatCurrency(detail.estimatedCost.amount, detail.estimatedCost.currency)
+                : "Chưa có"}
+            </Text>
             <Text style={styles.meta}>
               Thợ sửa chữa: {getAgentName(detail.assignedProviderId)}
             </Text>
