@@ -32,7 +32,7 @@ export type AgentTabParamList = {
 export type StaffTabParamList = {
   ReviewQueue: undefined;
   DispatchCenter: { requestId?: string } | undefined;
-  ActivityMonitor: { requestId?: string } | undefined;
+  DispatchHistory: { requestId?: string } | undefined;
   Profile: undefined;
 };
 
@@ -40,5 +40,6 @@ export type AdminTabParamList = {
   Dashboard: undefined;
   Users: undefined;
   Services: undefined;
+  AdminFeedback: undefined;
   Profile: undefined;
 };

@@ -8,7 +8,6 @@ import type { StaffTabParamList } from "../../../app/navigation/types";
 import { useAuth } from "../../auth/AuthContext";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
 import {
-  ACTIVITY_LOGS_BY_REQUEST_QUERY,
   ALL_REQUESTS_QUERY,
   ASSIGNMENTS_BY_REQUEST_QUERY,
   MATCHING_RESULTS_BY_REQUEST_QUERY,
@@ -24,7 +23,6 @@ import {
   formatShortId
 } from "../../../shared/utils/format";
 import type {
-  ActivityLogItem,
   AgentCapabilityItem,
   AssignmentItem,
   MatchingResultItem,
@@ -65,10 +63,6 @@ interface UsersResponse {
 
 interface ServicesByCategoryResponse {
   getServiceDefinitionsByCategory: ServiceDefinition[];
-}
-
-interface ActivityByRequestResponse {
-  getActivityLogsByServiceRequestId: ActivityLogItem[];
 }
 
 interface AgentMatchCandidate {
@@ -166,7 +160,6 @@ export default function DispatchCenterScreen() {
   const [services, setServices] = useState<ServiceDefinition[]>([]);
   const [matches, setMatches] = useState<MatchingResultItem[]>([]);
   const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
-  const [requestLogs, setRequestLogs] = useState<ActivityLogItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -323,7 +316,6 @@ export default function DispatchCenterScreen() {
       setServices([]);
       setMatches([]);
       setAssignments([]);
-      setRequestLogs([]);
       setSelectedServiceId("");
       setEstimatedAmount("");
       return;
@@ -332,7 +324,7 @@ export default function DispatchCenterScreen() {
     setLoading(true);
     setError("");
     try {
-      const [matchingData, assignmentData, activityData, serviceData] = await Promise.all([
+      const [matchingData, assignmentData, serviceData] = await Promise.all([
         graphqlRequest<MatchingByRequestResponse, { serviceRequestId: string }>(
           MATCHING_RESULTS_BY_REQUEST_QUERY,
           { serviceRequestId: request.id },
@@ -340,11 +332,6 @@ export default function DispatchCenterScreen() {
         ),
         graphqlRequest<AssignmentResponse, { serviceRequestId: string }>(
           ASSIGNMENTS_BY_REQUEST_QUERY,
-          { serviceRequestId: request.id },
-          session.accessToken
-        ),
-        graphqlRequest<ActivityByRequestResponse, { serviceRequestId: string }>(
-          ACTIVITY_LOGS_BY_REQUEST_QUERY,
           { serviceRequestId: request.id },
           session.accessToken
         ),
@@ -357,7 +344,6 @@ export default function DispatchCenterScreen() {
 
       setMatches(matchingData.getMatchingResultsByServiceRequestId);
       setAssignments(assignmentData.getAssignmentsByServiceRequestId);
-      setRequestLogs(activityData.getActivityLogsByServiceRequestId);
       const availableServices = serviceData.getServiceDefinitionsByCategory.filter(
         (service) => service.isActive || service.id === request.serviceDefinitionId
       );
@@ -611,7 +597,6 @@ export default function DispatchCenterScreen() {
       setServices([]);
       setMatches([]);
       setAssignments([]);
-      setRequestLogs([]);
       return;
     }
 
@@ -736,17 +721,17 @@ export default function DispatchCenterScreen() {
           {selectedRequest.ocrExtractedText ? (
             <Text style={styles.meta}>Nội dung từ ảnh: {selectedRequest.ocrExtractedText}</Text>
           ) : null}
-          <View style={styles.logBox}>
-            <Text style={styles.subTitle}>Nhật ký gần nhất</Text>
-            {requestLogs.slice(0, 4).map((log) => (
-              <Text key={log.id} style={styles.meta}>
-                • {formatDateTime(log.createdAt)} · {log.action}
-              </Text>
-            ))}
-            {requestLogs.length === 0 ? (
-              <Text style={styles.meta}>Chưa có nhật ký nào cho yêu cầu này.</Text>
-            ) : null}
-          </View>
+          {selectedRequest.assignedProviderId ? (
+            <ActionButton
+              label="Xem lịch sử phân công"
+              onPress={() =>
+                navigation.navigate("DispatchHistory", { requestId: selectedRequest.id })
+              }
+              variant="secondary"
+            />
+          ) : (
+            <Text style={styles.meta}>Đơn này chưa được gán thợ nên chưa có lịch sử phân công.</Text>
+          )}
         </View>
       ) : null}
 

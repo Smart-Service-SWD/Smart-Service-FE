@@ -49,13 +49,12 @@ export default function AdminDashboardScreen() {
     setLoading(true);
     setError("");
     try {
-      const data = await graphqlRequest<AdminDashboardResponse>(
-        ADMIN_DASHBOARD_QUERY,
-        undefined,
-        session.accessToken
-      );
-
-      const [agentData, staffData, customerData] = await Promise.all([
+      const [data, agentData, staffData, customerData] = await Promise.all([
+        graphqlRequest<AdminDashboardResponse>(
+          ADMIN_DASHBOARD_QUERY,
+          undefined,
+          session.accessToken
+        ),
         graphqlRequest<UsersByRoleResponse, { role: string }>(
           USERS_BY_ROLE_QUERY,
           { role: "AGENT" },

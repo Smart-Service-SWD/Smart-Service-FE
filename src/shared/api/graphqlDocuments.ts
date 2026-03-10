@@ -346,6 +346,19 @@ export const MY_FEEDBACKS_QUERY = `
   }
 `;
 
+export const SERVICE_FEEDBACKS_QUERY = `
+  query ServiceFeedbacks {
+    getServiceFeedbacks {
+      id
+      serviceRequestId
+      createdByUserId
+      rating
+      comment
+      createdAt
+    }
+  }
+`;
+
 export const FEEDBACK_BY_REQUEST_QUERY = `
   query FeedbackByRequest($serviceRequestId: UUID!) {
     getFeedbackByServiceRequestId(serviceRequestId: $serviceRequestId) {

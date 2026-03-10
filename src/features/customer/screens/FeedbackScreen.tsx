@@ -7,9 +7,17 @@ import ScreenLayout from "../../../shared/ui/ScreenLayout";
 import { colors } from "../../../app/theme/colors";
 import { useAuth } from "../../auth/AuthContext";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
-import { MY_FEEDBACKS_QUERY, MY_REQUESTS_QUERY } from "../../../shared/api/graphqlDocuments";
+import {
+  MY_FEEDBACKS_QUERY,
+  MY_REQUESTS_QUERY,
+  SERVICE_AGENTS_QUERY
+} from "../../../shared/api/graphqlDocuments";
 import { asErrorMessage, formatDateTime, formatShortId } from "../../../shared/utils/format";
-import type { ServiceFeedbackItem, ServiceRequestItem } from "../../../shared/types/domain";
+import type {
+  ServiceAgentItem,
+  ServiceFeedbackItem,
+  ServiceRequestItem
+} from "../../../shared/types/domain";
 import LabeledInput from "../../../shared/ui/LabeledInput";
 import ActionButton from "../../../shared/ui/ActionButton";
 import { createServiceFeedback } from "../api/customerApi";
@@ -23,6 +31,10 @@ interface CompletedRequestsResponse {
   getMyServiceRequests: ServiceRequestItem[];
 }
 
+interface ServiceAgentsResponse {
+  getServiceAgents: ServiceAgentItem[];
+}
+
 export default function FeedbackScreen() {
   const { session } = useAuth();
   const route = useRoute<RouteProp<CustomerTabParamList, "Feedback">>();
@@ -32,6 +44,7 @@ export default function FeedbackScreen() {
   const [comment, setComment] = useState("");
   const [items, setItems] = useState<ServiceFeedbackItem[]>([]);
   const [completedRequests, setCompletedRequests] = useState<ServiceRequestItem[]>([]);
+  const [agentNamesById, setAgentNamesById] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -54,6 +67,9 @@ export default function FeedbackScreen() {
     [completedRequests]
   );
 
+  const getAgentName = (agentId?: string | null) =>
+    agentId ? agentNamesById[agentId] ?? formatShortId(agentId) : "Chưa phân công";
+
   const selectedRequest =
     availableRequests.find((item) => item.id === requestId) ?? null;
 
@@ -62,7 +78,7 @@ export default function FeedbackScreen() {
       return;
     }
     try {
-      const [feedbackData, requestData] = await Promise.all([
+      const [feedbackData, requestData, agentData] = await Promise.all([
         graphqlRequest<MyFeedbackResponse>(
           MY_FEEDBACKS_QUERY,
           undefined,
@@ -72,11 +88,19 @@ export default function FeedbackScreen() {
           MY_REQUESTS_QUERY,
           { status: "COMPLETED" },
           session.accessToken
+        ),
+        graphqlRequest<ServiceAgentsResponse>(
+          SERVICE_AGENTS_QUERY,
+          undefined,
+          session.accessToken
         )
       ]);
 
       setItems(feedbackData.getMyServiceFeedbacks);
       setCompletedRequests(requestData.getMyServiceRequests);
+      setAgentNamesById(
+        Object.fromEntries(agentData.getServiceAgents.map((agent) => [agent.id, agent.fullName]))
+      );
       const availableRequestIds = requestData.getMyServiceRequests
         .filter(
           (request) =>
@@ -195,6 +219,9 @@ export default function FeedbackScreen() {
               <Text style={styles.rowMeta}>
                 Tạo yêu cầu lúc: {formatDateTime(item.createdAt)}
               </Text>
+              <Text style={styles.rowMeta}>
+                Thợ sửa chữa: {getAgentName(item.assignedProviderId)}
+              </Text>
             </Pressable>
           );
         })}
@@ -207,7 +234,8 @@ export default function FeedbackScreen() {
         ) : null}
         {selectedRequest ? (
           <Text style={styles.selectedText}>
-            Đang đánh giá: {selectedRequest.description}
+            Đang đánh giá: {selectedRequest.description} · Thợ:{" "}
+            {getAgentName(selectedRequest.assignedProviderId)}
           </Text>
         ) : null}
         <LabeledInput
@@ -242,6 +270,13 @@ export default function FeedbackScreen() {
               Yêu cầu: {requestLabelsById[item.serviceRequestId] ?? formatShortId(item.serviceRequestId)}
             </Text>
             <Text style={styles.rowMeta}>Mã: {formatShortId(item.serviceRequestId)}</Text>
+            <Text style={styles.rowMeta}>
+              Thợ sửa chữa:{" "}
+              {getAgentName(
+                completedRequests.find((request) => request.id === item.serviceRequestId)
+                  ?.assignedProviderId
+              )}
+            </Text>
             <Text style={styles.rowMeta}>Điểm: {item.rating}/5</Text>
             <Text style={styles.rowMeta}>Nhận xét: {item.comment || "-"}</Text>
             <Text style={styles.rowMeta}>Tạo lúc: {formatDateTime(item.createdAt)}</Text>

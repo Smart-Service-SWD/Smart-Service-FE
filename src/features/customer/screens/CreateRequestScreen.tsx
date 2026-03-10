@@ -261,7 +261,7 @@ export default function CreateRequestScreen() {
       return;
     }
     if (!createdRequestId.trim()) {
-      setError("Hãy tạo yêu cầu trước.");
+      setError("Vui lòng gửi yêu cầu trước rồi mới thêm liên kết tệp.");
       return;
     }
     if (!attachmentFileName.trim() || !attachmentFileUrl.trim()) {
@@ -306,7 +306,7 @@ export default function CreateRequestScreen() {
           Bước 5: Nhấn “Gửi yêu cầu”, hệ thống sẽ phân tích thông tin và tạo đơn.
         </Text>
         <Text style={styles.value}>
-          Bước 6: Nếu cần, thêm liên kết tệp sau khi tạo yêu cầu.
+          Bước 6: Nếu cần, thêm liên kết tệp sau khi gửi yêu cầu thành công.
         </Text>
       </View>
 
@@ -529,7 +529,9 @@ export default function CreateRequestScreen() {
       ) : null}
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Bước 6 · Thêm liên kết tệp có sẵn (tùy chọn)</Text>
+        <Text style={styles.sectionTitle}>
+          Bước 6 · Thêm liên kết tệp sau khi tạo yêu cầu (tùy chọn)
+        </Text>
         {createdRequestId ? (
           <>
             <View style={styles.selectedServiceBox}>
@@ -552,7 +554,7 @@ export default function CreateRequestScreen() {
               onChangeText={setAttachmentFileUrl}
               placeholder="https://example.com/report.pdf"
               autoCapitalize="none"
-              hint="Hiện tại bước này nhận liên kết có sẵn. Ảnh minh họa từ máy đã được hỗ trợ ở bước 4."
+              hint="Bước này chỉ nhận liên kết tệp có sẵn. Ảnh minh họa từ máy đã được hỗ trợ trực tiếp ở bước 4."
             />
             <View style={styles.categoryGrid}>
               {attachmentTypeOptions.map((option) => {
@@ -575,8 +577,8 @@ export default function CreateRequestScreen() {
           </>
         ) : (
           <Text style={styles.value}>
-            Hãy tạo yêu cầu trước. Sau đó nếu bạn đã có sẵn liên kết tệp, hệ thống sẽ gắn liên kết
-            đó vào đúng yêu cầu vừa tạo.
+            Bước này chỉ dùng sau khi bạn đã bấm “Gửi yêu cầu”. Khi tạo đơn thành công, bạn có
+            thể dán liên kết tệp tại đây để gắn đúng vào yêu cầu vừa tạo.
           </Text>
         )}
       </View>
@@ -605,7 +607,7 @@ export default function CreateRequestScreen() {
             busy
               ? "Đang thêm..."
               : !createdRequestId
-                ? "Tạo yêu cầu trước"
+                ? "Cần gửi yêu cầu trước"
                 : "Thêm liên kết tệp"
           }
           onPress={() => void submitAttachment()}

@@ -17,10 +17,11 @@ const tabMeta: Record<string, TabMeta> = {
   RequestBoard: { label: "Bảng việc", icon: "📋" },
   ReviewQueue: { label: "Yêu cầu", icon: "📥" },
   DispatchCenter: { label: "Điều phối", icon: "🚚" },
-  ActivityMonitor: { label: "Hoạt động", icon: "📈" },
+  DispatchHistory: { label: "Lịch sử", icon: "🧾" },
   Dashboard: { label: "Tổng quan", icon: "📊" },
   Users: { label: "Người dùng", icon: "👥" },
-  Services: { label: "Dịch vụ", icon: "🛠️" }
+  Services: { label: "Dịch vụ", icon: "🛠️" },
+  AdminFeedback: { label: "Feedback", icon: "⭐" }
 };
 
 export const getTabScreenOptions = ({

@@ -5,22 +5,15 @@ import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import ScreenLayout from "../../../shared/ui/ScreenLayout";
 import { colors } from "../../../app/theme/colors";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
-import {
-  ACTIVE_SERVICE_AGENTS_QUERY,
-  HOME_BOOTSTRAP_QUERY
-} from "../../../shared/api/graphqlDocuments";
+import { HOME_BOOTSTRAP_QUERY } from "../../../shared/api/graphqlDocuments";
 import { asErrorMessage, formatCurrency } from "../../../shared/utils/format";
-import type { ServiceAgentItem, ServiceCategory, ServiceDefinition } from "../../../shared/types/domain";
+import type { ServiceCategory, ServiceDefinition } from "../../../shared/types/domain";
 import type { CustomerTabParamList } from "../../../app/navigation/types";
 import ActionButton from "../../../shared/ui/ActionButton";
 
 interface HomeBootstrapResponse {
   getServiceCategories: ServiceCategory[];
   getServiceDefinitions: ServiceDefinition[];
-}
-
-interface ActiveAgentResponse {
-  getActiveServiceAgents: ServiceAgentItem[];
 }
 
 const formatComplexityRange = (range?: number[] | null): string => {
@@ -35,7 +28,6 @@ export default function HomeScreen() {
   const navigation = useNavigation<BottomTabNavigationProp<CustomerTabParamList>>();
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [services, setServices] = useState<ServiceDefinition[]>([]);
-  const [activeAgents, setActiveAgents] = useState<ServiceAgentItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -43,13 +35,9 @@ export default function HomeScreen() {
     setLoading(true);
     setError("");
     try {
-      const [homeData, agentData] = await Promise.all([
-        graphqlRequest<HomeBootstrapResponse>(HOME_BOOTSTRAP_QUERY),
-        graphqlRequest<ActiveAgentResponse>(ACTIVE_SERVICE_AGENTS_QUERY)
-      ]);
+      const homeData = await graphqlRequest<HomeBootstrapResponse>(HOME_BOOTSTRAP_QUERY);
       setCategories(homeData.getServiceCategories);
       setServices(homeData.getServiceDefinitions.filter((service) => service.isActive));
-      setActiveAgents(agentData.getActiveServiceAgents);
     } catch (loadError) {
       setError(asErrorMessage(loadError));
     } finally {
@@ -96,19 +84,6 @@ export default function HomeScreen() {
           <Text style={styles.summaryNumber}>{services.length}</Text>
           <Text style={styles.summaryLabel}>Dịch vụ</Text>
         </View>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryNumber}>{activeAgents.length}</Text>
-          <Text style={styles.summaryLabel}>KTV đang trực</Text>
-        </View>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Nhân sự đang trực ({activeAgents.length})</Text>
-        {activeAgents.slice(0, 8).map((agent) => (
-          <Text key={agent.id} style={styles.rowSubtitle}>
-            {agent.fullName}
-          </Text>
-        ))}
       </View>
 
       <View style={styles.card}>

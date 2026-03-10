@@ -300,17 +300,20 @@ export default function ReviewQueueScreen() {
               />
             ) : (
               <Text style={styles.meta}>
-                Đơn này không còn ở bước điều phối. Staff nên xem lịch sử hoặc theo dõi tiến độ
-                thay vì mở tab điều phối.
+                Đơn này không còn ở bước điều phối.
               </Text>
             )}
-            <ActionButton
-              label="Xem lịch sử của đơn"
-              onPress={() =>
-                navigation.navigate("ActivityMonitor", { requestId: selectedRequest.id })
-              }
-              variant="secondary"
-            />
+            {selectedRequest.assignedProviderId ? (
+              <ActionButton
+                label="Xem lịch sử phân công"
+                onPress={() =>
+                  navigation.navigate("DispatchHistory", { requestId: selectedRequest.id })
+                }
+                variant="secondary"
+              />
+            ) : (
+              <Text style={styles.meta}>Đơn này chưa được gán thợ nên chưa có lịch sử phân công.</Text>
+            )}
           </View>
         </View>
       ) : null}

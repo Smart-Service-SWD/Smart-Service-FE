@@ -13,6 +13,7 @@ import {
   MY_FEEDBACKS_QUERY,
   MY_REQUESTS_QUERY,
   REQUEST_BY_ID_QUERY,
+  SERVICE_AGENTS_QUERY,
   SERVICE_DEFINITIONS_QUERY
 } from "../../../shared/api/graphqlDocuments";
 import {
@@ -24,6 +25,7 @@ import {
 } from "../../../shared/utils/format";
 import type {
   ActivityLogItem,
+  ServiceAgentItem,
   ServiceFeedbackItem,
   ServiceDefinition,
   ServiceRequestItem
@@ -55,6 +57,10 @@ interface ServiceDefinitionsResponse {
   getServiceDefinitions: ServiceDefinition[];
 }
 
+interface ServiceAgentsResponse {
+  getServiceAgents: ServiceAgentItem[];
+}
+
 const filters = [
   { label: "Tất cả", value: null },
   { label: "Chờ AI", value: "AWAITING_ANALYSIS" },
@@ -77,10 +83,47 @@ export default function MyRequestsScreen() {
   const [detailFeedbacks, setDetailFeedbacks] = useState<ServiceFeedbackItem[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLogItem[]>([]);
   const [serviceNamesById, setServiceNamesById] = useState<Record<string, string>>({});
+  const [agentNamesById, setAgentNamesById] = useState<Record<string, string>>({});
   const [reviewedRequestIds, setReviewedRequestIds] = useState<string[]>([]);
   const [averageRating, setAverageRating] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const getAgentName = (agentId?: string | null) =>
+    agentId ? agentNamesById[agentId] ?? formatShortId(agentId) : "Chưa phân công";
+
+  const formatActivityForCustomer = (log: ActivityLogItem) => {
+    const assignedMatch = /^Staff assigned provider ([\w-]+) with assignment ([\w-]+)$/i.exec(
+      log.action
+    );
+    if (assignedMatch) {
+      return `Nhân viên điều phối đã phân công thợ ${getAgentName(assignedMatch[1])}.`;
+    }
+
+    const matchingMatch = /^Staff created matching result ([\w-]+) for agent ([\w-]+)$/i.exec(
+      log.action
+    );
+    if (matchingMatch) {
+      return `Nhân viên điều phối đã ghép thợ ${getAgentName(matchingMatch[2])} cho yêu cầu.`;
+    }
+
+    const evaluatedMatch = /^Staff evaluated complexity (\d+) before dispatch$/i.exec(log.action);
+    if (evaluatedMatch) {
+      return `Nhân viên điều phối đã đánh giá độ phức tạp mức ${evaluatedMatch[1]}.`;
+    }
+
+    const agentStartedMatch = /^Agent ([\w-]+) started work$/i.exec(log.action);
+    if (agentStartedMatch) {
+      return `Thợ sửa chữa ${getAgentName(agentStartedMatch[1])} đã bắt đầu công việc.`;
+    }
+
+    const agentCompletedMatch = /^Agent ([\w-]+) completed work$/i.exec(log.action);
+    if (agentCompletedMatch) {
+      return `Thợ sửa chữa ${getAgentName(agentCompletedMatch[1])} đã hoàn thành công việc.`;
+    }
+
+    return log.action;
+  };
 
   const load = async () => {
     if (!session) {
@@ -89,7 +132,7 @@ export default function MyRequestsScreen() {
     setLoading(true);
     setError("");
     try {
-      const [requestData, serviceData, feedbackData] = await Promise.all([
+      const [requestData, serviceData, feedbackData, agentData] = await Promise.all([
         graphqlRequest<MyRequestsResponse, { status?: string | null }>(
           MY_REQUESTS_QUERY,
           { status: statusFilter },
@@ -100,12 +143,20 @@ export default function MyRequestsScreen() {
           MY_FEEDBACKS_QUERY,
           undefined,
           session.accessToken
+        ),
+        graphqlRequest<ServiceAgentsResponse>(
+          SERVICE_AGENTS_QUERY,
+          undefined,
+          session.accessToken
         )
       ]);
 
       setItems(requestData.getMyServiceRequests);
       setServiceNamesById(
         Object.fromEntries(serviceData.getServiceDefinitions.map((service) => [service.id, service.name]))
+      );
+      setAgentNamesById(
+        Object.fromEntries(agentData.getServiceAgents.map((agent) => [agent.id, agent.fullName]))
       );
       setReviewedRequestIds(
         Array.from(
@@ -243,6 +294,9 @@ export default function MyRequestsScreen() {
             <Text style={styles.meta}>AI dự kiến: {item.estimatedDuration}</Text>
           ) : null}
           {item.addressText ? <Text style={styles.meta}>Địa chỉ: {item.addressText}</Text> : null}
+          {item.assignedProviderId ? (
+            <Text style={styles.meta}>Thợ sửa chữa: {getAgentName(item.assignedProviderId)}</Text>
+          ) : null}
           {item.status === "COMPLETED" ? (
             reviewedRequestIds.includes(item.id) ? (
               <Text style={styles.feedbackDone}>Đã gửi đánh giá</Text>
@@ -299,6 +353,9 @@ export default function MyRequestsScreen() {
             {detail.estimatedDuration ? (
               <Text style={styles.meta}>AI dự kiến: {detail.estimatedDuration}</Text>
             ) : null}
+            <Text style={styles.meta}>
+              Thợ sửa chữa: {getAgentName(detail.assignedProviderId)}
+            </Text>
             {detail.ocrExtractedText ? (
               <Text style={styles.meta}>OCR: {detail.ocrExtractedText}</Text>
             ) : null}
@@ -308,7 +365,7 @@ export default function MyRequestsScreen() {
               <Text style={styles.metaStrong}>Nhật ký gần nhất</Text>
               {activityLogs.slice(0, 4).map((log) => (
                 <Text key={log.id} style={styles.meta}>
-                  • {formatDateTime(log.createdAt)} · {log.action}
+                  • {formatDateTime(log.createdAt)} · {formatActivityForCustomer(log)}
                 </Text>
               ))}
               {activityLogs.length === 0 ? (
