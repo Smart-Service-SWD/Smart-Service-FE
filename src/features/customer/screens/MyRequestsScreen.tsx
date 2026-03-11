@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useNavigation } from "@react-navigation/native";
 import ScreenLayout from "../../../shared/ui/ScreenLayout";
 import { colors } from "../../../app/theme/colors";
 import type { CustomerTabParamList } from "../../../app/navigation/types";
 import { useAuth } from "../../auth/AuthContext";
+import { cancelServiceRequest } from "../api/customerApi";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
+import { ApiError } from "../../../shared/api/httpClient";
 import {
   ACTIVITY_LOGS_BY_REQUEST_QUERY,
   FEEDBACK_BY_REQUEST_QUERY,
@@ -70,8 +72,12 @@ const filters = [
   { label: "Đã duyệt", value: "APPROVED" },
   { label: "Đã phân công", value: "ASSIGNED" },
   { label: "Đang làm", value: "IN_PROGRESS" },
-  { label: "Hoàn thành", value: "COMPLETED" }
+  { label: "Hoàn thành", value: "COMPLETED" },
+  { label: "Đã hủy", value: "CANCELLED" }
 ] as const;
+
+const canCancelBeforeStaffConfirmation = (status?: string | null) =>
+  status === "AWAITING_ANALYSIS" || status === "CREATED" || status === "URGENT_DISPATCH";
 
 export default function MyRequestsScreen() {
   const { session } = useAuth();
@@ -87,6 +93,7 @@ export default function MyRequestsScreen() {
   const [reviewedRequestIds, setReviewedRequestIds] = useState<string[]>([]);
   const [averageRating, setAverageRating] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [cancelingRequestId, setCancelingRequestId] = useState("");
   const [error, setError] = useState("");
 
   const getAgentName = (agentId?: string | null) =>
@@ -214,6 +221,51 @@ export default function MyRequestsScreen() {
     }
   };
 
+  const performCancelRequest = async (requestId: string) => {
+    if (!session) {
+      return;
+    }
+
+    setCancelingRequestId(requestId);
+    setError("");
+    try {
+      await cancelServiceRequest(session.accessToken, requestId);
+      setDetail((current) =>
+        current?.id === requestId ? { ...current, status: "CANCELLED" } : current
+      );
+      await load();
+      Alert.alert("Đã hủy yêu cầu", "Yêu cầu của bạn đã được hủy.");
+    } catch (cancelError) {
+      const message = asErrorMessage(cancelError);
+      setError(message);
+
+      if (cancelError instanceof ApiError && cancelError.status === 409) {
+        await load();
+        await loadRequestDetail(requestId);
+        Alert.alert("Không thể hủy", message);
+      }
+    } finally {
+      setCancelingRequestId("");
+    }
+  };
+
+  const confirmCancelRequest = (requestId: string) => {
+    Alert.alert(
+      "Hủy yêu cầu",
+      "Bạn chỉ có thể hủy trước khi staff xác nhận độ phức tạp. Xác nhận hủy yêu cầu này?",
+      [
+        { text: "Không", style: "cancel" },
+        {
+          text: "Hủy yêu cầu",
+          style: "destructive",
+          onPress: () => {
+            void performCancelRequest(requestId);
+          }
+        }
+      ]
+    );
+  };
+
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -264,50 +316,80 @@ export default function MyRequestsScreen() {
       {!!error ? <Text style={styles.error}>{error}</Text> : null}
 
       {items.map((item) => (
-        <Pressable
-          key={item.id}
-          style={[styles.card, detailRequestId === item.id && styles.cardSelected]}
-          onPress={() => void loadRequestDetail(item.id)}
-        >
-          <Text style={styles.cardTitle}>{item.description}</Text>
-          <Text style={styles.meta}>Trạng thái: {formatRequestStatus(item.status)}</Text>
-          {item.serviceDefinitionId ? (
-            <Text style={styles.meta}>
-              Dịch vụ:{" "}
-              {serviceNamesById[item.serviceDefinitionId] ?? formatShortId(item.serviceDefinitionId)}
-            </Text>
-          ) : null}
-          <Text style={styles.meta}>Tạo lúc: {formatDateTime(item.createdAt)}</Text>
-          <Text style={styles.meta}>
-            Độ phức tạp: {item.complexity?.level ?? "Chưa đánh giá"}
-          </Text>
-          <Text style={styles.meta}>
-            Chi phí ước tính:{" "}
-            {item.estimatedCost
-              ? formatCurrency(item.estimatedCost.amount, item.estimatedCost.currency)
-              : "Chưa có"}
-          </Text>
-          {item.addressText ? <Text style={styles.meta}>Địa chỉ: {item.addressText}</Text> : null}
-          {item.assignedProviderId ? (
-            <Text style={styles.meta}>Thợ sửa chữa: {getAgentName(item.assignedProviderId)}</Text>
-          ) : null}
-          {item.status === "COMPLETED" ? (
-            reviewedRequestIds.includes(item.id) ? (
-              <Text style={styles.feedbackDone}>Đã gửi đánh giá</Text>
-            ) : (
-              <Text
-                style={styles.feedbackHint}
-                onPress={() => {
-                  navigation.navigate("Feedback", { requestId: item.id });
-                }}
-              >
-                ★ Gửi đánh giá →
+        (() => {
+          const isSelected = detailRequestId === item.id;
+          const canCancel = canCancelBeforeStaffConfirmation(item.status);
+
+          return (
+            <Pressable
+              key={item.id}
+              style={[styles.card, isSelected && styles.cardSelected]}
+              onPress={() => void loadRequestDetail(item.id)}
+            >
+              <Text style={styles.cardTitle}>{item.description}</Text>
+              <Text style={styles.meta}>Trạng thái: {formatRequestStatus(item.status)}</Text>
+              {item.serviceDefinitionId ? (
+                <Text style={styles.meta}>
+                  Dịch vụ:{" "}
+                  {serviceNamesById[item.serviceDefinitionId] ??
+                    formatShortId(item.serviceDefinitionId)}
+                </Text>
+              ) : null}
+              <Text style={styles.meta}>Tạo lúc: {formatDateTime(item.createdAt)}</Text>
+              <Text style={styles.meta}>
+                Độ phức tạp: {item.complexity?.level ?? "Chưa đánh giá"}
               </Text>
-            )
-          ) : (
-            <Text style={styles.tapHint}>Nhấn để xem chi tiết</Text>
-          )}
-        </Pressable>
+              <Text style={styles.meta}>
+                Chi phí ước tính:{" "}
+                {item.estimatedCost
+                  ? formatCurrency(item.estimatedCost.amount, item.estimatedCost.currency)
+                  : "Chưa có"}
+              </Text>
+              {item.addressText ? (
+                <Text style={styles.meta}>Địa chỉ: {item.addressText}</Text>
+              ) : null}
+              {item.assignedProviderId ? (
+                <Text style={styles.meta}>
+                  Thợ sửa chữa: {getAgentName(item.assignedProviderId)}
+                </Text>
+              ) : null}
+              {canCancel ? (
+                <>
+                  <Text style={styles.cancelHint}>
+                    Có thể hủy trước khi staff xác nhận độ phức tạp
+                  </Text>
+                  {isSelected ? (
+                    <ActionButton
+                      label={
+                        cancelingRequestId === item.id ? "Đang hủy..." : "Hủy yêu cầu này"
+                      }
+                      onPress={() => confirmCancelRequest(item.id)}
+                      disabled={loading || cancelingRequestId.length > 0}
+                      variant="danger"
+                    />
+                  ) : (
+                    <Text style={styles.tapHint}>Nhấn vào card này để hiện nút hủy</Text>
+                  )}
+                </>
+              ) : item.status === "COMPLETED" ? (
+                reviewedRequestIds.includes(item.id) ? (
+                  <Text style={styles.feedbackDone}>Đã gửi đánh giá</Text>
+                ) : (
+                  <Text
+                    style={styles.feedbackHint}
+                    onPress={() => {
+                      navigation.navigate("Feedback", { requestId: item.id });
+                    }}
+                  >
+                    ★ Gửi đánh giá →
+                  </Text>
+                )
+              ) : (
+                <Text style={styles.tapHint}>Nhấn để xem chi tiết</Text>
+              )}
+            </Pressable>
+          );
+        })()
       ))}
 
       {!loading && items.length === 0 ? (
@@ -350,6 +432,21 @@ export default function MyRequestsScreen() {
             <Text style={styles.meta}>
               Thợ sửa chữa: {getAgentName(detail.assignedProviderId)}
             </Text>
+            {canCancelBeforeStaffConfirmation(detail.status) ? (
+              <View style={styles.cancelBox}>
+                <Text style={styles.meta}>
+                  Bạn có thể hủy ở bước này vì staff chưa xác nhận độ phức tạp.
+                </Text>
+                <ActionButton
+                  label={
+                    cancelingRequestId === detail.id ? "Đang hủy..." : "Hủy yêu cầu"
+                  }
+                  onPress={() => confirmCancelRequest(detail.id)}
+                  disabled={loading || cancelingRequestId.length > 0}
+                  variant="danger"
+                />
+              </View>
+            ) : null}
             {detail.ocrExtractedText ? (
               <Text style={styles.meta}>OCR: {detail.ocrExtractedText}</Text>
             ) : null}
@@ -430,6 +527,11 @@ const styles = StyleSheet.create({
     gap: 3,
     marginTop: 8
   },
+  cancelBox: {
+    gap: 8,
+    marginTop: 10,
+    marginBottom: 4
+  },
   logBox: {
     gap: 4,
     marginTop: 10,
@@ -451,6 +553,12 @@ const styles = StyleSheet.create({
   feedbackHint: {
     color: colors.success,
     fontSize: 13,
+    fontWeight: "700",
+    marginTop: 6
+  },
+  cancelHint: {
+    color: colors.danger,
+    fontSize: 12,
     fontWeight: "700",
     marginTop: 6
   },

@@ -1,6 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
-import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
+import {
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+  type RouteProp
+} from "@react-navigation/native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import ScreenLayout from "../../../shared/ui/ScreenLayout";
 import { colors } from "../../../app/theme/colors";
@@ -278,7 +283,7 @@ export default function DispatchCenterScreen() {
     return wasAnalyzedByAI ? "AI chưa trả về" : "Chưa phân tích AI";
   };
 
-  const loadInitialData = async () => {
+  const loadInitialData = useCallback(async () => {
     if (!session) {
       return;
     }
@@ -306,7 +311,7 @@ export default function DispatchCenterScreen() {
     } catch (loadError) {
       setError(asErrorMessage(loadError));
     }
-  };
+  }, [session]);
 
   const loadRequestContext = async (request: ServiceRequestItem) => {
     if (!session) {
@@ -558,10 +563,11 @@ export default function DispatchCenterScreen() {
     }
   };
 
-  useEffect(() => {
-    void loadInitialData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.accessToken]);
+  useFocusEffect(
+    useCallback(() => {
+      void loadInitialData();
+    }, [loadInitialData])
+  );
 
   useEffect(() => {
     const routeRequestId = route.params?.requestId;

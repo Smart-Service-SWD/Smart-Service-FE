@@ -29,6 +29,7 @@ import ActionButton from "../../../shared/ui/ActionButton";
 import {
   completeInProgressRequest,
   createActivityLog,
+  setServiceAgentActiveStatus,
   startAssignedRequest
 } from "../api/agentApi";
 
@@ -62,6 +63,7 @@ export default function AssignmentsScreen() {
   const [serviceNamesById, setServiceNamesById] = useState<Record<string, string>>({});
   const [bindingMessage, setBindingMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [updatingAvailability, setUpdatingAvailability] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -204,6 +206,38 @@ export default function AssignmentsScreen() {
     }
   };
 
+  const handleToggleAvailability = async () => {
+    if (!session || !linkedServiceAgent) {
+      setError("Tài khoản này chưa có hồ sơ thợ để cập nhật trạng thái hoạt động.");
+      return;
+    }
+
+    setUpdatingAvailability(true);
+    setError("");
+    setSuccess("");
+    try {
+      const nextIsActive = !linkedServiceAgent.isActive;
+      const result = await setServiceAgentActiveStatus(
+        session.accessToken,
+        linkedServiceAgent.id,
+        nextIsActive
+      );
+
+      setLinkedServiceAgent((current) =>
+        current ? { ...current, isActive: result.isActive } : current
+      );
+      setSuccess(
+        result.isActive
+          ? "Bạn đã bật nhận việc mới. Staff sẽ thấy bạn trong danh sách phân công."
+          : "Bạn đã tắt nhận việc mới. Staff sẽ không còn thấy bạn trong danh sách phân công mới."
+      );
+    } catch (actionError) {
+      setError(asErrorMessage(actionError));
+    } finally {
+      setUpdatingAvailability(false);
+    }
+  };
+
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -235,8 +269,32 @@ export default function AssignmentsScreen() {
         <Text style={styles.title}>Thông tin nhận việc</Text>
         <Text style={styles.meta}>Thợ đang đăng nhập: {linkedServiceAgent?.fullName ?? "-"}</Text>
         <Text style={styles.meta}>
-          Trạng thái: {linkedServiceAgent ? "Sẵn sàng nhận công việc" : "Chưa có hồ sơ thợ"}
+          Trạng thái:{" "}
+          {!linkedServiceAgent
+            ? "Chưa có hồ sơ thợ"
+            : linkedServiceAgent.isActive
+              ? "Đang nhận việc mới"
+              : "Đang tạm ngưng nhận việc mới"}
         </Text>
+        {linkedServiceAgent ? (
+          <>
+            <Text style={styles.meta}>
+              Khi tắt, staff sẽ không còn thấy bạn trong danh sách để phân công yêu cầu mới.
+            </Text>
+            <ActionButton
+              label={
+                updatingAvailability
+                  ? "Đang cập nhật..."
+                  : linkedServiceAgent.isActive
+                    ? "Tắt nhận việc mới"
+                    : "Bật nhận việc mới"
+              }
+              onPress={() => void handleToggleAvailability()}
+              disabled={loading || updatingAvailability}
+              variant="secondary"
+            />
+          </>
+        ) : null}
       </View>
 
       {items.map((item) => (

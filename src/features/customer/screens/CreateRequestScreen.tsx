@@ -16,7 +16,6 @@ import {
 import ActionButton from "../../../shared/ui/ActionButton";
 import LabeledInput from "../../../shared/ui/LabeledInput";
 import {
-  createServiceAttachment,
   createServiceRequest,
   type CreateServiceRequestResult,
   type RequestImageAsset
@@ -37,13 +36,6 @@ interface PickedRequestImage extends RequestImageAsset {
   fileSize?: number;
 }
 
-const attachmentTypeOptions = [
-  { label: "Ảnh", value: 0 },
-  { label: "Video", value: 1 },
-  { label: "Tài liệu", value: 2 },
-  { label: "Khác", value: 3 }
-] as const;
-
 export default function CreateRequestScreen() {
   const navigation = useNavigation<BottomTabNavigationProp<CustomerTabParamList>>();
   const { session } = useAuth();
@@ -54,9 +46,6 @@ export default function CreateRequestScreen() {
   const [description, setDescription] = useState("");
   const [addressText, setAddressText] = useState("");
   const [selectedImage, setSelectedImage] = useState<PickedRequestImage | null>(null);
-  const [attachmentFileName, setAttachmentFileName] = useState("");
-  const [attachmentFileUrl, setAttachmentFileUrl] = useState("");
-  const [attachmentType, setAttachmentType] = useState<number>(0);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [createResult, setCreateResult] = useState<CreateServiceRequestResult | null>(null);
@@ -255,40 +244,6 @@ export default function CreateRequestScreen() {
     }
   };
 
-  const submitAttachment = async () => {
-    if (!session) {
-      setError("Bạn chưa đăng nhập");
-      return;
-    }
-    if (!createdRequestId.trim()) {
-      setError("Vui lòng gửi yêu cầu trước rồi mới thêm liên kết tệp.");
-      return;
-    }
-    if (!attachmentFileName.trim() || !attachmentFileUrl.trim()) {
-      setError("Cần nhập tên tệp và liên kết tệp.");
-      return;
-    }
-
-    setBusy(true);
-    setError("");
-    setSuccess("");
-    try {
-      const attachmentId = await createServiceAttachment(session.accessToken, {
-        serviceRequestId: createdRequestId.trim(),
-        fileName: attachmentFileName.trim(),
-        fileUrl: attachmentFileUrl.trim(),
-        type: attachmentType
-      });
-      setSuccess(`Đã thêm tệp đính kèm. Mã tệp: ${attachmentId}`);
-      setAttachmentFileName("");
-      setAttachmentFileUrl("");
-    } catch (attachmentError) {
-      setError(asErrorMessage(attachmentError));
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
     <ScreenLayout
       title="Tạo yêu cầu dịch vụ"
@@ -304,9 +259,6 @@ export default function CreateRequestScreen() {
         <Text style={styles.value}>Bước 4: Có thể chọn hoặc chụp ảnh minh họa.</Text>
         <Text style={styles.value}>
           Bước 5: Nhấn “Gửi yêu cầu”, hệ thống sẽ phân tích thông tin và tạo đơn.
-        </Text>
-        <Text style={styles.value}>
-          Bước 6: Nếu cần, thêm liên kết tệp sau khi gửi yêu cầu thành công.
         </Text>
       </View>
 
@@ -528,61 +480,6 @@ export default function CreateRequestScreen() {
         </View>
       ) : null}
 
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>
-          Bước 6 · Thêm liên kết tệp sau khi tạo yêu cầu (tùy chọn)
-        </Text>
-        {createdRequestId ? (
-          <>
-            <View style={styles.selectedServiceBox}>
-              <Text style={styles.selectedServiceTitle}>Yêu cầu hiện tại</Text>
-              <Text style={styles.selectedServiceValue}>{createdRequestId}</Text>
-            </View>
-            <Text style={styles.value}>
-              Bước này phù hợp khi bạn đã có sẵn liên kết chia sẻ tới tệp trên Drive, OneDrive
-              hoặc một nguồn lưu trữ khác.
-            </Text>
-            <LabeledInput
-              label="Tên tệp"
-              value={attachmentFileName}
-              onChangeText={setAttachmentFileName}
-              placeholder="report.pdf"
-            />
-            <LabeledInput
-              label="Liên kết tệp"
-              value={attachmentFileUrl}
-              onChangeText={setAttachmentFileUrl}
-              placeholder="https://example.com/report.pdf"
-              autoCapitalize="none"
-              hint="Bước này chỉ nhận liên kết tệp có sẵn. Ảnh minh họa từ máy đã được hỗ trợ trực tiếp ở bước 4."
-            />
-            <View style={styles.categoryGrid}>
-              {attachmentTypeOptions.map((option) => {
-                const active = option.value === attachmentType;
-                return (
-                  <Pressable
-                    key={option.value}
-                    style={[styles.categoryChip, active && styles.categoryChipActive]}
-                    onPress={() => setAttachmentType(option.value)}
-                  >
-                    <Text
-                      style={[styles.categoryChipText, active && styles.categoryChipTextActive]}
-                    >
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </>
-        ) : (
-          <Text style={styles.value}>
-            Bước này chỉ dùng sau khi bạn đã bấm “Gửi yêu cầu”. Khi tạo đơn thành công, bạn có
-            thể dán liên kết tệp tại đây để gắn đúng vào yêu cầu vừa tạo.
-          </Text>
-        )}
-      </View>
-
       {!!error ? <Text style={styles.error}>{error}</Text> : null}
       {!!success ? <Text style={styles.success}>{success}</Text> : null}
 
@@ -601,18 +498,6 @@ export default function CreateRequestScreen() {
           }
           onPress={() => void submit()}
           disabled={!canSubmitRequest}
-        />
-        <ActionButton
-          label={
-            busy
-              ? "Đang thêm..."
-              : !createdRequestId
-                ? "Cần gửi yêu cầu trước"
-                : "Thêm liên kết tệp"
-          }
-          onPress={() => void submitAttachment()}
-          disabled={busy || !createdRequestId.trim()}
-          variant="secondary"
         />
       </View>
     </ScreenLayout>

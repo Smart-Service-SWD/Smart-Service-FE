@@ -89,6 +89,8 @@ Purpose: quick memory file for future AI/dev sessions working on `Service_FE`.
 - Agent request board no longer requires manual request ID input:
   - agent taps a request card
   - FE auto-loads assignment + matching data for that request
+- Agent can now bật/tắt trạng thái nhận việc mới ngay trên màn `Công việc của tôi`.
+- Khi `isActive = false`, staff dispatch FE không còn hiện thợ đó trong danh sách phân công mới.
 
 ### Staff dispatch flow
 

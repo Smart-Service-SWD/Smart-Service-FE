@@ -22,13 +22,6 @@ interface CreateFeedbackPayload {
   comment?: string | null;
 }
 
-interface CreateAttachmentPayload {
-  serviceRequestId: string;
-  fileName: string;
-  fileUrl: string;
-  type: number;
-}
-
 export interface CreateServiceRequestResult {
   serviceRequestId: string;
   aiComplexityLevel?: number | null;
@@ -42,6 +35,11 @@ export interface CreateServiceRequestResult {
   ocrExtractedText?: string | null;
   wasAnalyzedByAI: boolean;
   isDangerFlagged: boolean;
+}
+
+export interface ServiceRequestStatusResult {
+  serviceRequestId: string;
+  status: string;
 }
 
 const appendImage = (formData: FormData, image: RequestImageAsset) => {
@@ -93,13 +91,12 @@ export const createServiceFeedback = (
     body: payload
   });
 
-export const createServiceAttachment = (
+export const cancelServiceRequest = (
   token: string,
-  payload: CreateAttachmentPayload
-): Promise<string> =>
-  httpRequest<string>({
-    path: "/api/service-attachments",
-    method: "POST",
-    token,
-    body: payload
+  serviceRequestId: string
+): Promise<ServiceRequestStatusResult> =>
+  httpRequest<ServiceRequestStatusResult>({
+    path: `/api/service-requests/${serviceRequestId}/cancel`,
+    method: "PATCH",
+    token
   });

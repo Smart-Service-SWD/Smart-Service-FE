@@ -32,6 +32,13 @@ export const asErrorMessage = (error: unknown): string => {
       return "Hệ thống đang lỗi khi nhận chi phí ước tính. Hãy cập nhật/restart BE rồi thử phân công lại.";
     }
 
+    if (
+      normalizedMessage.includes("before staff confirms its complexity") ||
+      normalizedMessage.includes("before staff confirms complexity")
+    ) {
+      return "Yêu cầu này không còn hủy được vì staff đã xác nhận độ phức tạp hoặc đã chuyển sang bước xử lý tiếp theo.";
+    }
+
     if (error.errorCode === "AUTH_401_INVALID_CREDENTIALS") {
       return "Email hoặc mật khẩu không đúng.";
     }
