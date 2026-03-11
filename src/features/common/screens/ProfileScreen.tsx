@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import ScreenLayout from "../../../shared/ui/ScreenLayout";
 import { colors } from "../../../app/theme/colors";
@@ -13,6 +13,10 @@ import {
 } from "../../../shared/utils/format";
 import ActionButton from "../../../shared/ui/ActionButton";
 import LabeledInput from "../../../shared/ui/LabeledInput";
+import SectionCard from "../../../shared/ui/SectionCard";
+import StatusBadge from "../../../shared/ui/StatusBadge";
+import MetricTile from "../../../shared/ui/MetricTile";
+import DetailRow from "../../../shared/ui/DetailRow";
 import { changePassword, updateProfile } from "../api/profileApi";
 import type { UserProfile } from "../../../shared/types/domain";
 
@@ -23,6 +27,19 @@ interface MeResponse {
 interface UserByIdResponse {
   getUserById: UserProfile | null;
 }
+
+const getInitials = (fullName?: string | null) => {
+  const parts = fullName?.trim().split(/\s+/).filter(Boolean) ?? [];
+
+  if (!parts.length) {
+    return "U";
+  }
+
+  return parts
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+};
 
 export default function ProfileScreen() {
   const { session, logout, refreshSession } = useAuth();
@@ -185,32 +202,83 @@ export default function ProfileScreen() {
     }
   };
 
+  const resolvedFullName = profile?.fullName ?? session?.fullName ?? "Người dùng";
+  const roleLabel = formatRoleLabel(session?.role);
+  const lockLabel = formatBooleanLabel(profile?.isLocked ?? false, "Đã khóa", "Hoạt động");
+  const initials = useMemo(() => getInitials(resolvedFullName), [resolvedFullName]);
+
   return (
     <ScreenLayout
       title="Tài khoản"
       subtitle="Quản lý thông tin cá nhân, mật khẩu và phiên đăng nhập hiện tại"
     >
-      <View style={styles.card}>
-        <Text style={styles.label}>Email đăng nhập</Text>
-        <Text style={styles.value}>{session?.email ?? "-"}</Text>
-        <Text style={styles.label}>Vai trò hiện tại</Text>
-        <Text style={styles.value}>{formatRoleLabel(session?.role)}</Text>
-      </View>
+      <SectionCard tone="primary">
+        <View style={styles.heroRow}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{initials}</Text>
+          </View>
+          <View style={styles.heroContent}>
+            <Text style={styles.heroName}>{resolvedFullName}</Text>
+            <Text style={styles.heroEmail}>{session?.email ?? "-"}</Text>
+            <View style={styles.badgeRow}>
+              <StatusBadge label={roleLabel} tone="primary" />
+              <StatusBadge
+                label={lockLabel}
+                tone={profile?.isLocked ? "danger" : "success"}
+              />
+            </View>
+          </View>
+        </View>
 
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Thông tin từ hệ thống</Text>
-        <Text style={styles.label}>Họ tên</Text>
-        <Text style={styles.value}>{profile?.fullName ?? "-"}</Text>
-        <Text style={styles.label}>Số điện thoại</Text>
-        <Text style={styles.value}>{profile?.phoneNumber ?? "-"}</Text>
-        <Text style={styles.label}>Trạng thái khóa</Text>
-        <Text style={styles.value}>
-          {formatBooleanLabel(profile?.isLocked ?? false, "Đã khóa", "Hoạt động")}
-        </Text>
-      </View>
+        <View style={styles.metricGrid}>
+          <MetricTile
+            label="Số điện thoại"
+            value={profile?.phoneNumber?.trim() ? profile.phoneNumber : "Chưa cập nhật"}
+            helper="Thông tin dùng để staff và hệ thống liên hệ"
+          />
+          <MetricTile
+            label="Phiên hiện tại"
+            value={session ? "Đang hoạt động" : "Không có"}
+            helper="Có thể làm mới token mà không cần đăng nhập lại"
+            tone="success"
+          />
+        </View>
+      </SectionCard>
 
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Cập nhật hồ sơ</Text>
+      {!!error ? (
+        <SectionCard tone="danger">
+          <Text style={styles.messageTitle}>Có lỗi xảy ra</Text>
+          <Text style={styles.error}>{error}</Text>
+        </SectionCard>
+      ) : null}
+
+      {!!success ? (
+        <SectionCard tone="success">
+          <Text style={styles.messageTitle}>Cập nhật thành công</Text>
+          <Text style={styles.success}>{success}</Text>
+        </SectionCard>
+      ) : null}
+
+      <SectionCard
+        title="Thông tin từ hệ thống"
+        subtitle="Dữ liệu hồ sơ hiện đang đồng bộ với tài khoản đang đăng nhập"
+      >
+        <View style={styles.detailList}>
+          <DetailRow label="Email đăng nhập" value={session?.email ?? "-"} />
+          <DetailRow label="Vai trò hiện tại" value={roleLabel} />
+          <DetailRow label="Họ tên" value={profile?.fullName ?? "-"} />
+          <DetailRow
+            label="Số điện thoại"
+            value={profile?.phoneNumber?.trim() ? profile.phoneNumber : "Chưa cập nhật"}
+          />
+          <DetailRow label="Trạng thái khóa" value={lockLabel} />
+        </View>
+      </SectionCard>
+
+      <SectionCard
+        title="Cập nhật hồ sơ"
+        subtitle="Giữ lại email đăng nhập hiện tại, chỉ chỉnh thông tin hiển thị và liên hệ"
+      >
         <LabeledInput label="Họ và tên" value={fullName} onChangeText={setFullName} />
         <LabeledInput
           label="Số điện thoại"
@@ -223,10 +291,12 @@ export default function ProfileScreen() {
           onPress={() => void handleUpdateProfile()}
           disabled={busy}
         />
-      </View>
+      </SectionCard>
 
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Đổi mật khẩu</Text>
+      <SectionCard
+        title="Đổi mật khẩu"
+        subtitle="Dùng khi bạn muốn thay mật khẩu của tài khoản hiện tại"
+      >
         <LabeledInput
           label="Mật khẩu hiện tại"
           value={currentPassword}
@@ -250,55 +320,86 @@ export default function ProfileScreen() {
           label={busy ? "Đang cập nhật..." : "Cập nhật mật khẩu"}
           onPress={() => void handleChangePassword()}
           disabled={busy}
+          variant="secondary"
         />
-      </View>
+      </SectionCard>
 
-      {!!error ? <Text style={styles.error}>{error}</Text> : null}
-      {!!success ? <Text style={styles.success}>{success}</Text> : null}
-
-      <ActionButton
-        label={busy ? "Đang làm mới..." : "Làm mới phiên đăng nhập"}
-        onPress={() => void handleRefreshToken()}
-        disabled={busy}
-      />
-      <ActionButton label="Đăng xuất" onPress={() => void logout()} variant="danger" />
+      <SectionCard
+        title="Phiên đăng nhập"
+        subtitle="Làm mới token hoặc đăng xuất khỏi thiết bị này"
+      >
+        <ActionButton
+          label={busy ? "Đang làm mới..." : "Làm mới phiên đăng nhập"}
+          onPress={() => void handleRefreshToken()}
+          disabled={busy}
+          variant="secondary"
+        />
+        <ActionButton label="Đăng xuất" onPress={() => void logout()} variant="danger" />
+      </SectionCard>
     </ScreenLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 16,
-    padding: 14,
-    gap: 6
+  heroRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14
   },
-  sectionTitle: {
+  avatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 22,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  avatarText: {
+    color: "#fff",
+    fontSize: 24,
+    fontWeight: "800"
+  },
+  heroContent: {
+    flex: 1,
+    gap: 4
+  },
+  heroName: {
     color: colors.text,
-    fontWeight: "700",
-    fontSize: 15,
-    marginBottom: 4
+    fontSize: 21,
+    fontWeight: "800"
   },
-  label: {
-    color: colors.textMuted,
-    fontSize: 12
+  heroEmail: {
+    color: colors.textSoft,
+    fontSize: 13,
+    lineHeight: 18
   },
-  value: {
+  badgeRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 2
+  },
+  metricGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10
+  },
+  detailList: {
+    gap: 10
+  },
+  messageTitle: {
     color: colors.text,
     fontSize: 14,
-    fontWeight: "600"
+    fontWeight: "800"
   },
   error: {
     color: colors.danger,
-    fontSize: 13
+    fontSize: 13,
+    lineHeight: 18
   },
   success: {
     color: colors.success,
-    fontSize: 13
-  },
-  disabledButton: {
-    opacity: 0.7
+    fontSize: 13,
+    lineHeight: 18
   }
 });

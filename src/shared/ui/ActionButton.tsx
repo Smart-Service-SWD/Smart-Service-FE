@@ -16,13 +16,14 @@ export default function ActionButton({
 }: ActionButtonProps) {
   const isPrimary = variant === "primary";
   const isDanger = variant === "danger";
+  const isSecondary = variant === "secondary";
 
   return (
     <Pressable
       style={({ pressed }) => [
         styles.button,
         isPrimary && styles.primaryButton,
-        variant === "secondary" && styles.secondaryButton,
+        isSecondary && styles.secondaryButton,
         isDanger && styles.dangerButton,
         pressed && !disabled && styles.pressed,
         disabled && styles.disabled
@@ -34,7 +35,7 @@ export default function ActionButton({
         style={[
           styles.label,
           isPrimary && styles.primaryLabel,
-          variant === "secondary" && styles.secondaryLabel,
+          isSecondary && styles.secondaryLabel,
           isDanger && styles.primaryLabel
         ]}
       >
@@ -46,18 +47,27 @@ export default function ActionButton({
 
 const styles = StyleSheet.create({
   button: {
-    borderRadius: 14,
-    paddingVertical: 13,
-    paddingHorizontal: 14,
+    minHeight: 52,
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
+    shadowColor: colors.shadow,
+    shadowOffset: {
+      width: 0,
+      height: 8
+    },
+    shadowOpacity: 1,
+    shadowRadius: 16,
+    elevation: 1
   },
   primaryButton: {
     backgroundColor: colors.primary
   },
   secondaryButton: {
-    backgroundColor: colors.surface,
-    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft,
+    borderColor: "transparent",
     borderWidth: 1
   },
   dangerButton: {
@@ -65,19 +75,19 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 15,
-    fontWeight: "700"
+    fontWeight: "800"
   },
   primaryLabel: {
     color: "#fff"
   },
   secondaryLabel: {
-    color: colors.primary
+    color: colors.primaryStrong
   },
   disabled: {
-    opacity: 0.65
+    opacity: 0.6
   },
   pressed: {
-    transform: [{ scale: 0.98 }],
-    opacity: 0.92
+    transform: [{ scale: 0.985 }],
+    opacity: 0.94
   }
 });

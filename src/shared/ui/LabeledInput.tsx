@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Pressable,
   StyleSheet,
@@ -21,15 +22,33 @@ export default function LabeledInput({
   actionLabel,
   onActionPress,
   style,
+  onBlur,
+  onFocus,
   ...props
 }: LabeledInputProps) {
+  const [focused, setFocused] = useState(false);
+
   return (
     <View style={styles.wrapper}>
       <Text style={styles.label}>{label}</Text>
       <View style={styles.inputRow}>
         <TextInput
-          style={[styles.input, !!actionLabel && styles.inputWithAction, style]}
+          style={[
+            styles.input,
+            focused && styles.inputFocused,
+            !!actionLabel && styles.inputWithAction,
+            style
+          ]}
           placeholderTextColor={colors.textMuted}
+          selectionColor={colors.primary}
+          onFocus={(event) => {
+            setFocused(true);
+            onFocus?.(event);
+          }}
+          onBlur={(event) => {
+            setFocused(false);
+            onBlur?.(event);
+          }}
           {...props}
         />
         {actionLabel && onActionPress ? (
@@ -45,40 +64,52 @@ export default function LabeledInput({
 
 const styles = StyleSheet.create({
   wrapper: {
-    gap: 6
+    gap: 7
   },
   label: {
     color: colors.text,
     fontSize: 14,
-    fontWeight: "600"
+    fontWeight: "700"
   },
   input: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+    borderColor: "rgba(100, 116, 139, 0.18)",
+    borderRadius: 18,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
     color: colors.text,
-    backgroundColor: "#fff",
-    fontSize: 15
+    backgroundColor: colors.surfaceRaised,
+    fontSize: 15,
+    shadowColor: colors.shadow,
+    shadowOffset: {
+      width: 0,
+      height: 6
+    },
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
+    elevation: 1
+  },
+  inputFocused: {
+    borderColor: colors.primary,
+    backgroundColor: colors.surface
   },
   inputRow: {
     position: "relative",
     justifyContent: "center"
   },
   inputWithAction: {
-    paddingRight: 72
+    paddingRight: 78
   },
   actionButton: {
     position: "absolute",
-    right: 12,
+    right: 14,
     paddingVertical: 6,
     paddingHorizontal: 4
   },
   actionText: {
-    color: colors.primary,
+    color: colors.primaryStrong,
     fontSize: 12,
-    fontWeight: "700"
+    fontWeight: "800"
   },
   hint: {
     color: colors.textMuted,

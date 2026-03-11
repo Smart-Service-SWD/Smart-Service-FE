@@ -12,6 +12,9 @@ import { asErrorMessage, formatCurrency } from "../../../shared/utils/format";
 import type { ServiceCategory, ServiceDefinition } from "../../../shared/types/domain";
 import LabeledInput from "../../../shared/ui/LabeledInput";
 import ActionButton from "../../../shared/ui/ActionButton";
+import SectionCard from "../../../shared/ui/SectionCard";
+import MetricTile from "../../../shared/ui/MetricTile";
+import StatusBadge from "../../../shared/ui/StatusBadge";
 import {
   createCategory,
   createServiceDefinition,
@@ -127,7 +130,6 @@ export default function ServiceAdminScreen() {
 
   useEffect(() => {
     if (!selectedService) {
-      // Reset form khi bỏ chọn (sau xóa hoặc chọn lại)
       setServiceName("");
       setServiceDescription("");
       setBasePrice("100000");
@@ -325,18 +327,36 @@ export default function ServiceAdminScreen() {
   };
 
   return (
-    <ScreenLayout title="Quản lý dịch vụ" subtitle="Danh mục + định nghĩa dịch vụ">
-      {!!error ? <Text style={styles.error}>{error}</Text> : null}
-      {!!success ? <Text style={styles.success}>{success}</Text> : null}
-      {loading ? <Text style={styles.meta}>Đang xử lý...</Text> : null}
+    <ScreenLayout
+      title="Quản lý dịch vụ"
+      subtitle="Danh mục và định nghĩa dịch vụ được sắp lại theo nhịp mobile dễ thao tác hơn"
+    >
+      <SectionCard tone="primary" title="Tổng quan catalog">
+        <View style={styles.metricGrid}>
+          <MetricTile label="Danh mục" value={categories.length} helper="Nhóm dịch vụ hiện có" tone="primary" />
+          <MetricTile label="Dịch vụ" value={services.length} helper="Trong danh mục đang chọn" tone="success" />
+          <MetricTile label="Danh mục đang xem" value={selectedCategoryId ? 1 : 0} helper="Đã chọn để thao tác" tone="warning" />
+        </View>
+        {loading ? <Text style={styles.meta}>Đang đồng bộ dữ liệu dịch vụ...</Text> : null}
+      </SectionCard>
 
-      <View style={styles.card}>
-        <Text style={styles.title}>Tạo danh mục mới</Text>
-        <LabeledInput
-          label="Tên danh mục"
-          value={categoryName}
-          onChangeText={setCategoryName}
-        />
+      {!!error ? (
+        <SectionCard tone="danger">
+          <Text style={styles.error}>{error}</Text>
+        </SectionCard>
+      ) : null}
+
+      {!!success ? (
+        <SectionCard tone="success">
+          <Text style={styles.success}>{success}</Text>
+        </SectionCard>
+      ) : null}
+
+      <SectionCard
+        title="Tạo danh mục mới"
+        subtitle="Dùng cho các nhóm dịch vụ lớn trước khi thêm từng service cụ thể"
+      >
+        <LabeledInput label="Tên danh mục" value={categoryName} onChangeText={setCategoryName} />
         <LabeledInput
           label="Mô tả"
           value={categoryDescription}
@@ -349,11 +369,13 @@ export default function ServiceAdminScreen() {
           onPress={() => void handleCreateCategory()}
           disabled={loading}
         />
-      </View>
+      </SectionCard>
 
-      <View style={styles.card}>
-        <Text style={styles.title}>Quản lý dịch vụ (Tạo / Cập nhật / Xóa)</Text>
-        <Text style={styles.meta}>Danh mục</Text>
+      <SectionCard
+        title="Quản lý dịch vụ"
+        subtitle="Chọn danh mục, chạm vào một dịch vụ để nạp form chỉnh sửa hoặc tạo mới"
+      >
+        <Text style={styles.sectionLabel}>Danh mục</Text>
         <View style={styles.chipRow}>
           {categories.map((category) => {
             const active = category.id === selectedCategoryId;
@@ -370,13 +392,32 @@ export default function ServiceAdminScreen() {
             );
           })}
         </View>
-        {selectedServiceId ? (
-          <Text style={styles.hint}>
-            Đã chọn: {selectedService?.name ?? selectedServiceId}
-          </Text>
+
+        {selectedService ? (
+          <View style={styles.selectedServiceCard}>
+            <Text style={styles.selectedServiceTitle}>Đang chỉnh: {selectedService.name}</Text>
+            <View style={styles.badgeRow}>
+              <StatusBadge
+                label={selectedService.isActive ? "Đang hoạt động" : "Không hoạt động"}
+                tone={selectedService.isActive ? "success" : "danger"}
+              />
+              <StatusBadge
+                label={selectedService.isDangerous ? "Nguy hiểm" : "Bình thường"}
+                tone={selectedService.isDangerous ? "warning" : "neutral"}
+              />
+              <StatusBadge
+                label={`AI baseline ${formatComplexityRange(selectedService.complexityRange)}`}
+                tone="primary"
+              />
+            </View>
+            <Text style={styles.meta}>
+              Giá cơ sở: {formatCurrency(selectedService.basePrice)} • Thời gian chuẩn: {selectedService.estimatedDuration} phút
+            </Text>
+          </View>
         ) : (
-          <Text style={styles.hint}>Nhấn vào dịch vụ trong danh sách bên dưới để chỉnh sửa</Text>
+          <Text style={styles.hint}>Chưa chọn service. Nhấn vào một service trong danh sách bên dưới để nạp form sửa.</Text>
         )}
+
         <LabeledInput label="Tên dịch vụ" value={serviceName} onChangeText={setServiceName} />
         <LabeledInput
           label="Mô tả"
@@ -402,7 +443,7 @@ export default function ServiceAdminScreen() {
           value={complexityMin}
           onChangeText={setComplexityMin}
           keyboardType="number-pad"
-          hint="BE dùng phạm vi này làm baseline cho AI khi phân tích yêu cầu."
+          hint="Phạm vi này được backend dùng làm baseline khi AI phân tích yêu cầu."
         />
         <LabeledInput
           label="Độ phức tạp tối đa (1-5)"
@@ -422,9 +463,7 @@ export default function ServiceAdminScreen() {
         />
         {selectedServiceId ? (
           <Text style={styles.warningText}>
-            Lưu ý: BE hiện vẫn chưa persist `complexityRange` và `isDangerous` khi cập nhật
-            service đã có. Tạo mới thì lưu được, còn chỉnh sửa service cũ thì 2 field này có thể
-            chưa đổi trong DB.
+            Backend hiện vẫn có khả năng chưa persist đầy đủ `complexityRange` và `isDangerous` khi cập nhật service cũ.
           </Text>
         ) : null}
         <View style={styles.actionGroup}>
@@ -446,59 +485,53 @@ export default function ServiceAdminScreen() {
             variant="danger"
           />
         </View>
-      </View>
+      </SectionCard>
 
-      <View style={styles.card}>
-        <Text style={styles.title}>Dịch vụ trong danh mục ({services.length})</Text>
-        <Text style={styles.hint}>
-          Danh sách này chỉ hiển thị dịch vụ của danh mục đang chọn.
-        </Text>
-        {services.map((service) => (
-          <Pressable
-            key={service.id}
-            style={[styles.serviceRow, selectedServiceId === service.id && styles.serviceRowActive]}
-            onPress={() => setSelectedServiceId(service.id)}
-          >
-            <View style={styles.serviceRowHeader}>
-              <Text style={styles.serviceName}>{service.name}</Text>
-              <View style={[styles.statusBadge, !service.isActive && styles.statusBadgeInactive]}>
-                <Text style={styles.statusBadgeText}>
-                  {service.isActive ? "Đang hoạt động" : "Không hoạt động"}
-                </Text>
+      <SectionCard
+        title={`Dịch vụ trong danh mục (${services.length})`}
+        subtitle="Danh sách rút gọn, chạm để nạp lên form quản lý phía trên"
+      >
+        <View style={styles.serviceList}>
+          {services.map((service) => (
+            <Pressable
+              key={service.id}
+              style={[styles.serviceRow, selectedServiceId === service.id && styles.serviceRowActive]}
+              onPress={() => setSelectedServiceId(service.id)}
+            >
+              <View style={styles.serviceRowHeader}>
+                <Text style={styles.serviceName}>{service.name}</Text>
+                <StatusBadge
+                  label={service.isActive ? "Hoạt động" : "Tạm dừng"}
+                  tone={service.isActive ? "success" : "danger"}
+                />
               </View>
-            </View>
-            <Text style={styles.meta}>Danh mục: {service.categoryName}</Text>
-            <Text style={styles.meta}>
-              Giá: {formatCurrency(service.basePrice)} | Thời gian: {service.estimatedDuration} phút
-            </Text>
-            <Text style={styles.meta}>
-              Baseline AI: {formatComplexityRange(service.complexityRange)} |{" "}
-              {service.isDangerous ? "Nguy hiểm" : "Bình thường"}
-            </Text>
-            <Text style={[styles.meta, styles.idText]}>ID: {service.id}</Text>
-          </Pressable>
-        ))}
-        {!services.length ? (
-          <Text style={styles.hint}>Danh mục này chưa có dịch vụ nào.</Text>
-        ) : null}
-      </View>
+              <View style={styles.badgeRow}>
+                <StatusBadge label={service.categoryName} tone="neutral" />
+                <StatusBadge
+                  label={service.isDangerous ? "Nguy hiểm" : "Bình thường"}
+                  tone={service.isDangerous ? "warning" : "primary"}
+                />
+              </View>
+              <Text style={styles.meta}>
+                Giá: {formatCurrency(service.basePrice)} • Thời gian: {service.estimatedDuration} phút
+              </Text>
+              <Text style={styles.meta}>
+                Baseline AI: {formatComplexityRange(service.complexityRange)}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+        {!services.length ? <Text style={styles.hint}>Danh mục này chưa có dịch vụ nào.</Text> : null}
+      </SectionCard>
     </ScreenLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 14,
-    gap: 8
-  },
-  title: {
-    color: colors.text,
-    fontWeight: "700",
-    fontSize: 15
+  metricGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10
   },
   chipRow: {
     flexDirection: "row",
@@ -507,11 +540,11 @@ const styles = StyleSheet.create({
   },
   chip: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: "#fff"
+    borderColor: "rgba(100, 116, 139, 0.18)",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    backgroundColor: colors.surfaceRaised
   },
   chipActive: {
     borderColor: colors.primary,
@@ -520,80 +553,93 @@ const styles = StyleSheet.create({
   chipText: {
     color: colors.textMuted,
     fontSize: 12,
-    fontWeight: "700"
+    fontWeight: "800"
   },
   chipTextActive: {
-    color: colors.primary
+    color: colors.primaryStrong
+  },
+  selectedServiceCard: {
+    borderWidth: 1,
+    borderColor: colors.primarySoft,
+    borderRadius: 22,
+    padding: 14,
+    gap: 8,
+    backgroundColor: colors.primarySoftAlt
+  },
+  selectedServiceTitle: {
+    color: colors.text,
+    fontWeight: "800",
+    fontSize: 15
   },
   multiLine: {
-    minHeight: 80,
+    minHeight: 92,
     textAlignVertical: "top",
-    paddingTop: 10
+    paddingTop: 12
   },
   actionGroup: {
     gap: 8
   },
+  serviceList: {
+    gap: 10
+  },
   serviceRow: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    padding: 10,
-    gap: 2,
-    backgroundColor: "#fff"
+    borderColor: "rgba(100, 116, 139, 0.16)",
+    borderRadius: 20,
+    padding: 12,
+    gap: 8,
+    backgroundColor: colors.surfaceRaised
   },
   serviceRowActive: {
     borderColor: colors.primary,
-    backgroundColor: colors.primarySoft
+    backgroundColor: colors.primarySoftAlt
   },
   serviceRowHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center"
+    alignItems: "flex-start",
+    gap: 10
   },
   serviceName: {
     color: colors.text,
+    fontWeight: "800",
+    fontSize: 14,
+    flex: 1,
+    lineHeight: 20
+  },
+  sectionLabel: {
+    color: colors.text,
     fontWeight: "700",
-    fontSize: 13,
-    flex: 1
+    fontSize: 13
   },
-  statusBadge: {
-    backgroundColor: colors.success,
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 2
-  },
-  statusBadgeInactive: {
-    backgroundColor: colors.textMuted
-  },
-  statusBadgeText: {
-    color: "#fff",
-    fontSize: 11,
-    fontWeight: "700"
+  badgeRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
   },
   hint: {
     color: colors.textMuted,
     fontSize: 12,
-    fontStyle: "italic"
-  },
-  idText: {
-    fontSize: 10,
-    opacity: 0.7
+    lineHeight: 18
   },
   meta: {
     color: colors.textMuted,
-    fontSize: 12
+    fontSize: 12,
+    lineHeight: 18
   },
   warningText: {
-    color: colors.danger,
+    color: colors.warning,
     fontSize: 12,
     lineHeight: 18
   },
   error: {
     color: colors.danger,
-    fontSize: 13
+    fontSize: 13,
+    lineHeight: 18
   },
   success: {
     color: colors.success,
-    fontSize: 13
+    fontSize: 13,
+    lineHeight: 18
   }
 });

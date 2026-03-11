@@ -27,6 +27,9 @@ import type {
   UserProfile
 } from "../../../shared/types/domain";
 import ActionButton from "../../../shared/ui/ActionButton";
+import SectionCard from "../../../shared/ui/SectionCard";
+import MetricTile from "../../../shared/ui/MetricTile";
+import StatusBadge from "../../../shared/ui/StatusBadge";
 
 interface AllRequestsResponse {
   getServiceRequests: ServiceRequestItem[];
@@ -43,6 +46,14 @@ interface ServiceAgentsResponse {
 interface UsersResponse {
   getUsers: UserProfile[];
 }
+
+const getEstimatedCostLabel = (request: ServiceRequestItem | null) => {
+  if (!request?.estimatedCost) {
+    return "Chưa có chi phí ước tính";
+  }
+
+  return formatCurrency(request.estimatedCost.amount, request.estimatedCost.currency);
+};
 
 export default function DispatchHistoryScreen() {
   const { session } = useAuth();
@@ -175,126 +186,149 @@ export default function DispatchHistoryScreen() {
   return (
     <ScreenLayout
       title="Lịch sử phân công"
-      subtitle="Chỉ hiển thị các yêu cầu đã được gán thợ"
+      subtitle="Xem lại yêu cầu đã gán thợ cùng chi phí ước tính và từng assignment đã tạo"
     >
-      {loading ? <Text style={styles.meta}>Đang tải lịch sử phân công...</Text> : null}
-      {!!error ? <Text style={styles.error}>{error}</Text> : null}
-
-      <ActionButton
-        label={loading ? "Đang làm mới..." : "Làm mới"}
-        onPress={() => {
-          void loadInitialData();
-          if (selectedRequestId) {
-            void loadRequestHistory(selectedRequestId);
-          }
-        }}
-        disabled={loading}
-        variant="secondary"
-      />
-
-      <View style={styles.card}>
-        <Text style={styles.title}>Chọn yêu cầu</Text>
-        {orderedRequests.map((request) => {
-          const active = request.id === selectedRequestId;
-          return (
-            <Pressable
-              key={request.id}
-              style={[styles.selectionCard, active && styles.selectionCardActive]}
-              onPress={() => setSelectedRequestId(request.id)}
-            >
-              <Text style={styles.selectionTitle}>{request.description}</Text>
-              <Text style={styles.meta}>Mã: {formatShortId(request.id)}</Text>
-              <Text style={styles.meta}>Khách hàng: {getCustomerName(request.customerId)}</Text>
-              <Text style={styles.meta}>Trạng thái: {formatRequestStatus(request.status)}</Text>
-              <Text style={styles.meta}>
-                Thợ hiện tại: {getAgentName(request.assignedProviderId)}
-              </Text>
-              <Text style={styles.meta}>Tạo lúc: {formatDateTime(request.createdAt)}</Text>
-            </Pressable>
-          );
-        })}
-        {!orderedRequests.length ? (
-          <Text style={styles.meta}>Chưa có yêu cầu nào đã được gán thợ.</Text>
-        ) : null}
-      </View>
-
-      {selectedRequest ? (
-        <View style={styles.card}>
-          <Text style={styles.title}>Chi tiết yêu cầu đang xem</Text>
-          <Text style={styles.selectionTitle}>{selectedRequest.description}</Text>
-          <Text style={styles.meta}>Mã: {formatShortId(selectedRequest.id)}</Text>
-          <Text style={styles.meta}>
-            Khách hàng: {getCustomerName(selectedRequest.customerId)}
-          </Text>
-          <Text style={styles.meta}>Trạng thái: {formatRequestStatus(selectedRequest.status)}</Text>
-          <Text style={styles.meta}>
-            Thợ hiện tại: {getAgentName(selectedRequest.assignedProviderId)}
-          </Text>
+      <SectionCard tone="primary" title="Tổng quan lịch sử phân công">
+        <View style={styles.metricGrid}>
+          <MetricTile label="Yêu cầu có gán" value={orderedRequests.length} helper="Đã có provider" tone="primary" />
+          <MetricTile label="Assignment" value={assignments.length} helper="Của yêu cầu đang chọn" tone="success" />
         </View>
+        <ActionButton
+          label={loading ? "Đang làm mới..." : "Làm mới"}
+          onPress={() => {
+            void loadInitialData();
+            if (selectedRequestId) {
+              void loadRequestHistory(selectedRequestId);
+            }
+          }}
+          disabled={loading}
+          variant="secondary"
+        />
+      </SectionCard>
+
+      {loading ? (
+        <SectionCard tone="muted">
+          <Text style={styles.meta}>Đang tải lịch sử phân công...</Text>
+        </SectionCard>
       ) : null}
 
-      <View style={styles.card}>
-        <Text style={styles.title}>Assignment đã tạo ({assignments.length})</Text>
-        {assignments.map((assignment) => (
-          <View key={assignment.id} style={styles.selectionCard}>
-            <Text style={styles.selectionTitle}>Thợ: {getAgentName(assignment.agentId)}</Text>
-            <Text style={styles.meta}>
-              Phân công lúc: {formatDateTime(assignment.assignedAt)}
-            </Text>
-            <Text style={styles.meta}>
-              Chi phí ước tính:{" "}
-              {formatCurrency(
-                assignment.estimatedCost.amount,
-                assignment.estimatedCost.currency
-              )}
-            </Text>
+      {!!error ? (
+        <SectionCard tone="danger">
+          <Text style={styles.error}>{error}</Text>
+        </SectionCard>
+      ) : null}
+
+      <SectionCard title="Chọn yêu cầu" subtitle="Danh sách các yêu cầu đã có thợ để staff xem lại lịch sử gán và chi phí ước tính">
+        <View style={styles.requestList}>
+          {orderedRequests.map((request) => {
+            const active = request.id === selectedRequestId;
+            return (
+              <Pressable
+                key={request.id}
+                style={[styles.selectionCard, active && styles.selectionCardActive]}
+                onPress={() => setSelectedRequestId(request.id)}
+              >
+                <View style={styles.cardHeader}>
+                  <Text style={styles.selectionTitle}>{request.description}</Text>
+                  <StatusBadge label={formatRequestStatus(request.status)} tone="primary" />
+                </View>
+                <View style={styles.badgeRow}>
+                  <StatusBadge label={formatShortId(request.id)} tone="neutral" />
+                  <StatusBadge label={formatDateTime(request.createdAt)} tone="primary" />
+                </View>
+                <Text style={styles.meta}>Khách hàng: {getCustomerName(request.customerId)}</Text>
+                <Text style={styles.meta}>Thợ hiện tại: {getAgentName(request.assignedProviderId)}</Text>
+                <Text style={styles.meta}>Chi phí ước tính: {getEstimatedCostLabel(request)}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        {!orderedRequests.length ? <Text style={styles.meta}>Chưa có yêu cầu nào đã được gán thợ.</Text> : null}
+      </SectionCard>
+
+      {selectedRequest ? (
+        <SectionCard title="Chi tiết yêu cầu đang xem">
+          <Text style={styles.selectionTitle}>{selectedRequest.description}</Text>
+          <View style={styles.badgeRow}>
+            <StatusBadge label={formatRequestStatus(selectedRequest.status)} tone="primary" />
+            <StatusBadge label={formatShortId(selectedRequest.id)} tone="neutral" />
           </View>
-        ))}
-        {assignments.length === 0 ? (
-          <Text style={styles.meta}>Chưa có assignment nào cho yêu cầu đang chọn.</Text>
-        ) : null}
-      </View>
+          <Text style={styles.meta}>Khách hàng: {getCustomerName(selectedRequest.customerId)}</Text>
+          <Text style={styles.meta}>Thợ hiện tại: {getAgentName(selectedRequest.assignedProviderId)}</Text>
+          <Text style={styles.meta}>Chi phí ước tính: {getEstimatedCostLabel(selectedRequest)}</Text>
+        </SectionCard>
+      ) : null}
+
+      <SectionCard title={`Assignment đã tạo (${assignments.length})`} subtitle="Mỗi dòng đại diện cho một lần ghi nhận phân công trên hệ thống">
+        <View style={styles.assignmentList}>
+          {assignments.map((assignment) => (
+            <View key={assignment.id} style={styles.selectionCard}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.selectionTitle}>Thợ: {getAgentName(assignment.agentId)}</Text>
+                <StatusBadge label={formatDateTime(assignment.assignedAt)} tone="primary" />
+              </View>
+              <Text style={styles.meta}>
+                Chi phí ước tính: {formatCurrency(assignment.estimatedCost.amount, assignment.estimatedCost.currency)}
+              </Text>
+            </View>
+          ))}
+        </View>
+        {assignments.length === 0 ? <Text style={styles.meta}>Chưa có assignment nào cho yêu cầu đang chọn.</Text> : null}
+      </SectionCard>
     </ScreenLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 14,
-    padding: 14,
-    gap: 8
+  metricGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10
   },
-  title: {
-    color: colors.text,
-    fontWeight: "700",
-    fontSize: 15
+  requestList: {
+    gap: 10
+  },
+  assignmentList: {
+    gap: 10
   },
   selectionCard: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 10,
-    gap: 3,
-    backgroundColor: "#fff"
+    borderColor: "rgba(100, 116, 139, 0.16)",
+    borderRadius: 20,
+    padding: 12,
+    gap: 8,
+    backgroundColor: colors.surfaceRaised
   },
   selectionCardActive: {
     borderColor: colors.primary,
-    backgroundColor: colors.primarySoft
+    backgroundColor: colors.primarySoftAlt
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10
   },
   selectionTitle: {
     color: colors.text,
-    fontWeight: "700",
-    fontSize: 13
+    fontWeight: "800",
+    fontSize: 14,
+    flex: 1,
+    lineHeight: 20
+  },
+  badgeRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
   },
   meta: {
     color: colors.textMuted,
-    fontSize: 12
+    fontSize: 12,
+    lineHeight: 18
   },
   error: {
     color: colors.danger,
-    fontSize: 13
+    fontSize: 13,
+    lineHeight: 18
   }
 });

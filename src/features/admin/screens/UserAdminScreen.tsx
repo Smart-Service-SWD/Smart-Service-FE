@@ -22,6 +22,9 @@ import type {
 } from "../../../shared/types/domain";
 import LabeledInput from "../../../shared/ui/LabeledInput";
 import ActionButton from "../../../shared/ui/ActionButton";
+import SectionCard from "../../../shared/ui/SectionCard";
+import MetricTile from "../../../shared/ui/MetricTile";
+import StatusBadge from "../../../shared/ui/StatusBadge";
 import {
   type CreateAgentCapabilityPayload,
   createAgentUser,
@@ -63,6 +66,19 @@ const createCapabilityDraft = (): CapabilityDraft => ({
   serviceIds: []
 });
 
+const getUserInitials = (fullName?: string | null) => {
+  const parts = fullName?.trim().split(/\s+/).filter(Boolean) ?? [];
+
+  if (!parts.length) {
+    return "U";
+  }
+
+  return parts
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+};
+
 export default function UserAdminScreen() {
   const { session } = useAuth();
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -91,13 +107,21 @@ export default function UserAdminScreen() {
     [users, selectedUserId]
   );
 
-  // When a user is tapped from the list, sync role + lock flag to their current state
+  const roleSummary = useMemo(
+    () => ({
+      locked: users.filter((user) => user.isLocked).length,
+      staff: users.filter((user) => String(user.role).toUpperCase() === "STAFF").length,
+      agents: users.filter((user) => String(user.role).toUpperCase() === "AGENT").length,
+      customers: users.filter((user) => String(user.role).toUpperCase() === "CUSTOMER").length
+    }),
+    [users]
+  );
+
   const selectUser = (user: UserProfile) => {
     setSelectedUserId(user.id);
     setTargetRole(
       (user.role?.toString().toUpperCase() as (typeof roleOptions)[number]) ?? "CUSTOMER"
     );
-    // Default lock button to the opposite of current state (most useful action)
     setLockFlag(!user.isLocked);
     setError("");
     setSuccess("");
@@ -117,7 +141,6 @@ export default function UserAdminScreen() {
     if (!categoryId) {
       return;
     }
-    // Chỉ skip khi đã có dữ liệu VÀ không bị force refresh
     if (!forceRefresh && servicesByCategory[categoryId]?.length) {
       return;
     }
@@ -149,7 +172,6 @@ export default function UserAdminScreen() {
     setError("");
     try {
       await Promise.all([loadUsers(session.accessToken), loadCategories()]);
-      // Invalidate service cache khi reload màn hình
       setServicesByCategory({});
     } catch (loadError) {
       setError(asErrorMessage(loadError));
@@ -163,7 +185,6 @@ export default function UserAdminScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.accessToken]);
 
-  // Xóa cache service khi quay lại tab này để tránh stale data từ tab Services
   useFocusEffect(
     useCallback(() => {
       setServicesByCategory({});
@@ -173,9 +194,7 @@ export default function UserAdminScreen() {
   const setCapabilityCategory = (key: string, categoryId: string) => {
     setAgentCapabilities((current) =>
       current.map((item) =>
-        item.key === key
-          ? { ...item, categoryId, serviceIds: [] }
-          : item
+        item.key === key ? { ...item, categoryId, serviceIds: [] } : item
       )
     );
     void ensureServicesForCategory(categoryId);
@@ -253,12 +272,11 @@ export default function UserAdminScreen() {
       return;
     }
 
-    // Validate agent capabilities BEFORE setting loading to avoid stuck spinner
     let agentCapabilitiesPayload: CreateAgentCapabilityPayload[] | null = null;
     if (newUserRole === "AGENT") {
       agentCapabilitiesPayload = buildAgentCapabilities();
       if (!agentCapabilitiesPayload) {
-        return; // buildAgentCapabilities already set error
+        return;
       }
     }
 
@@ -345,7 +363,6 @@ export default function UserAdminScreen() {
       });
       setSuccess(lockFlag ? "Đã khóa tài khoản" : "Đã mở khóa tài khoản");
       await loadUsers(session.accessToken);
-      // Sync lockFlag sang hành động ngược chiều dựa trên trạng thái vừa áp dụng
       setLockFlag(!lockFlag);
     } catch (lockError) {
       setError(asErrorMessage(lockError));
@@ -355,13 +372,36 @@ export default function UserAdminScreen() {
   };
 
   return (
-    <ScreenLayout title="Quản lý người dùng" subtitle="Tạo tài khoản, đổi quyền, khóa/mở">
-      {!!error ? <Text style={styles.error}>{error}</Text> : null}
-      {!!success ? <Text style={styles.success}>{success}</Text> : null}
-      {loading ? <Text style={styles.meta}>Đang xử lý...</Text> : null}
+    <ScreenLayout
+      title="Quản lý người dùng"
+      subtitle="Tạo tài khoản, đổi quyền và khóa hoặc mở tài khoản theo bố cục gọn cho mobile"
+    >
+      <SectionCard tone="primary" title="Tổng quan người dùng">
+        <View style={styles.metricGrid}>
+          <MetricTile label="Tổng tài khoản" value={users.length} helper="Số user đang có" tone="primary" />
+          <MetricTile label="Staff" value={roleSummary.staff} helper="Nhân viên nội bộ" tone="success" />
+          <MetricTile label="Agent" value={roleSummary.agents} helper="Thợ kỹ thuật" tone="warning" />
+          <MetricTile label="Đang khóa" value={roleSummary.locked} helper="Cần kiểm tra nếu tăng bất thường" />
+        </View>
+        {loading ? <Text style={styles.meta}>Đang đồng bộ dữ liệu người dùng...</Text> : null}
+      </SectionCard>
 
-      <View style={styles.card}>
-        <Text style={styles.title}>Tạo người dùng mới</Text>
+      {!!error ? (
+        <SectionCard tone="danger">
+          <Text style={styles.error}>{error}</Text>
+        </SectionCard>
+      ) : null}
+
+      {!!success ? (
+        <SectionCard tone="success">
+          <Text style={styles.success}>{success}</Text>
+        </SectionCard>
+      ) : null}
+
+      <SectionCard
+        title="Tạo người dùng mới"
+        subtitle="Chọn role trước, sau đó điền thông tin. Nếu tạo agent thì cấu hình capability ngay trong cùng màn hình."
+      >
         <View style={styles.optionRow}>
           {createRoleOptions.map((role) => {
             const active = newUserRole === role;
@@ -392,12 +432,12 @@ export default function UserAdminScreen() {
           onChangeText={setPhoneNumber}
           keyboardType="phone-pad"
         />
+
         {newUserRole === "AGENT" ? (
           <View style={styles.subCard}>
-            <Text style={styles.subTitle}>Agent Capabilities (kỹ năng của thợ)</Text>
+            <Text style={styles.subTitle}>Capability của thợ</Text>
             <Text style={styles.meta}>
-              Tạo thợ sẽ đồng thời tạo User + ServiceAgent + danh sách capabilities.
-              Mật khẩu tạm sẽ được gửi về email.
+              Mỗi capability nên đại diện cho một danh mục, nhiều dịch vụ và một mức độ phức tạp tối đa.
             </Text>
             {agentCapabilities.map((capability, index) => {
               const isLoadingServices = loadingServicesForCategory === capability.categoryId;
@@ -409,8 +449,13 @@ export default function UserAdminScreen() {
 
               return (
                 <View key={capability.key} style={styles.capabilityCard}>
-                  <Text style={styles.capabilityTitle}>Capability #{index + 1}</Text>
-                  <Text style={styles.meta}>1 danh mục, nhiều dịch vụ, 1 mức độ phức tạp tối đa.</Text>
+                  <View style={styles.capabilityHeader}>
+                    <Text style={styles.capabilityTitle}>Capability #{index + 1}</Text>
+                    <StatusBadge
+                      label={hasServices ? `${capability.serviceIds.length} dịch vụ` : "Chưa chọn dịch vụ"}
+                      tone={hasServices ? "success" : "warning"}
+                    />
+                  </View>
 
                   <Text style={styles.sectionLabel}>1. Chọn danh mục</Text>
                   <View style={styles.optionRow}>
@@ -422,9 +467,7 @@ export default function UserAdminScreen() {
                           style={[styles.optionChip, active && styles.optionChipActive]}
                           onPress={() => setCapabilityCategory(capability.key, category.id)}
                         >
-                          <Text
-                            style={[styles.optionText, active && styles.optionTextActive]}
-                          >
+                          <Text style={[styles.optionText, active && styles.optionTextActive]}>
                             {category.name}
                           </Text>
                         </Pressable>
@@ -435,13 +478,13 @@ export default function UserAdminScreen() {
                   {hasCategory ? (
                     <>
                       <Text style={styles.sectionLabel}>
-                        2. Chọn dịch vụ được xử lý{hasServices ? ` (đã chọn ${capability.serviceIds.length})` : ""}
+                        2. Chọn dịch vụ {hasServices ? `(đã chọn ${capability.serviceIds.length})` : ""}
                       </Text>
                       {isLoadingServices ? (
                         <Text style={styles.meta}>Đang tải dịch vụ...</Text>
                       ) : services.length === 0 ? (
                         <Text style={styles.warning}>
-                          Danh mục này chưa có dịch vụ nào. Hãy thêm dịch vụ trong mục Quản lý dịch vụ trước.
+                          Danh mục này chưa có dịch vụ nào. Hãy thêm dịch vụ trong màn Quản lý dịch vụ trước.
                         </Text>
                       ) : (
                         <View style={styles.optionRow}>
@@ -453,14 +496,12 @@ export default function UserAdminScreen() {
                                 style={[styles.optionChip, active && styles.optionChipActive]}
                                 onPress={() => toggleCapabilityService(capability.key, service.id)}
                               >
-                                <Text
-                                  style={[styles.optionText, active && styles.optionTextActive]}
-                                >
+                                <Text style={[styles.optionText, active && styles.optionTextActive]}>
                                   {service.name}
                                   {service.complexityRange?.length === 2
                                     ? ` • ${service.complexityRange[0]}-${service.complexityRange[1]}`
                                     : ""}
-                                  {service.isDangerous ? " • ⚠" : ""}
+                                  {service.isDangerous ? " • Canh báo" : ""}
                                 </Text>
                               </Pressable>
                             );
@@ -478,9 +519,7 @@ export default function UserAdminScreen() {
                               style={[styles.optionChip, active && styles.optionChipActive]}
                               onPress={() => setCapabilityComplexity(capability.key, level)}
                             >
-                              <Text
-                                style={[styles.optionText, active && styles.optionTextActive]}
-                              >
+                              <Text style={[styles.optionText, active && styles.optionTextActive]}>
                                 Level {level}
                               </Text>
                             </Pressable>
@@ -490,7 +529,7 @@ export default function UserAdminScreen() {
                     </>
                   ) : (
                     <Text style={styles.warning}>
-                      ← Chọn danh mục ở bước 1 để hiện danh sách dịch vụ.
+                      Chọn danh mục để hệ thống nạp danh sách dịch vụ tương ứng.
                     </Text>
                   )}
 
@@ -504,41 +543,42 @@ export default function UserAdminScreen() {
                 </View>
               );
             })}
-            <ActionButton
-              label="Thêm Capability"
-              onPress={addCapability}
-              variant="secondary"
-            />
+            <ActionButton label="Thêm Capability" onPress={addCapability} variant="secondary" />
           </View>
         ) : null}
+
         <ActionButton
           label={loading ? "Đang tạo..." : "Tạo người dùng"}
           onPress={() => void handleCreateUser()}
           disabled={loading}
         />
-      </View>
+      </SectionCard>
 
-      <View style={styles.card}>
-        <Text style={styles.title}>Cập nhật quyền / Khóa tài khoản</Text>
+      <SectionCard
+        title="Cập nhật quyền và trạng thái khóa"
+        subtitle="Chạm vào một người dùng trong danh sách bên dưới để nạp sẵn thông tin thao tác"
+      >
         {selectedUser ? (
           <View style={styles.selectedUserBanner}>
-            <Text style={styles.selectedUserName}>{selectedUser.fullName}</Text>
-            <Text style={styles.meta}>{selectedUser.email}</Text>
-            <View style={styles.tagRow}>
-              <View style={styles.roleBadge}>
-                <Text style={styles.roleBadgeText}>
-                  {formatRoleLabel(String(selectedUser.role))}
-                </Text>
+            <View style={styles.selectedUserIdentity}>
+              <View style={styles.selectedAvatar}>
+                <Text style={styles.selectedAvatarText}>{getUserInitials(selectedUser.fullName)}</Text>
               </View>
-              <View style={[styles.lockBadge, selectedUser.isLocked && styles.lockBadgeLocked]}>
-                <Text style={styles.lockBadgeText}>
-                  {selectedUser.isLocked ? "Đang khóa" : "Đang mở"}
-                </Text>
+              <View style={styles.selectedUserText}>
+                <Text style={styles.selectedUserName}>{selectedUser.fullName}</Text>
+                <Text style={styles.meta}>{selectedUser.email}</Text>
               </View>
+            </View>
+            <View style={styles.badgeRow}>
+              <StatusBadge label={formatRoleLabel(String(selectedUser.role))} tone="primary" />
+              <StatusBadge
+                label={selectedUser.isLocked ? "Đang khóa" : "Đang hoạt động"}
+                tone={selectedUser.isLocked ? "danger" : "success"}
+              />
             </View>
           </View>
         ) : (
-          <Text style={styles.hint}>Nhấn vào người dùng trong danh sách bên dưới để chọn</Text>
+          <Text style={styles.hint}>Chưa chọn người dùng. Hãy nhấn vào một dòng trong danh sách ở cuối màn hình.</Text>
         )}
 
         <Text style={styles.sectionLabel}>Đổi quyền sang</Text>
@@ -562,30 +602,27 @@ export default function UserAdminScreen() {
           label={loading ? "Đang cập nhật..." : "Cập nhật quyền"}
           onPress={() => void handleUpdateRole()}
           disabled={loading || !selectedUserId}
+          variant="secondary"
         />
 
-        <Text style={styles.sectionLabel}>Khóa / Mở khóa tài khoản</Text>
+        <Text style={styles.sectionLabel}>Khóa hoặc mở khóa tài khoản</Text>
         <Text style={styles.meta}>
           {selectedUser
             ? `Trạng thái hiện tại: ${selectedUser.isLocked ? "Đang bị khóa" : "Đang hoạt động"}`
-            : "Chọn người dùng để xem trạng thái"}
+            : "Chọn người dùng để xem trạng thái hiện tại"}
         </Text>
         <View style={styles.optionRow}>
           <Pressable
             style={[styles.optionChip, !lockFlag && styles.optionChipActive]}
             onPress={() => setLockFlag(false)}
           >
-            <Text style={[styles.optionText, !lockFlag && styles.optionTextActive]}>
-              Mở khóa
-            </Text>
+            <Text style={[styles.optionText, !lockFlag && styles.optionTextActive]}>Mở khóa</Text>
           </Pressable>
           <Pressable
             style={[styles.optionChip, lockFlag && styles.optionChipDanger]}
             onPress={() => setLockFlag(true)}
           >
-            <Text style={[styles.optionText, lockFlag && styles.optionTextDanger]}>
-              Khóa
-            </Text>
+            <Text style={[styles.optionText, lockFlag && styles.optionTextDanger]}>Khóa</Text>
           </Pressable>
         </View>
         <ActionButton
@@ -594,130 +631,135 @@ export default function UserAdminScreen() {
           disabled={loading || !selectedUserId}
           variant={lockFlag ? "danger" : "secondary"}
         />
-      </View>
+      </SectionCard>
 
-      <View style={styles.card}>
-        <Text style={styles.title}>Danh sách người dùng ({users.length})</Text>
-        <Text style={styles.hint}>Nhấn để chọn người dùng cho thao tác bên trên</Text>
-        {users.map((user) => (
-          <Pressable
-            key={user.id}
-            style={[styles.userRow, selectedUserId === user.id && styles.userRowSelected]}
-            onPress={() => selectUser(user)}
-          >
-            <View style={styles.userRowHeader}>
-              <Text style={styles.userName}>{user.fullName}</Text>
-              <View style={[styles.lockBadge, user.isLocked && styles.lockBadgeLocked]}>
-                <Text style={styles.lockBadgeText}>
-                  {user.isLocked ? "Khóa" : "Mở"}
-                </Text>
+      <SectionCard
+        title={`Danh sách người dùng (${users.length})`}
+        subtitle="Danh sách đầy đủ để chọn nhanh người dùng cần thao tác"
+      >
+        <View style={styles.userList}>
+          {users.map((user) => (
+            <Pressable
+              key={user.id}
+              style={[styles.userRow, selectedUserId === user.id && styles.userRowSelected]}
+              onPress={() => selectUser(user)}
+            >
+              <View style={styles.userRowTop}>
+                <View style={styles.userIdentity}>
+                  <View style={styles.userAvatar}>
+                    <Text style={styles.userAvatarText}>{getUserInitials(user.fullName)}</Text>
+                  </View>
+                  <View style={styles.userInfo}>
+                    <Text style={styles.userName}>{user.fullName}</Text>
+                    <Text style={styles.meta}>{user.email}</Text>
+                  </View>
+                </View>
+                <StatusBadge
+                  label={user.isLocked ? "Khóa" : "Mở"}
+                  tone={user.isLocked ? "danger" : "success"}
+                />
               </View>
-            </View>
-            <Text style={styles.meta}>{user.email}</Text>
-            <Text style={styles.meta}>
-              Quyền: {formatRoleLabel(String(user.role))} | SĐT: {user.phoneNumber}
-            </Text>
-            <Text style={[styles.meta, styles.idText]}>Mã: {formatShortId(user.id)}</Text>
-          </Pressable>
-        ))}
-      </View>
+              <View style={styles.badgeRow}>
+                <StatusBadge label={formatRoleLabel(String(user.role))} tone="primary" />
+                <StatusBadge label={`SĐT ${user.phoneNumber || "-"}`} tone="neutral" />
+              </View>
+              <Text style={[styles.meta, styles.idText]}>Mã: {formatShortId(user.id)}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </SectionCard>
     </ScreenLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 14,
+  metricGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10
+  },
+  badgeRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8
   },
   subCard: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 12,
-    gap: 10,
-    backgroundColor: "#fff"
+    borderColor: "rgba(100, 116, 139, 0.16)",
+    borderRadius: 22,
+    padding: 14,
+    gap: 12,
+    backgroundColor: colors.surfaceRaised
   },
   subTitle: {
     color: colors.text,
-    fontWeight: "700",
-    fontSize: 14
+    fontWeight: "800",
+    fontSize: 15
   },
   capabilityCard: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 10,
-    gap: 8,
+    borderColor: "rgba(100, 116, 139, 0.16)",
+    borderRadius: 20,
+    padding: 12,
+    gap: 10,
     backgroundColor: colors.surface
+  },
+  capabilityHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 8
   },
   capabilityTitle: {
     color: colors.text,
-    fontWeight: "700",
-    fontSize: 13
-  },
-  title: {
-    color: colors.text,
-    fontWeight: "700",
-    fontSize: 15
+    fontWeight: "800",
+    fontSize: 14
   },
   sectionLabel: {
     color: colors.text,
-    fontWeight: "600",
+    fontWeight: "700",
     fontSize: 13,
-    marginTop: 4
+    marginTop: 2
   },
   hint: {
     color: colors.textMuted,
     fontSize: 12,
-    fontStyle: "italic"
+    lineHeight: 18
   },
   selectedUserBanner: {
-    backgroundColor: colors.primarySoft,
+    gap: 12,
     borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: 8,
-    padding: 10,
+    borderColor: colors.primarySoft,
+    borderRadius: 22,
+    padding: 14,
+    backgroundColor: colors.primarySoftAlt
+  },
+  selectedUserIdentity: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12
+  },
+  selectedAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  selectedAvatarText: {
+    color: "#fff",
+    fontWeight: "800",
+    fontSize: 18
+  },
+  selectedUserText: {
+    flex: 1,
     gap: 4
   },
   selectedUserName: {
     color: colors.text,
-    fontWeight: "700",
-    fontSize: 14
-  },
-  tagRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 4
-  },
-  roleBadge: {
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 2
-  },
-  roleBadgeText: {
-    color: "#fff",
-    fontSize: 11,
-    fontWeight: "700"
-  },
-  lockBadge: {
-    backgroundColor: colors.success,
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 2
-  },
-  lockBadgeLocked: {
-    backgroundColor: colors.danger
-  },
-  lockBadgeText: {
-    color: "#fff",
-    fontSize: 11,
-    fontWeight: "700"
+    fontWeight: "800",
+    fontSize: 16
   },
   optionRow: {
     flexDirection: "row",
@@ -726,74 +768,102 @@ const styles = StyleSheet.create({
   },
   optionChip: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: "#fff"
+    borderColor: "rgba(100, 116, 139, 0.18)",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    backgroundColor: colors.surfaceRaised
   },
   optionChipActive: {
     borderColor: colors.primary,
     backgroundColor: colors.primarySoft
   },
   optionChipDanger: {
-    borderColor: colors.danger ?? "#dc3545",
-    backgroundColor: "#fff0f0"
+    borderColor: colors.danger,
+    backgroundColor: colors.dangerSoft
   },
   optionText: {
     color: colors.textMuted,
     fontSize: 12,
-    fontWeight: "700"
+    fontWeight: "800"
   },
   optionTextActive: {
-    color: colors.primary
+    color: colors.primaryStrong
   },
   optionTextDanger: {
-    color: colors.danger ?? "#dc3545"
+    color: colors.danger
+  },
+  userList: {
+    gap: 10
   },
   userRow: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    padding: 10,
-    gap: 2,
-    backgroundColor: "#fff"
+    borderColor: "rgba(100, 116, 139, 0.16)",
+    borderRadius: 20,
+    padding: 12,
+    gap: 10,
+    backgroundColor: colors.surfaceRaised
   },
   userRowSelected: {
     borderColor: colors.primary,
-    backgroundColor: colors.primarySoft
+    backgroundColor: colors.primarySoftAlt
   },
-  userRowHeader: {
+  userRowTop: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center"
+    alignItems: "flex-start",
+    gap: 10
+  },
+  userIdentity: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1
+  },
+  userAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 15,
+    backgroundColor: colors.primarySoft,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  userAvatarText: {
+    color: colors.primaryStrong,
+    fontSize: 15,
+    fontWeight: "800"
+  },
+  userInfo: {
+    flex: 1,
+    gap: 3
   },
   userName: {
     color: colors.text,
-    fontWeight: "700",
-    fontSize: 13,
-    flex: 1
+    fontWeight: "800",
+    fontSize: 14
   },
   idText: {
-    fontSize: 10,
-    color: colors.textMuted,
-    opacity: 0.7
+    fontSize: 11,
+    opacity: 0.75
   },
   meta: {
     color: colors.textMuted,
-    fontSize: 12
+    fontSize: 12,
+    lineHeight: 18
   },
   warning: {
-    color: colors.textMuted,
+    color: colors.warning,
     fontSize: 12,
     lineHeight: 18
   },
   error: {
     color: colors.danger,
-    fontSize: 13
+    fontSize: 13,
+    lineHeight: 18
   },
   success: {
     color: colors.success,
-    fontSize: 13
+    fontSize: 13,
+    lineHeight: 18
   }
 });

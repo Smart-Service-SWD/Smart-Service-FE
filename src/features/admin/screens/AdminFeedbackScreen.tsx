@@ -21,6 +21,9 @@ import type {
   UserProfile
 } from "../../../shared/types/domain";
 import ActionButton from "../../../shared/ui/ActionButton";
+import SectionCard from "../../../shared/ui/SectionCard";
+import MetricTile from "../../../shared/ui/MetricTile";
+import StatusBadge from "../../../shared/ui/StatusBadge";
 
 interface ServiceFeedbacksResponse {
   getServiceFeedbacks: ServiceFeedbackItem[];
@@ -33,6 +36,18 @@ interface AllRequestsResponse {
 interface UsersResponse {
   getUsers: UserProfile[];
 }
+
+const getRatingTone = (rating: number) => {
+  if (rating >= 4) {
+    return "success" as const;
+  }
+
+  if (rating === 3) {
+    return "warning" as const;
+  }
+
+  return "danger" as const;
+};
 
 export default function AdminFeedbackScreen() {
   const { session } = useAuth();
@@ -50,6 +65,11 @@ export default function AdminFeedbackScreen() {
     const total = feedbacks.reduce((sum, item) => sum + item.rating, 0);
     return Number((total / feedbacks.length).toFixed(1));
   }, [feedbacks]);
+
+  const lowRatingCount = useMemo(
+    () => feedbacks.filter((item) => item.rating <= 2).length,
+    [feedbacks]
+  );
 
   const load = async () => {
     if (!session) {
@@ -95,91 +115,144 @@ export default function AdminFeedbackScreen() {
   return (
     <ScreenLayout
       title="Lịch sử feedback"
-      subtitle="Toàn bộ phản hồi khách hàng trong hệ thống"
+      subtitle="Toàn bộ phản hồi khách hàng trong hệ thống theo bố cục dễ đọc trên mobile"
     >
-      {loading ? <Text style={styles.meta}>Đang tải feedback...</Text> : null}
-      {!!error ? <Text style={styles.error}>{error}</Text> : null}
+      <SectionCard tone="primary" title="Tổng quan phản hồi">
+        <View style={styles.metricGrid}>
+          <MetricTile
+            label="Tổng feedback"
+            value={feedbacks.length}
+            helper="Số phản hồi đã lưu"
+            tone="primary"
+          />
+          <MetricTile
+            label="Điểm trung bình"
+            value={`${averageRating}/5`}
+            helper="Mức hài lòng chung"
+            tone="success"
+          />
+          <MetricTile
+            label="Đánh giá thấp"
+            value={lowRatingCount}
+            helper="Rating từ 1 đến 2 sao"
+            tone="warning"
+          />
+        </View>
+        <ActionButton
+          label={loading ? "Đang làm mới..." : "Làm mới feedback"}
+          onPress={() => void load()}
+          disabled={loading}
+          variant="secondary"
+        />
+      </SectionCard>
 
-      <ActionButton
-        label={loading ? "Đang làm mới..." : "Làm mới"}
-        onPress={() => void load()}
-        disabled={loading}
-        variant="secondary"
-      />
+      {loading ? (
+        <SectionCard tone="muted">
+          <Text style={styles.meta}>Đang tải feedback...</Text>
+        </SectionCard>
+      ) : null}
 
-      <View style={styles.card}>
-        <Text style={styles.title}>Tổng quan</Text>
-        <Text style={styles.meta}>Tổng feedback: {feedbacks.length}</Text>
-        <Text style={styles.meta}>Điểm trung bình: {averageRating}</Text>
-      </View>
+      {!!error ? (
+        <SectionCard tone="danger">
+          <Text style={styles.error}>{error}</Text>
+        </SectionCard>
+      ) : null}
 
-      <View style={styles.card}>
-        <Text style={styles.title}>Toàn bộ lịch sử</Text>
-        {feedbacks.map((feedback) => {
-          const request = requestsById[feedback.serviceRequestId];
+      <SectionCard
+        title={`Toàn bộ lịch sử (${feedbacks.length})`}
+        subtitle="Admin có thể quét nhanh từng phản hồi, trạng thái đơn và thời điểm gửi"
+      >
+        <View style={styles.feedbackList}>
+          {feedbacks.map((feedback) => {
+            const request = requestsById[feedback.serviceRequestId];
 
-          return (
-            <View key={feedback.id} style={styles.item}>
-              <Text style={styles.itemTitle}>
-                {request?.description ?? `Yêu cầu ${formatShortId(feedback.serviceRequestId)}`}
-              </Text>
-              <Text style={styles.meta}>
-                Mã yêu cầu: {formatShortId(feedback.serviceRequestId)}
-              </Text>
-              <Text style={styles.meta}>
-                Khách hàng:{" "}
-                {userNamesById[feedback.createdByUserId] ?? formatShortId(feedback.createdByUserId)}
-              </Text>
-              <Text style={styles.meta}>Điểm: {feedback.rating}/5</Text>
-              <Text style={styles.meta}>Nhận xét: {feedback.comment?.trim() || "-"}</Text>
-              <Text style={styles.meta}>
-                Trạng thái yêu cầu: {formatRequestStatus(request?.status)}
-              </Text>
-              <Text style={styles.meta}>Gửi lúc: {formatDateTime(feedback.createdAt)}</Text>
-            </View>
-          );
-        })}
+            return (
+              <View key={feedback.id} style={styles.item}>
+                <View style={styles.itemHeader}>
+                  <Text style={styles.itemTitle}>
+                    {request?.description ?? `Yêu cầu ${formatShortId(feedback.serviceRequestId)}`}
+                  </Text>
+                  <StatusBadge
+                    label={`${feedback.rating}/5`}
+                    tone={getRatingTone(feedback.rating)}
+                  />
+                </View>
+                <View style={styles.badgeRow}>
+                  <StatusBadge
+                    label={formatRequestStatus(request?.status)}
+                    tone="neutral"
+                  />
+                  <StatusBadge label={formatDateTime(feedback.createdAt)} tone="primary" />
+                </View>
+                <Text style={styles.meta}>
+                  Mã yêu cầu: {formatShortId(feedback.serviceRequestId)}
+                </Text>
+                <Text style={styles.meta}>
+                  Khách hàng: {userNamesById[feedback.createdByUserId] ?? formatShortId(feedback.createdByUserId)}
+                </Text>
+                <Text style={styles.comment}>
+                  {feedback.comment?.trim() || "Khách hàng không để lại nhận xét chi tiết."}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
         {!feedbacks.length ? (
           <Text style={styles.meta}>Chưa có feedback nào trong hệ thống.</Text>
         ) : null}
-      </View>
+      </SectionCard>
     </ScreenLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 14,
-    gap: 8
+  metricGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10
   },
-  title: {
-    color: colors.text,
-    fontWeight: "700",
-    fontSize: 15
+  feedbackList: {
+    gap: 10
   },
   item: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    padding: 10,
-    gap: 3,
-    backgroundColor: "#fff"
+    borderColor: "rgba(100, 116, 139, 0.16)",
+    borderRadius: 20,
+    padding: 14,
+    gap: 8,
+    backgroundColor: colors.surfaceRaised
+  },
+  itemHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10
   },
   itemTitle: {
+    flex: 1,
     color: colors.text,
-    fontWeight: "700",
-    fontSize: 13
+    fontWeight: "800",
+    fontSize: 14,
+    lineHeight: 20
+  },
+  badgeRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
   },
   meta: {
     color: colors.textMuted,
-    fontSize: 13
+    fontSize: 12,
+    lineHeight: 18
+  },
+  comment: {
+    color: colors.text,
+    fontSize: 13,
+    lineHeight: 20
   },
   error: {
     color: colors.danger,
-    fontSize: 13
+    fontSize: 13,
+    lineHeight: 18
   }
 });

@@ -37,24 +37,45 @@ export const getTabScreenOptions = ({
   return {
     headerShown: false,
     tabBarHideOnKeyboard: true,
-    tabBarActiveTintColor: colors.primary,
+    tabBarActiveTintColor: colors.primaryStrong,
     tabBarInactiveTintColor: colors.textMuted,
     tabBarLabelStyle: {
       fontSize: 11,
-      fontWeight: "700"
+      fontWeight: "800",
+      marginTop: 2
     },
+    tabBarItemStyle: {
+      borderRadius: 18,
+      marginHorizontal: 4,
+      marginVertical: 4
+    },
+    tabBarActiveBackgroundColor: colors.primarySoft,
     tabBarStyle: {
-      height: 68,
+      position: "absolute",
+      left: 12,
+      right: 12,
+      bottom: 12,
+      height: 76,
       paddingTop: 8,
-      paddingBottom: 8,
+      paddingBottom: 10,
+      paddingHorizontal: 8,
       backgroundColor: colors.surface,
-      borderTopColor: colors.border
+      borderTopWidth: 0,
+      borderRadius: 26,
+      shadowColor: colors.shadow,
+      shadowOffset: {
+        width: 0,
+        height: 12
+      },
+      shadowOpacity: 1,
+      shadowRadius: 24,
+      elevation: 6
     },
     tabBarIcon: ({ focused }) => (
       <Text
         style={{
           fontSize: focused ? 18 : 17,
-          opacity: focused ? 1 : 0.7
+          opacity: focused ? 1 : 0.72
         }}
       >
         {meta.icon}
