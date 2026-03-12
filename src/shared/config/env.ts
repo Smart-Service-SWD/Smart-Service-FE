@@ -1,75 +1,43 @@
 import { Platform } from "react-native";
 
-/**
- * Remove trailing slash from URL
- */
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
 
-/**
- * Backend port
- */
 const API_PORT = 5268;
 
-/**
- * Default API host
- * Android emulator: 10.0.2.2
- * Physical device / iOS / web: use LAN IP
- */
-const DEFAULT_API_HOST =
-  Platform.OS === "android" ? "10.0.2.2" : "192.168.1.14";
-
-/**
- * Known API hosts from project history
- */
+// Keep the export name stable because other local tooling may already use it.
 export const KNOWN_API_HOSTS_FROM_GIT_HISTORY = [
   "localhost",
   "127.0.0.1",
-  "10.0.2.2",
-  "192.168.1.14",
-  "192.168.1.26",
-  "192.168.1.100",
-  "192.168.1.101",
-  "192.168.1.102",
-  "192.168.1.103",
-  "192.168.123.6",
-  "192.168.123.188",
-  "192.168.123.189",
-  "172.20.10.4",
+  "10.0.2.2"
 ] as const;
 
-/**
- * Generate base URLs
- */
-export const KNOWN_API_BASE_URLS = [
-  `http://localhost:${API_PORT}`,
-  ...KNOWN_API_HOSTS_FROM_GIT_HISTORY.map(
-    (host) => `http://${host}:${API_PORT}`
-  ),
-];
+export const KNOWN_API_BASE_URLS = KNOWN_API_HOSTS_FROM_GIT_HISTORY.map(
+  (host) => `http://${host}:${API_PORT}`
+);
 
-/**
- * API base URL
- */
+// Shared fallback for the whole team:
+// - Android emulator reaches the host machine through 10.0.2.2
+// - iOS simulator / web / desktop use localhost
+// Real devices should set EXPO_PUBLIC_API_BASE_URL in .env.local
+const DEFAULT_API_HOST = Platform.OS === "android" ? "10.0.2.2" : "localhost";
+
 const apiBaseUrlRaw =
   process.env.EXPO_PUBLIC_API_BASE_URL ??
   `http://${DEFAULT_API_HOST}:${API_PORT}`;
 
-export const API_BASE_URL = trimTrailingSlash(apiBaseUrlRaw);
-
-/**
- * GraphQL endpoint
- */
-export const GRAPHQL_URL =
+const graphqlUrlRaw =
   process.env.EXPO_PUBLIC_GRAPHQL_URL ??
-  `${API_BASE_URL}/graphql`;
+  `${trimTrailingSlash(apiBaseUrlRaw)}/graphql`;
 
-/**
- * Debug info
- */
+export const API_BASE_URL = trimTrailingSlash(apiBaseUrlRaw);
+export const GRAPHQL_URL = trimTrailingSlash(graphqlUrlRaw);
+
 export const ENV_INFO = {
   API_BASE_URL,
   GRAPHQL_URL,
-  PLATFORM: Platform.OS,
+  PLATFORM: Platform.OS
 };
 
-console.log("ENV_INFO:", ENV_INFO);
+if (__DEV__) {
+  console.log("ENV_INFO:", ENV_INFO);
+}
