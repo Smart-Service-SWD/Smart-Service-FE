@@ -1,179 +1,130 @@
-# Smart Service Mobile FE
+# Smart Service Mobile
 
-React Native + Expo mobile application for Smart Service Backend integration with camera analysis and AI capabilities.
+Frontend mobile rebuilt and connected to BE flow in `Service_BE`.
 
-## Features
+Architecture follows BE guidance:
 
-- 📷 **Camera Integration** - Capture images for analysis
-- 🤖 **AI Analysis** - Send images to backend for AI processing
-- 📝 **Service Requests** - Create service requests from analysis results
-- 📜 **History** - View analysis history and details
-- 🔄 **Real-time Updates** - Live feedback during processing
+- REST (`/api/*`) for command/write actions
+- GraphQL (`/graphql`) for read/query actions
+- JWT auth + refresh token
+- Role routing: `CUSTOMER`, `AGENT`, `STAFF`, `ADMIN`
 
-## Prerequisites
-
-- Node.js 16+ 
-- npm or yarn
-- Expo CLI (`npm install -g expo-cli`)
-- Expo Go app on your phone (for testing)
-- Backend running (Smart Service BE API)
-
-## Installation
-
-1. **Clone and navigate to project**
-   ```bash
-   cd SmartService-FE
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Configure Backend URL**
-   Edit `src/config/api.config.js`:
-   ```javascript
-   BASE_URL: 'http://YOUR_BACKEND_IP:5000/api'
-   ```
-
-## Running the App
-
-### Option 1: Expo Go (Recommended for Development)
-
-1. **Start the Expo server**
-   ```bash
-   npm start
-   ```
-
-2. **Scan the QR code** with:
-   - **Android**: Expo Go app
-   - **iOS**: Camera app (iOS 11+) or Expo Go app
-
-### Option 2: Android Studio Emulator
+## Setup
 
 ```bash
-npm run android
+npm install
+npm run typecheck
+npm run start
 ```
 
-### Option 3: Web (Limited functionality)
+## Env
 
-```bash
-npm run web
+Copy `.env.example` to `.env` and configure:
+
+```env
+EXPO_PUBLIC_API_BASE_URL=http://localhost:5268
+EXPO_PUBLIC_GRAPHQL_URL=http://localhost:5268/graphql
 ```
 
-## Project Structure
+Examples:
 
-```
+- iOS simulator: `http://localhost:5268`
+- Android emulator: `http://10.0.2.2:5268`
+- Physical device: `http://<lan-ip>:5268`
+
+## Implemented Role Flows
+
+### Customer
+
+- Home catalog:
+  - `getServiceCategories`
+  - `getServiceDefinitions`
+  - `getActiveServiceAgents`
+- Create request flow:
+  - AI analyze: `POST /api/service-analysis`
+  - Create request: `POST /api/service-requests`
+  - Add attachment: `POST /api/service-attachments`
+- My requests:
+  - `getMyServiceRequests`
+  - `getServiceRequestById`
+  - `getFeedbackByServiceRequestId`
+  - `getAverageRatingByServiceRequestId`
+- Feedback:
+  - `POST /api/service-feedbacks`
+  - `getMyServiceFeedbacks`
+
+### Agent
+
+- Assignments:
+  - `getAssignmentsByAgentId`
+  - request detail lookup: `getServiceRequestById`
+- Request board:
+  - `getServiceRequests`
+  - `getAssignmentsByServiceRequestId`
+  - `getMatchingResultsByServiceRequestId`
+
+### Staff
+
+- Review queue:
+  - `getServiceRequestsByStatus`
+  - Evaluate complexity: `PATCH /api/service-requests/{id}/evaluate-complexity`
+  - Activity log: `POST /api/activity-logs`
+- Dispatch center:
+  - `getServiceAgents`
+  - `getMatchingResultsByServiceRequestId`
+  - `getRecommendedMatches`
+  - `getAssignmentsByServiceRequestId`
+  - Create matching: `POST /api/matching-results`
+  - Assign provider: `PATCH /api/service-requests/{id}/assign-provider`
+  - Create assignment: `POST /api/assignments`
+- Activity monitor:
+  - `getActivityLogs`
+  - `getActivityLogsByServiceRequestId`
+
+### Admin
+
+- Dashboard:
+  - `getDashboardSummary`
+  - `getUsersByRole`
+- User admin:
+  - `getUsers`
+  - Create user: `POST /api/users/customers|agents|staff`
+  - Update role: `PATCH /api/auth/users/{id}/role`
+  - Lock/unlock: `PATCH /api/auth/users/{id}/lock`
+- Service admin:
+  - `getServiceCategories`
+  - `getServiceDefinitions`
+  - Create category: `POST /api/service-categories`
+  - Service CRUD: `POST/PUT/DELETE /api/services`
+
+### Common (all roles)
+
+- Profile:
+  - `me`
+  - `PUT /api/auth/profile`
+  - `POST /api/auth/change-password`
+  - `POST /api/auth/refresh-token`
+  - `POST /api/auth/logout`
+
+## Folder Structure
+
+```text
 src/
-├── config/           # Configuration files (API endpoints)
-├── navigation/       # Navigation structure (Bottom tabs + Stack)
-├── screens/          # Screen components
-│   ├── CameraScreen.js           # Camera capture
-│   ├── HistoryScreen.js          # Analysis history
-│   ├── AnalysisDetailScreen.js   # Detail view
-│   ├── AnalysisResultScreen.js   # Result display
-│   └── CreateRequestScreen.js    # Create request form
-├── services/         # API services
-│   ├── apiClient.js          # Axios HTTP client
-│   └── analysisService.js    # Analysis API calls
-├── context/          # React Context (State management)
-│   └── AnalysisContext.js    # Analysis state
-├── utils/            # Utility functions
-│   └── permissions.js        # Camera & photo permissions
-└── components/       # Reusable components (empty, add as needed)
+  app/
+    navigation/
+    theme/
+  features/
+    auth/
+    customer/
+    agent/
+    staff/
+    admin/
+    common/
+  shared/
+    api/
+    config/
+    storage/
+    types/
+    ui/
+    utils/
 ```
-
-## API Endpoints Used
-
-The app communicates with these BE endpoints:
-
-```
-POST   /api/ServiceAnalysis/analyze       - Send image for analysis
-GET    /api/ServiceAnalysis/history       - Get analysis history
-GET    /api/ServiceAnalysis/:id           - Get analysis details
-POST   /api/ServiceRequest/create         - Create service request
-GET    /api/ServiceRequest/list           - Get service requests
-```
-
-## Key Dependencies
-
-- **expo-camera** - Camera functionality
-- **expo-image-picker** - Photo library access
-- **@react-navigation** - Navigation
-- **axios** - HTTP client
-- **expo-permissions** - Permission handling
-
-## Configuration
-
-### API Configuration (`src/config/api.config.js`)
-
-Change `BASE_URL` to match your backend:
-
-```javascript
-// For local development with emulator
-BASE_URL: 'http://10.0.2.2:5000/api'  // Android emulator
-
-// For physical device
-BASE_URL: 'http://192.168.1.100:5000/api'  // Your machine IP
-
-// For deployed backend
-BASE_URL: 'https://api.example.com/api'
-```
-
-## Usage Flow
-
-1. **Camera Tab**: 
-   - Launch camera
-   - Capture photo
-   - App sends to BE for analysis
-   - View results
-
-2. **History Tab**:
-   - View all past analyses
-   - Tap to view details
-   - Create service request from analysis
-
-## Troubleshooting
-
-### Camera not working
-- Check permissions in `src/utils/permissions.js`
-- Ensure `expo-camera` plugin is properly configured in `app.json`
-
-### Backend connection error
-- Verify backend is running
-- Check IP address in `api.config.js`
-- Ensure firewall allows connection
-
-### Images not uploading
-- Check file format (should be JPEG)
-- Verify backend accepts multipart/form-data
-- Check network connection
-
-## Development Tips
-
-- Use `expo-dev-client` for faster iteration
-- Enable debug mode in browser: `exp://your-machine-ip:19000`
-- Monitor network requests with Flipper or React Native Debugger
-
-## Building for Production
-
-### APK (Android)
-```bash
-expo build:android -t apk
-```
-
-### IPA (iOS)
-```bash
-expo build:ios
-```
-
-### Update EAS Config
-Update `eas.json` with your project ID and credentials.
-
-## License
-
-MIT
-
-## Support
-
-For issues or questions, contact the development team.

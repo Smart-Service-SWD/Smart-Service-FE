@@ -1,16 +1,18 @@
-name: React Native CI
+name: FE Mobile CI
 
 on:
   push:
     branches:
       - main
       - develop
+      - FE-filnal
       - feature/*
       - hotfix/*
   pull_request:
     branches:
       - main
       - develop
+      - FE-filnal
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -34,7 +36,5 @@ jobs:
         run: npm ci
 
       - name: Type Check
-        run: npm run type-check
+        run: npm run typecheck
 
-      #- name: Lint
-      #  run: npm run lint

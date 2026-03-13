@@ -1,41 +1,37 @@
 {
   "expo": {
-    "name": "Smart Service",
-    "slug": "smart-service-fe",
+    "name": "Smart Service Mobile",
+    "slug": "smart-service-mobile",
     "version": "1.0.0",
+    "icon": "./src/assets/icon.png",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./src/assets/logo-splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#f4f6f8"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.smartservice.mobile"
+      "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#ffffff",
-        "foregroundImage": "./assets/images/android-icon-foreground.png"
-      },
-      "package": "com.smartservice.mobile"
-    },
-    "web": {
-      "favicon": "./assets/images/favicon.png"
+        "foregroundImage": "./src/assets/adaptive-icon.png",
+        "backgroundColor": "#f4f6f8"
+      }
     },
     "plugins": [
       [
-        "expo-camera",
-        {
-          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera"
-        }
-      ],
-      [
         "expo-image-picker",
         {
-          "photosPermission": "Allow $(PRODUCT_NAME) to access your photos",
-          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera"
+          "photosPermission": "Cho phep Smart Service truy cap thu vien anh de gui anh OCR cho yeu cau dich vu.",
+          "cameraPermission": "Cho phep Smart Service mo camera de chup anh gui kem yeu cau dich vu.",
+          "microphonePermission": false
         }
       ]
-    ],
-    "assetBundlePatterns": [
-      "**/*"
-    ]  }
+    ]
+  }
 }
