@@ -494,7 +494,7 @@ export default function CreateRequestScreen() {
                   ? "Chọn dịch vụ trước"
                   : !addressText.trim()
                     ? "Nhập địa chỉ trước"
-                  : "Gửi yêu cầu"
+                    : "Gửi yêu cầu"
           }
           onPress={() => void submit()}
           disabled={!canSubmitRequest}
@@ -506,28 +506,33 @@ export default function CreateRequestScreen() {
 
 const styles = StyleSheet.create({
   heroCard: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: "#eff6ff",
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 16,
-    padding: 16,
-    gap: 6
+    borderColor: "#bfdbfe",
+    borderRadius: 20,
+    padding: 18,
+    gap: 8
   },
   card: {
-    backgroundColor: colors.surface,
+    backgroundColor: "#fff",
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 16,
-    padding: 14,
-    gap: 10
+    borderColor: "#e2e8f0",
+    borderRadius: 20,
+    padding: 18,
+    gap: 14,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2
   },
   successCard: {
-    backgroundColor: "#ecfdf5",
+    backgroundColor: "#eff6ff",
     borderWidth: 1,
-    borderColor: "#86efac",
-    borderRadius: 16,
-    padding: 14,
-    gap: 8
+    borderColor: "#bfdbfe",
+    borderRadius: 20,
+    padding: 18,
+    gap: 10
   },
   alertCard: {
     backgroundColor: "#fff7ed",
@@ -537,23 +542,23 @@ const styles = StyleSheet.create({
     backgroundColor: "#ffedd5",
     borderWidth: 1,
     borderColor: "#fdba74",
-    borderRadius: 12,
-    padding: 10,
-    gap: 4
+    borderRadius: 14,
+    padding: 14,
+    gap: 6
   },
   alertTitle: {
     color: "#9a3412",
-    fontWeight: "700",
-    fontSize: 13
+    fontWeight: "800",
+    fontSize: 14
   },
   alertText: {
     color: "#9a3412",
-    fontSize: 12,
-    lineHeight: 18
+    fontSize: 13,
+    lineHeight: 19
   },
   label: {
-    color: colors.text,
-    fontWeight: "600",
+    color: "#0f172a",
+    fontWeight: "800",
     fontSize: 14
   },
   multilineInput: {
@@ -563,25 +568,25 @@ const styles = StyleSheet.create({
   },
   imageCard: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 12,
-    gap: 10,
-    backgroundColor: "#fff"
+    borderColor: "#e2e8f0",
+    borderRadius: 16,
+    padding: 14,
+    gap: 12,
+    backgroundColor: "#f0f4ff"
   },
   previewCard: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 10,
-    gap: 6,
-    backgroundColor: colors.surface
+    borderColor: "#e2e8f0",
+    borderRadius: 14,
+    padding: 12,
+    gap: 8,
+    backgroundColor: "#fff"
   },
   previewImage: {
     width: "100%",
-    height: 180,
+    height: 200,
     borderRadius: 12,
-    backgroundColor: colors.primarySoft
+    backgroundColor: "#eff6ff"
   },
   categoryGrid: {
     flexDirection: "row",
@@ -589,78 +594,81 @@ const styles = StyleSheet.create({
     gap: 8
   },
   serviceGrid: {
-    gap: 8
+    gap: 10
   },
   categoryChip: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: "#fff"
+    borderColor: "#e2e8f0",
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: "#f0f4ff"
   },
   categoryChipActive: {
     borderColor: colors.primary,
-    backgroundColor: colors.primarySoft
+    backgroundColor: "#eff6ff"
   },
   categoryChipText: {
-    color: colors.textMuted,
-    fontWeight: "600"
+    color: "#64748b",
+    fontWeight: "700",
+    fontSize: 13
   },
   categoryChipTextActive: {
     color: colors.primary
   },
   serviceCard: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 10,
-    gap: 4,
-    backgroundColor: "#fff"
+    borderColor: "#e2e8f0",
+    borderRadius: 14,
+    padding: 14,
+    gap: 6,
+    backgroundColor: "#f0f4ff"
   },
   serviceCardActive: {
     borderColor: colors.primary,
-    backgroundColor: colors.primarySoft
+    backgroundColor: "#eff6ff"
   },
   serviceTitle: {
-    color: colors.text,
-    fontWeight: "700",
-    fontSize: 13
+    color: "#0f172a",
+    fontWeight: "800",
+    fontSize: 14
   },
   serviceMeta: {
-    color: colors.textMuted,
+    color: "#64748b",
     fontSize: 12,
     lineHeight: 18
   },
   selectedServiceBox: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 10,
+    borderColor: "#bfdbfe",
+    borderRadius: 14,
+    padding: 14,
     gap: 4,
-    backgroundColor: "#fff"
+    backgroundColor: "#eff6ff"
   },
   selectedServiceTitle: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: "700"
+    color: "#1d4ed8",
+    fontSize: 11,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.5
   },
   selectedServiceValue: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: "700"
+    color: "#0f172a",
+    fontSize: 14,
+    fontWeight: "800"
   },
   selectedServiceMeta: {
-    color: colors.textMuted,
+    color: "#64748b",
     fontSize: 12
   },
   sectionTitle: {
-    color: colors.text,
-    fontWeight: "700",
+    color: "#0f172a",
+    fontWeight: "800",
     fontSize: 15
   },
   value: {
-    color: colors.textMuted,
+    color: "#64748b",
     fontSize: 13,
     lineHeight: 20
   },

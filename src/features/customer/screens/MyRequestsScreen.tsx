@@ -478,53 +478,68 @@ const styles = StyleSheet.create({
   },
   filterChip: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    borderColor: "#e2e8f0",
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     backgroundColor: "#fff"
   },
   filterChipActive: {
     borderColor: colors.primary,
-    backgroundColor: colors.primarySoft
+    backgroundColor: "#eff6ff"
   },
   filterChipText: {
-    color: colors.textMuted,
+    color: "#64748b",
     fontSize: 12,
-    fontWeight: "600"
+    fontWeight: "700"
   },
   filterChipTextActive: {
     color: colors.primary
   },
   loading: {
-    color: colors.textMuted
+    color: "#64748b",
+    fontSize: 13,
+    textAlign: "center"
   },
   error: {
     color: colors.danger,
-    fontSize: 13
+    fontSize: 13,
+    backgroundColor: "#fef2f2",
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#fecaca"
   },
   card: {
-    backgroundColor: colors.surface,
+    backgroundColor: "#fff",
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 16,
-    padding: 14,
-    gap: 6
+    borderColor: "#e2e8f0",
+    borderRadius: 20,
+    padding: 16,
+    gap: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2
   },
   cardSelected: {
     borderColor: colors.primary,
-    backgroundColor: colors.primarySoft
+    backgroundColor: "#eff6ff"
   },
   cardTitle: {
-    color: colors.text,
-    fontWeight: "700"
+    color: "#0f172a",
+    fontWeight: "800",
+    fontSize: 14,
+    lineHeight: 20
   },
   meta: {
-    color: colors.textMuted,
-    fontSize: 12
+    color: "#64748b",
+    fontSize: 12,
+    lineHeight: 18
   },
   detailBox: {
-    gap: 3,
+    gap: 6,
     marginTop: 8
   },
   cancelBox: {
@@ -533,44 +548,45 @@ const styles = StyleSheet.create({
     marginBottom: 4
   },
   logBox: {
-    gap: 4,
-    marginTop: 10,
-    paddingTop: 10,
+    gap: 6,
+    marginTop: 12,
+    paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: colors.border
+    borderTopColor: "#e2e8f0"
   },
   metaStrong: {
-    color: colors.text,
-    fontSize: 12,
-    fontWeight: "700"
+    color: "#0f172a",
+    fontSize: 13,
+    fontWeight: "800"
   },
   tapHint: {
     color: colors.primary,
     fontSize: 12,
-    fontWeight: "600",
-    marginTop: 6
+    fontWeight: "700",
+    marginTop: 4
   },
   feedbackHint: {
-    color: colors.success,
+    color: "#2563eb",
     fontSize: 13,
-    fontWeight: "700",
-    marginTop: 6
+    fontWeight: "800",
+    marginTop: 4
   },
   cancelHint: {
     color: colors.danger,
     fontSize: 12,
     fontWeight: "700",
-    marginTop: 6
+    marginTop: 4
   },
   feedbackDone: {
-    color: colors.textMuted,
+    color: "#94a3b8",
     fontSize: 12,
     fontWeight: "700",
-    marginTop: 6
+    marginTop: 4
   },
   empty: {
-    color: colors.textMuted,
+    color: "#94a3b8",
     textAlign: "center",
-    marginTop: 16
+    marginTop: 20,
+    fontSize: 13
   }
 });

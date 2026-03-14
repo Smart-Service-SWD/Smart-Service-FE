@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import ScreenLayout from "../../../shared/ui/ScreenLayout";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "../../../app/theme/colors";
 import { useAuth } from "../../auth/AuthContext";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
@@ -68,10 +75,7 @@ export default function AssignmentsScreen() {
   const [success, setSuccess] = useState("");
 
   const load = async () => {
-    if (!session) {
-      return;
-    }
-
+    if (!session) return;
     setLoading(true);
     setError("");
     setBindingMessage("");
@@ -85,15 +89,13 @@ export default function AssignmentsScreen() {
         graphqlRequest<ServiceDefinitionsResponse>(SERVICE_DEFINITIONS_QUERY)
       ]);
       const linkedAgent =
-        serviceAgentData.getServiceAgents.find((agent) => agent.userId === session.userId) ??
-        null;
+        serviceAgentData.getServiceAgents.find((agent) => agent.userId === session.userId) ?? null;
 
       setServiceNamesById(
         Object.fromEntries(
           serviceDefinitionData.getServiceDefinitions.map((service) => [service.id, service.name])
         )
       );
-
       setLinkedServiceAgent(linkedAgent);
 
       if (!linkedAgent) {
@@ -118,16 +120,12 @@ export default function AssignmentsScreen() {
   };
 
   const loadRequestDetail = async (requestedId?: string) => {
-    if (!session) {
-      return;
-    }
-
+    if (!session) return;
     const requestId = requestedId ?? detailRequestId;
     if (!requestId.trim()) {
       setError("Hãy chọn một công việc từ danh sách phía trên");
       return;
     }
-
     setLoading(true);
     setError("");
     try {
@@ -137,7 +135,6 @@ export default function AssignmentsScreen() {
         session.accessToken
       );
       let nextCustomerProfile: UserProfile | null = null;
-
       if (data.getServiceRequestById?.customerId) {
         const userData = await graphqlRequest<UserByIdResponse, { id: string }>(
           USER_BY_ID_QUERY,
@@ -146,7 +143,6 @@ export default function AssignmentsScreen() {
         );
         nextCustomerProfile = userData.getUserById;
       }
-
       setDetailRequestId(requestId.trim());
       setDetail(data.getServiceRequestById);
       setCustomerProfile(nextCustomerProfile);
@@ -162,12 +158,10 @@ export default function AssignmentsScreen() {
       setError("Hãy chọn công việc cần cập nhật.");
       return;
     }
-
     if (targetStatus === "IN_PROGRESS" && detail.status !== "ASSIGNED") {
       setError("Chỉ có thể bắt đầu khi công việc đang ở trạng thái Đã phân công.");
       return;
     }
-
     if (targetStatus === "COMPLETED" && detail.status !== "IN_PROGRESS") {
       setError("Chỉ có thể hoàn thành khi công việc đang ở trạng thái Đang thực hiện.");
       return;
@@ -211,7 +205,6 @@ export default function AssignmentsScreen() {
       setError("Tài khoản này chưa có hồ sơ thợ để cập nhật trạng thái hoạt động.");
       return;
     }
-
     setUpdatingAvailability(true);
     setError("");
     setSuccess("");
@@ -222,7 +215,6 @@ export default function AssignmentsScreen() {
         linkedServiceAgent.id,
         nextIsActive
       );
-
       setLinkedServiceAgent((current) =>
         current ? { ...current, isActive: result.isActive } : current
       );
@@ -250,7 +242,6 @@ export default function AssignmentsScreen() {
       setCustomerProfile(null);
       return;
     }
-
     const stillExists = items.some((item) => item.serviceRequestId === detailRequestId);
     if (!stillExists) {
       void loadRequestDetail(items[0].serviceRequestId);
@@ -258,191 +249,326 @@ export default function AssignmentsScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items]);
 
+  const isActive = linkedServiceAgent?.isActive;
+
   return (
-    <ScreenLayout title="Công việc của tôi" subtitle="Danh sách công việc được phân công">
-      {loading ? <Text style={styles.loading}>Đang tải...</Text> : null}
-      {!!error ? <Text style={styles.error}>{error}</Text> : null}
-      {!!success ? <Text style={styles.success}>{success}</Text> : null}
-      {!!bindingMessage ? <Text style={styles.info}>{bindingMessage}</Text> : null}
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Công việc của tôi</Text>
+          <Text style={styles.headerSub}>Danh sách công việc được phân công</Text>
+        </View>
 
-      <View style={styles.card}>
-        <Text style={styles.title}>Thông tin nhận việc</Text>
-        <Text style={styles.meta}>Thợ đang đăng nhập: {linkedServiceAgent?.fullName ?? "-"}</Text>
-        <Text style={styles.meta}>
-          Trạng thái:{" "}
-          {!linkedServiceAgent
-            ? "Chưa có hồ sơ thợ"
-            : linkedServiceAgent.isActive
-              ? "Đang nhận việc mới"
-              : "Đang tạm ngưng nhận việc mới"}
-        </Text>
-        {linkedServiceAgent ? (
-          <>
-            <Text style={styles.meta}>
-              Khi tắt, staff sẽ không còn thấy bạn trong danh sách để phân công yêu cầu mới.
-            </Text>
-            <ActionButton
-              label={
-                updatingAvailability
-                  ? "Đang cập nhật..."
-                  : linkedServiceAgent.isActive
-                    ? "Tắt nhận việc mới"
-                    : "Bật nhận việc mới"
-              }
-              onPress={() => void handleToggleAvailability()}
-              disabled={loading || updatingAvailability}
-              variant="secondary"
-            />
-          </>
-        ) : null}
-      </View>
-
-      {items.map((item) => (
-        <Pressable
-          key={item.id}
-          style={[styles.card, detailRequestId === item.serviceRequestId && styles.cardSelected]}
-          onPress={() => void loadRequestDetail(item.serviceRequestId)}
-        >
-          <Text style={styles.title}>Công việc {formatShortId(item.serviceRequestId)}</Text>
-          <Text style={styles.meta}>Phân công lúc: {formatDateTime(item.assignedAt)}</Text>
-          <Text style={styles.meta}>
-            Ước tính: {formatCurrency(item.estimatedCost.amount, item.estimatedCost.currency)}
-          </Text>
-        </Pressable>
-      ))}
-
-      {!loading && items.length === 0 ? (
-        <Text style={styles.empty}>Chưa có công việc nào</Text>
-      ) : null}
-
-      <View style={styles.card}>
-        <Text style={styles.title}>Chi tiết công việc</Text>
-        {detailRequestId ? (
-          <Text style={styles.selected}>Đang xem công việc: {formatShortId(detailRequestId)}</Text>
-        ) : (
-          <Text style={styles.hint}>Nhấn vào một công việc phía trên để xem chi tiết</Text>
+        {/* Alerts */}
+        {!!error && (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>⚠️ {error}</Text>
+          </View>
         )}
-        <ActionButton
-          label={loading ? "Đang tải..." : "Tải lại yêu cầu đang chọn"}
-          onPress={() => void loadRequestDetail(detailRequestId)}
-          disabled={loading || !detailRequestId}
-          variant="secondary"
-        />
-        {detail ? (
-          <View style={styles.detail}>
-            <Text style={styles.meta}>
-              Trạng thái: {formatRequestStatus(detail.status)}
-            </Text>
-            <Text style={styles.meta}>
-              Khách hàng: {customerProfile?.fullName ?? formatShortId(detail.customerId)}
-            </Text>
-            <Text style={styles.meta}>
-              Số điện thoại: {customerProfile?.phoneNumber || "-"}
-            </Text>
-            {detail.serviceDefinitionId ? (
-              <Text style={styles.meta}>
-                Dịch vụ:{" "}
-                {serviceNamesById[detail.serviceDefinitionId] ??
-                  formatShortId(detail.serviceDefinitionId)}
-              </Text>
-            ) : null}
-            <Text style={styles.meta}>Mô tả: {detail.description}</Text>
-            <Text style={styles.meta}>
-              Độ phức tạp: {detail.complexity?.level ?? "Chưa đánh giá"}
-            </Text>
-            <Text style={styles.meta}>
-              Địa chỉ: {detail.addressText || "Khách hàng chưa nhập địa chỉ cho yêu cầu này."}
-            </Text>
-            <View style={styles.actionGroup}>
-              {detail.status === "ASSIGNED" ? (
-                <ActionButton
-                  label={loading ? "Đang bắt đầu..." : "Bắt đầu làm việc"}
-                  onPress={() => void handleStatusChange("IN_PROGRESS")}
-                  disabled={loading}
-                />
-              ) : null}
-              {detail.status === "IN_PROGRESS" ? (
-                <ActionButton
-                  label={loading ? "Đang hoàn thành..." : "Hoàn thành công việc"}
-                  onPress={() => void handleStatusChange("COMPLETED")}
-                  disabled={loading}
-                />
-              ) : null}
-              {detail.status === "COMPLETED" ? (
-                <Text style={styles.info}>Công việc này đã hoàn thành.</Text>
-              ) : null}
-              {detail.status !== "ASSIGNED" &&
-              detail.status !== "IN_PROGRESS" &&
-              detail.status !== "COMPLETED" ? (
-                <Text style={styles.hint}>
-                  Nút thao tác chỉ hiện khi công việc đã được phân công hoặc đang thực hiện.
+        {!!success && (
+          <View style={styles.successBox}>
+            <Text style={styles.successText}>✅ {success}</Text>
+          </View>
+        )}
+        {!!bindingMessage && (
+          <View style={styles.infoBox}>
+            <Text style={styles.infoText}>ℹ️ {bindingMessage}</Text>
+          </View>
+        )}
+
+        {/* Agent status card */}
+        <View style={styles.agentCard}>
+          <View style={styles.agentCardLeft}>
+            <View style={[styles.agentAvatar, isActive ? styles.agentAvatarActive : styles.agentAvatarInactive]}>
+              <Text style={styles.agentAvatarText}>{linkedServiceAgent?.fullName?.[0]?.toUpperCase() ?? "?"}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.agentName}>{linkedServiceAgent?.fullName ?? "Chưa gắn hồ sơ"}</Text>
+              <View style={[styles.availPill, isActive ? styles.availPillOn : styles.availPillOff]}>
+                <Text style={[styles.availPillText, isActive ? styles.availPillTextOn : styles.availPillTextOff]}>
+                  {!linkedServiceAgent ? "Chưa có hồ sơ thợ" : isActive ? "🟢 Đang nhận việc" : "⏸ Tạm ngưng"}
                 </Text>
-              ) : null}
+              </View>
             </View>
           </View>
-        ) : null}
-      </View>
-    </ScreenLayout>
+          {linkedServiceAgent ? (
+            <Pressable
+              style={({ pressed }) => [
+                styles.toggleBtn,
+                isActive ? styles.toggleBtnOff : styles.toggleBtnOn,
+                pressed && { opacity: 0.8 }
+              ]}
+              onPress={() => void handleToggleAvailability()}
+              disabled={loading || updatingAvailability}
+            >
+              {updatingAvailability ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.toggleBtnText}>{isActive ? "Tắt" : "Bật"}</Text>
+              )}
+            </Pressable>
+          ) : null}
+        </View>
+
+        {/* Assignment list */}
+        <View style={styles.card}>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardTitle}>Danh sách công việc ({items.length})</Text>
+            {loading && <ActivityIndicator color={colors.primary} size="small" />}
+          </View>
+
+          {items.length === 0 && !loading ? (
+            <View style={styles.emptyWrap}>
+              <Text style={styles.emptyEmoji}>📋</Text>
+              <Text style={styles.emptyText}>Chưa có công việc nào được phân công</Text>
+            </View>
+          ) : (
+            <View style={styles.assignmentList}>
+              {items.map((item) => {
+                const isSelected = detailRequestId === item.serviceRequestId;
+                return (
+                  <Pressable
+                    key={item.id}
+                    style={[styles.assignmentRow, isSelected && styles.assignmentRowSelected]}
+                    onPress={() => void loadRequestDetail(item.serviceRequestId)}
+                  >
+                    <View style={styles.assignmentRowLeft}>
+                      <View style={[styles.assignmentDot, isSelected && styles.assignmentDotActive]} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.assignmentTitle}>
+                          Công việc {formatShortId(item.serviceRequestId)}
+                        </Text>
+                        <Text style={styles.assignmentMeta}>
+                          📅 {formatDateTime(item.assignedAt)}
+                        </Text>
+                        <Text style={styles.assignmentMeta}>
+                          💰 {formatCurrency(item.estimatedCost.amount, item.estimatedCost.currency)}
+                        </Text>
+                      </View>
+                    </View>
+                    {isSelected && (
+                      <View style={styles.selectedTag}>
+                        <Text style={styles.selectedTagText}>Đang xem</Text>
+                      </View>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+        </View>
+
+        {/* Detail panel */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Chi tiết công việc</Text>
+
+          {detail ? (
+            <View style={styles.detailBody}>
+              <View style={styles.statusRow}>
+                <Text style={styles.statusLabel}>Trạng thái:</Text>
+                <Text style={styles.statusValue}>{formatRequestStatus(detail.status)}</Text>
+              </View>
+
+              {[
+                { icon: "👤", label: customerProfile?.fullName ?? formatShortId(detail.customerId) },
+                { icon: "📞", label: customerProfile?.phoneNumber || "-" },
+                {
+                  icon: "🛠",
+                  label: detail.serviceDefinitionId
+                    ? (serviceNamesById[detail.serviceDefinitionId] ?? formatShortId(detail.serviceDefinitionId))
+                    : "-"
+                },
+                { icon: "📝", label: detail.description },
+                { icon: "⚡", label: `Độ phức tạp: ${detail.complexity?.level ?? "Chưa đánh giá"}` },
+                { icon: "📍", label: detail.addressText || "Khách hàng chưa nhập địa chỉ" }
+              ].map(({ icon, label }, i) => (
+                <View key={i} style={styles.detailRow}>
+                  <Text style={styles.detailIcon}>{icon}</Text>
+                  <Text style={styles.detailText}>{label}</Text>
+                </View>
+              ))}
+
+              {/* Action buttons */}
+              <View style={styles.actionRow}>
+                {detail.status === "ASSIGNED" ? (
+                  <Pressable
+                    style={({ pressed }) => [styles.actionBtn, styles.actionBtnStart, pressed && { opacity: 0.85 }]}
+                    onPress={() => void handleStatusChange("IN_PROGRESS")}
+                    disabled={loading}
+                  >
+                    {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.actionBtnText}>▶ Bắt đầu làm việc</Text>}
+                  </Pressable>
+                ) : null}
+                {detail.status === "IN_PROGRESS" ? (
+                  <Pressable
+                    style={({ pressed }) => [styles.actionBtn, styles.actionBtnDone, pressed && { opacity: 0.85 }]}
+                    onPress={() => void handleStatusChange("COMPLETED")}
+                    disabled={loading}
+                  >
+                    {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.actionBtnText}>✅ Hoàn thành công việc</Text>}
+                  </Pressable>
+                ) : null}
+                {detail.status === "COMPLETED" ? (
+                  <View style={styles.completedBadge}>
+                    <Text style={styles.completedText}>✅ Công việc đã hoàn thành</Text>
+                  </View>
+                ) : null}
+              </View>
+            </View>
+          ) : (
+            <Text style={styles.emptyText}>Nhấn vào một công việc ở trên để xem chi tiết</Text>
+          )}
+
+          <ActionButton
+            label={loading ? "Đang tải..." : "Tải lại yêu cầu đang chọn"}
+            onPress={() => void loadRequestDetail(detailRequestId)}
+            disabled={loading || !detailRequestId}
+            variant="secondary"
+          />
+        </View>
+
+        <View style={{ height: 80 }} />
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  loading: {
-    color: colors.textMuted
-  },
-  error: {
-    color: colors.danger,
-    fontSize: 13
-  },
-  info: {
-    color: colors.textMuted,
-    fontSize: 13
-  },
-  success: {
-    color: colors.success,
-    fontSize: 13
-  },
-  card: {
-    backgroundColor: colors.surface,
+  safeArea: { flex: 1, backgroundColor: "#f0f4ff" },
+  scroll: { flex: 1 },
+  content: { paddingTop: 16, paddingBottom: 20, paddingHorizontal: 20, gap: 14 },
+
+  header: { gap: 4 },
+  headerTitle: { fontSize: 22, fontWeight: "800", color: "#0f172a" },
+  headerSub: { fontSize: 13, color: "#64748b" },
+
+  errorBox: { backgroundColor: "#fef2f2", borderWidth: 1, borderColor: "#fecaca", borderRadius: 12, padding: 12 },
+  errorText: { fontSize: 13, color: colors.danger },
+  successBox: { backgroundColor: "#eff6ff", borderWidth: 1, borderColor: "#bfdbfe", borderRadius: 12, padding: 12 },
+  successText: { fontSize: 13, color: "#1d4ed8", fontWeight: "600" },
+  infoBox: { backgroundColor: "#f0f4ff", borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, padding: 12 },
+  infoText: { fontSize: 13, color: "#64748b" },
+
+  // Agent card
+  agentCard: {
+    backgroundColor: "#fff",
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: "#e2e8f0",
+    borderRadius: 20,
+    padding: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2
+  },
+  agentCardLeft: { flex: 1, flexDirection: "row", alignItems: "center", gap: 12 },
+  agentAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  agentAvatarActive: { backgroundColor: "#dbeafe" },
+  agentAvatarInactive: { backgroundColor: "#f1f5f9" },
+  agentAvatarText: { fontSize: 20, fontWeight: "800", color: "#0f172a" },
+  agentName: { fontSize: 15, fontWeight: "800", color: "#0f172a", marginBottom: 4 },
+  availPill: { alignSelf: "flex-start", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  availPillOn: { backgroundColor: "#dbeafe" },
+  availPillOff: { backgroundColor: "#f1f5f9" },
+  availPillText: { fontSize: 11, fontWeight: "700" },
+  availPillTextOn: { color: "#2563eb" },
+  availPillTextOff: { color: "#64748b" },
+  toggleBtn: { borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10 },
+  toggleBtnOn: { backgroundColor: "#2563eb" },
+  toggleBtnOff: { backgroundColor: "#dc2626" },
+  toggleBtnText: { color: "#fff", fontWeight: "800", fontSize: 13 },
+
+  // Card
+  card: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 20,
+    padding: 16,
+    gap: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2
+  },
+  cardHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  cardTitle: { fontSize: 15, fontWeight: "800", color: "#0f172a" },
+
+  emptyWrap: { alignItems: "center", paddingVertical: 24, gap: 8 },
+  emptyEmoji: { fontSize: 32 },
+  emptyText: { color: "#94a3b8", fontSize: 13, textAlign: "center" },
+
+  assignmentList: { gap: 8 },
+  assignmentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#f0f4ff",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 14,
+    padding: 12
+  },
+  assignmentRowSelected: { borderColor: colors.primary, backgroundColor: "#eff6ff" },
+  assignmentRowLeft: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10 },
+  assignmentDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#cbd5e1",
+    flexShrink: 0
+  },
+  assignmentDotActive: { backgroundColor: colors.primary },
+  assignmentTitle: { fontSize: 13, fontWeight: "700", color: "#0f172a" },
+  assignmentMeta: { fontSize: 11, color: "#64748b" },
+  selectedTag: { backgroundColor: "#eff6ff", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  selectedTagText: { fontSize: 10, fontWeight: "800", color: colors.primary },
+
+  // Detail
+  detailBody: { gap: 10 },
+  statusRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  statusLabel: { fontSize: 13, fontWeight: "700", color: "#64748b" },
+  statusValue: { fontSize: 13, fontWeight: "800", color: colors.primary },
+  detailRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  detailIcon: { fontSize: 14, marginTop: 1 },
+  detailText: { flex: 1, fontSize: 13, color: "#374151", lineHeight: 19 },
+  actionRow: { gap: 10, marginTop: 6 },
+  actionBtn: {
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3
+  },
+  actionBtnStart: { backgroundColor: colors.primary },
+  actionBtnDone: { backgroundColor: "#2563eb" },
+  actionBtnText: { color: "#fff", fontSize: 14, fontWeight: "800" },
+  completedBadge: {
+    backgroundColor: "#eff6ff",
     borderRadius: 12,
     padding: 14,
-    gap: 4
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#bfdbfe"
   },
-  title: {
-    color: colors.text,
-    fontWeight: "700"
-  },
-  meta: {
-    color: colors.textMuted,
-    fontSize: 12
-  },
-  detail: {
-    marginTop: 8,
-    gap: 3
-  },
-  actionGroup: {
-    gap: 10,
-    marginTop: 10
-  },
-  empty: {
-    color: colors.textMuted,
-    textAlign: "center",
-    marginTop: 20
-  },
-  cardSelected: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySoft
-  },
-  selected: {
-    color: colors.primary,
-    fontSize: 12,
-    fontWeight: "700"
-  },
-  hint: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontStyle: "italic"
-  }
+  completedText: { color: "#1d4ed8", fontWeight: "800", fontSize: 14 }
 });
