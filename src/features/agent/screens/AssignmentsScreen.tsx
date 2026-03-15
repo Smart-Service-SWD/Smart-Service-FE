@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "../../../app/theme/colors";
+import BrandLogo from "../../../shared/ui/BrandLogo";
 import { useAuth } from "../../auth/AuthContext";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
 import {
@@ -260,8 +261,15 @@ export default function AssignmentsScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Công việc của tôi</Text>
-          <Text style={styles.headerSub}>Danh sách công việc được phân công</Text>
+          <View style={styles.headerLeft}>
+            <View style={styles.logoBox}>
+              <BrandLogo size={40} />
+            </View>
+            <View>
+              <Text style={styles.headerTitle}>Công việc của tôi</Text>
+              <Text style={styles.headerSub}>Danh sách công việc được phân công</Text>
+            </View>
+          </View>
         </View>
 
         {/* Alerts */}
@@ -443,9 +451,27 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   content: { paddingTop: 16, paddingBottom: 20, paddingHorizontal: 20, gap: 14 },
 
-  header: { gap: 4 },
-  headerTitle: { fontSize: 22, fontWeight: "800", color: "#0f172a" },
-  headerSub: { fontSize: 13, color: "#64748b" },
+  header: {
+    flexDirection: "row",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderRadius: 28,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.55)",
+    gap: 14,
+    alignItems: "flex-start",
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
+    marginBottom: 8
+  },
+  headerLeft: { flexDirection: "row", gap: 12, flex: 1, alignItems: "flex-start" },
+  logoBox: { width: 50, height: 50, borderRadius: 14, overflow: "hidden", flexShrink: 0 },
+  headerTitle: { fontSize: 18, fontWeight: "700", color: "#0f172a" },
+  headerSub: { fontSize: 12, color: "#64748b", marginTop: 2 },
 
   errorBox: { backgroundColor: "#fef2f2", borderWidth: 1, borderColor: "#fecaca", borderRadius: 12, padding: 12 },
   errorText: { fontSize: 13, color: colors.danger },

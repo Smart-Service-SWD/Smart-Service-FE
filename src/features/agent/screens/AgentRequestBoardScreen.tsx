@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "../../../app/theme/colors";
+import BrandLogo from "../../../shared/ui/BrandLogo";
 import { useAuth } from "../../auth/AuthContext";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
 import {
@@ -54,30 +55,14 @@ interface UserByIdResponse {
 }
 
 const statusOptions = [
-  "ALL",
-  "AWAITING_ANALYSIS",
-  "CREATED",
-  "URGENT_DISPATCH",
-  "PENDING_REVIEW",
-  "APPROVED",
-  "ASSIGNED",
-  "IN_PROGRESS",
-  "COMPLETED",
-  "CANCELLED"
+  { label: "Chờ AI", value: "AWAITING_ANALYSIS" },
+  { label: "Mới tạo", value: "CREATED" },
+  { label: "Khẩn cấp", value: "URGENT_DISPATCH" },
+  { label: "Chờ duyệt", value: "PENDING_REVIEW" },
+  { label: "Đã duyệt", value: "APPROVED" },
+  { label: "Đã phân công", value: "ASSIGNED" },
+  { label: "Đang làm", value: "IN_PROGRESS" }
 ] as const;
-
-const STATUS_LABELS: Record<(typeof statusOptions)[number], string> = {
-  ALL: "Tất cả",
-  AWAITING_ANALYSIS: "Chờ AI",
-  CREATED: "Mới",
-  URGENT_DISPATCH: "Khẩn",
-  PENDING_REVIEW: "Chờ duyệt",
-  APPROVED: "Đã duyệt",
-  ASSIGNED: "Đã gán",
-  IN_PROGRESS: "Đang làm",
-  COMPLETED: "Hoàn thành",
-  CANCELLED: "Đã hủy"
-};
 
 const STATUS_COLORS: Partial<Record<string, { bg: string; text: string }>> = {
   URGENT_DISPATCH: { bg: "#fef2f2", text: "#dc2626" },
@@ -90,7 +75,8 @@ const STATUS_COLORS: Partial<Record<string, { bg: string; text: string }>> = {
 export default function AgentRequestBoardScreen() {
   const { session } = useAuth();
   const [items, setItems] = useState<ServiceRequestItem[]>([]);
-  const [statusFilter, setStatusFilter] = useState<(typeof statusOptions)[number]>("ALL");
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [selectedRequestId, setSelectedRequestId] = useState("");
   const [serviceNamesById, setServiceNamesById] = useState<Record<string, string>>({});
   const [customerProfile, setCustomerProfile] = useState<UserProfile | null>(null);
@@ -100,9 +86,11 @@ export default function AgentRequestBoardScreen() {
   const [error, setError] = useState("");
 
   const filteredItems = useMemo(() => {
-    if (statusFilter === "ALL") return items;
-    return items.filter((item) => item.status === statusFilter);
-  }, [items, statusFilter]);
+    if (selectedStatuses.length === 0) {
+      return items.filter((item) => item.status !== "CANCELLED" && item.status !== "COMPLETED");
+    }
+    return items.filter((item) => selectedStatuses.includes(item.status) && item.status !== "CANCELLED" && item.status !== "COMPLETED");
+  }, [items, selectedStatuses]);
 
   const selectedRequest = useMemo(
     () => items.find((item) => item.id === selectedRequestId) ?? null,
@@ -186,6 +174,17 @@ export default function AgentRequestBoardScreen() {
 
   const getStatusStyle = (status: string) => STATUS_COLORS[status] ?? { bg: "#f0f4ff", text: "#64748b" };
 
+  const toggleStatus = (value: string) => {
+    setSelectedStatuses((prev) =>
+      prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value]
+    );
+  };
+
+  const dropdownLabel =
+    selectedStatuses.length === 0
+      ? "Tất cả trạng thái"
+      : `${selectedStatuses.length} trạng thái`;
+
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
       <ScrollView
@@ -195,31 +194,57 @@ export default function AgentRequestBoardScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Bảng yêu cầu</Text>
-          <Text style={styles.headerSub}>Tra cứu và xem thông tin yêu cầu dịch vụ</Text>
+          <View style={styles.headerLeft}>
+            <View style={styles.logoBox}>
+              <BrandLogo size={40} />
+            </View>
+            <View>
+              <Text style={styles.headerTitle}>Bảng yêu cầu</Text>
+              <Text style={styles.headerSub}>Tra cứu và xem thông tin yêu cầu dịch vụ</Text>
+            </View>
+          </View>
         </View>
 
         {/* Filter chips */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScroll}
-        >
-          {statusOptions.map((opt) => {
-            const active = statusFilter === opt;
-            return (
-              <Pressable
-                key={opt}
-                style={[styles.filterChip, active && styles.filterChipActive]}
-                onPress={() => setStatusFilter(opt)}
-              >
-                <Text style={[styles.filterText, active && styles.filterTextActive]}>
-                  {STATUS_LABELS[opt]}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+        <View style={styles.dropdownContainer}>
+          <Pressable
+            style={({ pressed }) => [styles.dropdownButton, pressed && styles.dropdownButtonPressed]}
+            onPress={() => setDropdownOpen((v) => !v)}
+          >
+            <Text style={styles.dropdownButtonText}>🔽 {dropdownLabel}</Text>
+            <Text style={styles.dropdownChevron}>{dropdownOpen ? "▲" : "▼"}</Text>
+          </Pressable>
+
+          {dropdownOpen && (
+            <View style={styles.dropdownMenu}>
+              {selectedStatuses.length > 0 && (
+                <Pressable
+                  style={styles.dropdownClearRow}
+                  onPress={() => setSelectedStatuses([])}
+                >
+                  <Text style={styles.dropdownClearText}>✕ Bỏ chọn tất cả</Text>
+                </Pressable>
+              )}
+              {statusOptions.map((opt) => {
+                const checked = selectedStatuses.includes(opt.value);
+                return (
+                  <Pressable
+                    key={opt.value}
+                    style={[styles.dropdownItem, checked && styles.dropdownItemChecked]}
+                    onPress={() => toggleStatus(opt.value)}
+                  >
+                    <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
+                      {checked && <Text style={styles.checkMark}>✓</Text>}
+                    </View>
+                    <Text style={[styles.dropdownItemText, checked && styles.dropdownItemTextChecked]}>
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+        </View>
 
         {/* Error / Loading */}
         {!!error && (
@@ -240,6 +265,9 @@ export default function AgentRequestBoardScreen() {
           {filteredItems.slice(0, 25).map((item) => {
             const status = getStatusStyle(item.status);
             const isSelected = selectedRequestId === item.id;
+            const serviceName = item.serviceDefinitionId
+              ? serviceNamesById[item.serviceDefinitionId] ?? "Dịch vụ"
+              : "Dịch vụ";
             return (
               <Pressable
                 key={item.id}
@@ -247,7 +275,7 @@ export default function AgentRequestBoardScreen() {
                 onPress={() => void loadLinkedData(item.id)}
               >
                 <View style={styles.requestRowHeader}>
-                  <Text style={styles.requestDesc} numberOfLines={2}>{item.description}</Text>
+                  <Text style={styles.requestDesc} numberOfLines={2}>{serviceName}</Text>
                   <View style={[styles.statusPill, { backgroundColor: status.bg }]}>
                     <Text style={[styles.statusText, { color: status.text }]}>
                       {formatRequestStatus(item.status)}
@@ -255,13 +283,8 @@ export default function AgentRequestBoardScreen() {
                   </View>
                 </View>
                 <View style={styles.requestMeta}>
-                  <Text style={styles.metaText}>🆔 {formatShortId(item.id)}</Text>
+                  <Text style={styles.metaText}>{item.description}</Text>
                   <Text style={styles.metaText}>🕐 {formatDateTime(item.createdAt)}</Text>
-                  {item.serviceDefinitionId ? (
-                    <Text style={styles.metaText}>
-                      🛠 {serviceNamesById[item.serviceDefinitionId] ?? formatShortId(item.serviceDefinitionId)}
-                    </Text>
-                  ) : null}
                 </View>
               </Pressable>
             );
@@ -283,18 +306,18 @@ export default function AgentRequestBoardScreen() {
           {selectedRequest ? (
             <>
               <View style={styles.detailInfo}>
-                <Text style={styles.detailDesc}>{selectedRequest.description}</Text>
+                {selectedRequest.serviceDefinitionId ? (
+                  <Text style={styles.detailDesc}>
+                    {serviceNamesById[selectedRequest.serviceDefinitionId] ?? formatShortId(selectedRequest.serviceDefinitionId)}
+                  </Text>
+                ) : null}
+                <Text style={styles.metaText}>{selectedRequest.description}</Text>
                 <View style={styles.detailGrid}>
                   <Text style={styles.metaText}>👤 {customerProfile?.fullName ?? "-"}</Text>
                   <Text style={styles.metaText}>📞 {customerProfile?.phoneNumber || "-"}</Text>
                   <Text style={styles.metaText}>
                     📍 {selectedRequest.addressText || "Chưa nhập địa chỉ"}
                   </Text>
-                  {selectedRequest.serviceDefinitionId ? (
-                    <Text style={styles.metaText}>
-                      🛠 {serviceNamesById[selectedRequest.serviceDefinitionId] ?? formatShortId(selectedRequest.serviceDefinitionId)}
-                    </Text>
-                  ) : null}
                   <Text style={styles.metaText}>🕐 {formatDateTime(selectedRequest.createdAt)}</Text>
                 </View>
               </View>
@@ -314,7 +337,7 @@ export default function AgentRequestBoardScreen() {
           )}
 
           <ActionButton
-            label={loading ? "Đang tải..." : "Tải dữ liệu liên kết"}
+            label={loading ? "Đang tải..." : "Tải Lại"}
             onPress={() => void loadLinkedData(selectedRequestId)}
             disabled={loading || !selectedRequestId}
             variant="secondary"
@@ -332,22 +355,124 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   content: { paddingTop: 16, paddingBottom: 20, gap: 14 },
 
-  header: { paddingHorizontal: 20, gap: 4 },
-  headerTitle: { fontSize: 22, fontWeight: "800", color: "#0f172a" },
-  headerSub: { fontSize: 13, color: "#64748b" },
+  header: {
+    flexDirection: "row",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderRadius: 28,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.55)",
+    gap: 14,
+    alignItems: "flex-start",
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
+    marginBottom: 8,
+    marginHorizontal: 20
+  },
+  headerLeft: { flexDirection: "row", gap: 12, flex: 1, alignItems: "flex-start" },
+  logoBox: { width: 50, height: 50, borderRadius: 14, overflow: "hidden", flexShrink: 0 },
+  headerTitle: { fontSize: 18, fontWeight: "700", color: "#0f172a" },
+  headerSub: { fontSize: 12, color: "#64748b", marginTop: 2 },
 
-  filterScroll: { paddingHorizontal: 20, gap: 8 },
-  filterChip: {
+  dropdownContainer: {
+    paddingHorizontal: 20,
+    zIndex: 10
+  },
+  dropdownButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#fff",
     borderWidth: 1,
     borderColor: "#e2e8f0",
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    backgroundColor: "#fff"
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2
   },
-  filterChipActive: { borderColor: colors.primary, backgroundColor: "#eff6ff" },
-  filterText: { fontSize: 12, color: "#64748b", fontWeight: "700" },
-  filterTextActive: { color: colors.primary },
+  dropdownButtonPressed: {
+    backgroundColor: "#f8fafc"
+  },
+  dropdownButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0f172a"
+  },
+  dropdownChevron: {
+    fontSize: 11,
+    color: "#94a3b8"
+  },
+  dropdownMenu: {
+    marginTop: 6,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 14,
+    padding: 6,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4
+  },
+  dropdownClearRow: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+    marginBottom: 2
+  },
+  dropdownClearText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.danger
+  },
+  dropdownItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 10
+  },
+  dropdownItemChecked: {
+    backgroundColor: "#eff6ff"
+  },
+  dropdownItemText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#64748b"
+  },
+  dropdownItemTextChecked: {
+    color: colors.primary,
+    fontWeight: "700"
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: "#cbd5e1",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  checkboxChecked: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary
+  },
+  checkMark: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "800"
+  },
 
   errorBox: {
     marginHorizontal: 20,
