@@ -69,6 +69,7 @@ export default function AssignmentsScreen() {
   const [customerProfile, setCustomerProfile] = useState<UserProfile | null>(null);
   const [linkedServiceAgent, setLinkedServiceAgent] = useState<ServiceAgentItem | null>(null);
   const [serviceNamesById, setServiceNamesById] = useState<Record<string, string>>({});
+  const [requestServiceNames, setRequestServiceNames] = useState<Record<string, string>>({});
   const [bindingMessage, setBindingMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [updatingAvailability, setUpdatingAvailability] = useState(false);
@@ -112,7 +113,40 @@ export default function AssignmentsScreen() {
         { agentId: linkedAgent.id },
         session.accessToken
       );
-      setItems(data.getAssignmentsByAgentId);
+      
+      // Load request details for all assignments to get service names
+      const assignments = data.getAssignmentsByAgentId;
+      const requestServiceMap: Record<string, string> = {};
+      
+      if (assignments.length > 0) {
+        const requestDetailsPromises = assignments.map((assignment) =>
+          graphqlRequest<RequestByIdResponse, { id: string }>(
+            REQUEST_BY_ID_QUERY,
+            { id: assignment.serviceRequestId },
+            session.accessToken
+          )
+            .then((response) => {
+              if (
+                response.getServiceRequestById?.serviceDefinitionId &&
+                serviceDefinitionData.getServiceDefinitions
+              ) {
+                const serviceName = serviceDefinitionData.getServiceDefinitions.find(
+                  (s) => s.id === response.getServiceRequestById?.serviceDefinitionId
+                )?.name;
+                if (serviceName) {
+                  requestServiceMap[assignment.serviceRequestId] = serviceName;
+                }
+              }
+            })
+            .catch(() => {
+              // Silently ignore fetch errors for individual requests
+            })
+        );
+        await Promise.all(requestDetailsPromises);
+      }
+      
+      setRequestServiceNames(requestServiceMap);
+      setItems(assignments);
     } catch (loadError) {
       setError(asErrorMessage(loadError));
     } finally {
@@ -349,7 +383,7 @@ export default function AssignmentsScreen() {
                       <View style={[styles.assignmentDot, isSelected && styles.assignmentDotActive]} />
                       <View style={{ flex: 1 }}>
                         <Text style={styles.assignmentTitle}>
-                          Công việc {formatShortId(item.serviceRequestId)}
+                          {requestServiceNames[item.serviceRequestId] ?? "Dịch vụ"}
                         </Text>
                         <Text style={styles.assignmentMeta}>
                           📅 {formatDateTime(item.assignedAt)}
@@ -393,6 +427,7 @@ export default function AssignmentsScreen() {
                 },
                 { icon: "📝", label: detail.description },
                 { icon: "⚡", label: `Độ phức tạp: ${detail.complexity?.level ?? "Chưa đánh giá"}` },
+                { icon: "💰", label: detail.estimatedCost ? formatCurrency(detail.estimatedCost.amount, detail.estimatedCost.currency) : "-" },
                 { icon: "📍", label: detail.addressText || "Khách hàng chưa nhập địa chỉ" }
               ].map(({ icon, label }, i) => (
                 <View key={i} style={styles.detailRow}>
@@ -433,7 +468,7 @@ export default function AssignmentsScreen() {
           )}
 
           <ActionButton
-            label={loading ? "Đang tải..." : "Tải lại yêu cầu đang chọn"}
+            label={loading ? "Đang tải..." : "Tải lại yêu cầu"}
             onPress={() => void loadRequestDetail(detailRequestId)}
             disabled={loading || !detailRequestId}
             variant="secondary"
