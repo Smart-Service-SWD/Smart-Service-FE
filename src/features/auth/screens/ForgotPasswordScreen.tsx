@@ -1,12 +1,20 @@
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import ScreenLayout from "../../../shared/ui/ScreenLayout";
 import { colors } from "../../../app/theme/colors";
 import { asErrorMessage } from "../../../shared/utils/format";
 import type { AuthStackParamList } from "../../../app/navigation/types";
-import ActionButton from "../../../shared/ui/ActionButton";
-import LabeledInput from "../../../shared/ui/LabeledInput";
 import { forgotPasswordApi } from "../api/authApi";
 
 type ForgotPasswordScreenProps = NativeStackScreenProps<
@@ -56,85 +64,219 @@ export default function ForgotPasswordScreen({
   };
 
   return (
-    <ScreenLayout
-      title="Quên mật khẩu"
-      subtitle="Nhập email để hệ thống gửi OTP 6 số về Gmail đã đăng ký"
-    >
-      <View style={styles.heroCard}>
-        <Text style={styles.heroTitle}>Cách dùng</Text>
-        <Text style={styles.heroText}>1. Nhập đúng email tài khoản.</Text>
-        <Text style={styles.heroText}>2. Nhấn gửi OTP.</Text>
-        <Text style={styles.heroText}>3. Mở Gmail lấy mã và sang bước đặt lại mật khẩu.</Text>
-      </View>
+    <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Back */}
+          <Pressable style={styles.backBtn} onPress={() => navigation.navigate("Login")}>
+            <Text style={styles.backText}>← Quay lại đăng nhập</Text>
+          </Pressable>
 
-      <View style={styles.card}>
-        <LabeledInput
-          label="Email"
-          autoCapitalize="none"
-          keyboardType="email-address"
-          value={email}
-          onChangeText={setEmail}
-          placeholder="customer@example.com"
-        />
+          {/* Hero */}
+          <View style={styles.hero}>
+            <View style={styles.iconBubble}>
+              <Text style={styles.iconEmoji}>📧</Text>
+            </View>
+            <Text style={styles.heroTitle}>Quên mật khẩu?</Text>
+            <Text style={styles.heroSub}>
+              Nhập email để nhận mã OTP 6 số qua Gmail đã đăng ký
+            </Text>
+          </View>
 
-        {!!error ? <Text style={styles.error}>{error}</Text> : null}
-        {!!success ? <Text style={styles.success}>{success}</Text> : null}
+          {/* Steps */}
+          <View style={styles.stepsCard}>
+            {["Nhập đúng email tài khoản", "Nhấn gửi OTP", "Mở Gmail lấy mã và sang bước đặt lại"].map(
+              (step, i) => (
+                <View key={i} style={styles.step}>
+                  <View style={styles.stepBadge}>
+                    <Text style={styles.stepNum}>{i + 1}</Text>
+                  </View>
+                  <Text style={styles.stepText}>{step}</Text>
+                </View>
+              )
+            )}
+          </View>
 
-        <ActionButton
-          label={busy ? "Đang gửi OTP..." : "Gửi OTP"}
-          onPress={() => void onSubmit()}
-          disabled={busy}
-        />
-        <ActionButton
-          label="Tôi đã có OTP"
-          onPress={() =>
-            navigation.navigate("ResetPassword", { email: email.trim() || undefined })
-          }
-          variant="secondary"
-        />
-        <ActionButton
-          label="Quay lại đăng nhập"
-          onPress={() => navigation.navigate("Login")}
-          variant="secondary"
-        />
-      </View>
-    </ScreenLayout>
+          {/* Form card */}
+          <View style={styles.card}>
+            <View style={styles.inputWrap}>
+              <Text style={styles.inputIcon}>✉️</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Email của bạn"
+                placeholderTextColor="#94a3b8"
+                autoCapitalize="none"
+                keyboardType="email-address"
+                value={email}
+                onChangeText={setEmail}
+              />
+            </View>
+
+            {!!error && (
+              <View style={styles.errorBox}>
+                <Text style={styles.errorText}>⚠️ {error}</Text>
+              </View>
+            )}
+            {!!success && (
+              <View style={styles.successBox}>
+                <Text style={styles.successText}>✅ {success}</Text>
+              </View>
+            )}
+
+            <Pressable
+              style={({ pressed }) => [styles.submitBtn, (busy || pressed) && styles.submitPressed]}
+              onPress={() => void onSubmit()}
+              disabled={busy}
+            >
+              {busy ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.submitText}>Gửi OTP</Text>
+              )}
+            </Pressable>
+
+            <Pressable
+              style={styles.secondaryBtn}
+              onPress={() =>
+                navigation.navigate("ResetPassword", { email: email.trim() || undefined })
+              }
+            >
+              <Text style={styles.secondaryText}>Tôi đã có OTP →</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  heroCard: {
-    backgroundColor: colors.primarySoft,
+  safeArea: { flex: 1, backgroundColor: "#f0f4ff" },
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 40,
+    gap: 20
+  },
+
+  backBtn: { alignSelf: "flex-start" },
+  backText: { fontSize: 14, color: colors.primary, fontWeight: "700" },
+
+  hero: { alignItems: "center", gap: 10 },
+  iconBubble: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    backgroundColor: "#eff6ff",
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 16,
-    padding: 16,
-    gap: 6
+    borderColor: "#bfdbfe"
   },
-  heroTitle: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: "700"
-  },
-  heroText: {
-    color: colors.textMuted,
+  iconEmoji: { fontSize: 32 },
+  heroTitle: { fontSize: 24, fontWeight: "800", color: "#0f172a" },
+  heroSub: {
     fontSize: 14,
-    lineHeight: 20
+    color: "#64748b",
+    textAlign: "center",
+    lineHeight: 21
   },
-  card: {
-    backgroundColor: colors.surface,
+
+  stepsCard: {
+    backgroundColor: "#eff6ff",
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 16,
-    padding: 16,
+    borderColor: "#bfdbfe",
+    borderRadius: 18,
+    padding: 18,
     gap: 12
   },
-  error: {
-    color: colors.danger,
-    fontSize: 13
+  step: { flexDirection: "row", alignItems: "center", gap: 12 },
+  stepBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0
   },
-  success: {
-    color: colors.success,
-    fontSize: 13
-  }
+  stepNum: { color: "#fff", fontSize: 11, fontWeight: "800" },
+  stepText: { fontSize: 13, color: "#1e40af", fontWeight: "600", flex: 1 },
+
+  card: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 24,
+    padding: 24,
+    gap: 14,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    elevation: 3
+  },
+
+  inputWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f0f4ff",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 10
+  },
+  inputIcon: { fontSize: 16 },
+  input: { flex: 1, fontSize: 15, color: "#0f172a", fontWeight: "500" },
+
+  errorBox: {
+    backgroundColor: "#fef2f2",
+    borderWidth: 1,
+    borderColor: "#fecaca",
+    borderRadius: 12,
+    padding: 12
+  },
+  errorText: { fontSize: 13, color: colors.danger, fontWeight: "500" },
+  successBox: {
+    backgroundColor: "#eff6ff",
+    borderWidth: 1,
+    borderColor: "#bfdbfe",
+    borderRadius: 12,
+    padding: 12
+  },
+  successText: { fontSize: 13, color: "#1d4ed8", fontWeight: "600" },
+
+  submitBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: "center",
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 4
+  },
+  submitPressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
+  submitText: { color: "#fff", fontSize: 16, fontWeight: "800" },
+
+  secondaryBtn: {
+    borderWidth: 1,
+    borderColor: "#bfdbfe",
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: "center",
+    backgroundColor: "#eff6ff"
+  },
+  secondaryText: { color: colors.primary, fontSize: 14, fontWeight: "700" }
 });

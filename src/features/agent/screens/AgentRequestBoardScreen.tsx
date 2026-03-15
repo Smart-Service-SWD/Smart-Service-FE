@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import ScreenLayout from "../../../shared/ui/ScreenLayout";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "../../../app/theme/colors";
 import { useAuth } from "../../auth/AuthContext";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
@@ -59,6 +66,27 @@ const statusOptions = [
   "CANCELLED"
 ] as const;
 
+const STATUS_LABELS: Record<(typeof statusOptions)[number], string> = {
+  ALL: "Tất cả",
+  AWAITING_ANALYSIS: "Chờ AI",
+  CREATED: "Mới",
+  URGENT_DISPATCH: "Khẩn",
+  PENDING_REVIEW: "Chờ duyệt",
+  APPROVED: "Đã duyệt",
+  ASSIGNED: "Đã gán",
+  IN_PROGRESS: "Đang làm",
+  COMPLETED: "Hoàn thành",
+  CANCELLED: "Đã hủy"
+};
+
+const STATUS_COLORS: Partial<Record<string, { bg: string; text: string }>> = {
+  URGENT_DISPATCH: { bg: "#fef2f2", text: "#dc2626" },
+  COMPLETED: { bg: "#eff6ff", text: "#2563eb" },
+  CANCELLED: { bg: "#f0f4ff", text: "#94a3b8" },
+  ASSIGNED: { bg: "#eff6ff", text: "#2563eb" },
+  IN_PROGRESS: { bg: "#fefce8", text: "#ca8a04" }
+};
+
 export default function AgentRequestBoardScreen() {
   const { session } = useAuth();
   const [items, setItems] = useState<ServiceRequestItem[]>([]);
@@ -72,9 +100,7 @@ export default function AgentRequestBoardScreen() {
   const [error, setError] = useState("");
 
   const filteredItems = useMemo(() => {
-    if (statusFilter === "ALL") {
-      return items;
-    }
+    if (statusFilter === "ALL") return items;
     return items.filter((item) => item.status === statusFilter);
   }, [items, statusFilter]);
 
@@ -84,9 +110,7 @@ export default function AgentRequestBoardScreen() {
   );
 
   const loadBoard = async () => {
-    if (!session) {
-      return;
-    }
+    if (!session) return;
     setLoading(true);
     setError("");
     try {
@@ -110,10 +134,7 @@ export default function AgentRequestBoardScreen() {
   };
 
   const loadLinkedData = async (requestedId?: string) => {
-    if (!session) {
-      return;
-    }
-
+    if (!session) return;
     const requestId = requestedId ?? selectedRequestId;
     if (!requestId.trim()) {
       setError("Hãy chọn một yêu cầu từ danh sách");
@@ -136,10 +157,10 @@ export default function AgentRequestBoardScreen() {
         ),
         request?.customerId
           ? graphqlRequest<UserByIdResponse, { id: string }>(
-              USER_BY_ID_QUERY,
-              { id: request.customerId },
-              session.accessToken
-            )
+            USER_BY_ID_QUERY,
+            { id: request.customerId },
+            session.accessToken
+          )
           : Promise.resolve<UserByIdResponse | null>(null)
       ]);
       setSelectedRequestId(requestId.trim());
@@ -154,10 +175,7 @@ export default function AgentRequestBoardScreen() {
   };
 
   useEffect(() => {
-    if (selectedRequest) {
-      return;
-    }
-
+    if (selectedRequest) return;
     setCustomerProfile(null);
   }, [selectedRequest]);
 
@@ -166,169 +184,232 @@ export default function AgentRequestBoardScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.accessToken]);
 
+  const getStatusStyle = (status: string) => STATUS_COLORS[status] ?? { bg: "#f0f4ff", text: "#64748b" };
+
   return (
-    <ScreenLayout title="Bảng yêu cầu" subtitle="Danh sách yêu cầu dịch vụ">
-      <View style={styles.filterRow}>
-        {statusOptions.map((option) => {
-          const active = statusFilter === option;
-          return (
-            <Pressable
-              key={option}
-              style={[styles.filterChip, active && styles.filterChipActive]}
-              onPress={() => setStatusFilter(option)}
-            >
-              <Text style={[styles.filterText, active && styles.filterTextActive]}>
-                {option === "ALL" ? "Tất cả" : formatRequestStatus(option)}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Bảng yêu cầu</Text>
+          <Text style={styles.headerSub}>Tra cứu và xem thông tin yêu cầu dịch vụ</Text>
+        </View>
 
-      {!!error ? <Text style={styles.error}>{error}</Text> : null}
-      {loading ? <Text style={styles.meta}>Đang tải...</Text> : null}
+        {/* Filter chips */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterScroll}
+        >
+          {statusOptions.map((opt) => {
+            const active = statusFilter === opt;
+            return (
+              <Pressable
+                key={opt}
+                style={[styles.filterChip, active && styles.filterChipActive]}
+                onPress={() => setStatusFilter(opt)}
+              >
+                <Text style={[styles.filterText, active && styles.filterTextActive]}>
+                  {STATUS_LABELS[opt]}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
 
-      <View style={styles.card}>
-        <Text style={styles.title}>Yêu cầu ({filteredItems.length})</Text>
-        {filteredItems.slice(0, 25).map((item) => (
-          <Pressable
-            key={item.id}
-            style={[styles.row, selectedRequestId === item.id && styles.rowSelected]}
-            onPress={() => void loadLinkedData(item.id)}
-          >
-            <Text style={styles.rowTitle}>{item.description}</Text>
-            <Text style={styles.meta}>Mã: {formatShortId(item.id)}</Text>
-            {item.serviceDefinitionId ? (
-              <Text style={styles.meta}>
-                Dịch vụ:{" "}
-                {serviceNamesById[item.serviceDefinitionId] ??
-                  formatShortId(item.serviceDefinitionId)}
-              </Text>
-            ) : null}
-            <Text style={styles.meta}>Trạng thái: {formatRequestStatus(item.status)}</Text>
-            <Text style={styles.meta}>Tạo lúc: {formatDateTime(item.createdAt)}</Text>
-          </Pressable>
-        ))}
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.title}>Tra cứu công việc &amp; matching</Text>
-        {selectedRequest ? (
-          <Text style={styles.selected}>Đã chọn: {selectedRequest.description}</Text>
-        ) : (
-          <Text style={styles.hint}>Nhấn vào yêu cầu phía trên để chọn</Text>
+        {/* Error / Loading */}
+        {!!error && (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>⚠️ {error}</Text>
+          </View>
         )}
-        {selectedRequest ? (
-          <>
-            <Text style={styles.meta}>Mã: {formatShortId(selectedRequest.id)}</Text>
-            <Text style={styles.meta}>
-              Khách hàng: {customerProfile?.fullName ?? formatShortId(selectedRequest.customerId)}
-            </Text>
-            <Text style={styles.meta}>
-              Số điện thoại: {customerProfile?.phoneNumber || "-"}
-            </Text>
-            <Text style={styles.meta}>
-              Địa chỉ:{" "}
-              {selectedRequest.addressText || "Khách hàng chưa nhập địa chỉ cho yêu cầu này."}
-            </Text>
-            {selectedRequest.serviceDefinitionId ? (
-              <Text style={styles.meta}>
-                Dịch vụ:{" "}
-                {serviceNamesById[selectedRequest.serviceDefinitionId] ??
-                  formatShortId(selectedRequest.serviceDefinitionId)}
-              </Text>
+        {loading && !selectedRequestId && (
+          <View style={styles.loadingRow}>
+            <ActivityIndicator color={colors.primary} size="small" />
+            <Text style={styles.loadingText}>Đang tải...</Text>
+          </View>
+        )}
+
+        {/* Request list */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Yêu cầu ({filteredItems.length})</Text>
+          {filteredItems.slice(0, 25).map((item) => {
+            const status = getStatusStyle(item.status);
+            const isSelected = selectedRequestId === item.id;
+            return (
+              <Pressable
+                key={item.id}
+                style={[styles.requestRow, isSelected && styles.requestRowSelected]}
+                onPress={() => void loadLinkedData(item.id)}
+              >
+                <View style={styles.requestRowHeader}>
+                  <Text style={styles.requestDesc} numberOfLines={2}>{item.description}</Text>
+                  <View style={[styles.statusPill, { backgroundColor: status.bg }]}>
+                    <Text style={[styles.statusText, { color: status.text }]}>
+                      {formatRequestStatus(item.status)}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.requestMeta}>
+                  <Text style={styles.metaText}>🆔 {formatShortId(item.id)}</Text>
+                  <Text style={styles.metaText}>🕐 {formatDateTime(item.createdAt)}</Text>
+                  {item.serviceDefinitionId ? (
+                    <Text style={styles.metaText}>
+                      🛠 {serviceNamesById[item.serviceDefinitionId] ?? formatShortId(item.serviceDefinitionId)}
+                    </Text>
+                  ) : null}
+                </View>
+              </Pressable>
+            );
+          })}
+          {!loading && filteredItems.length === 0 && (
+            <Text style={styles.emptyText}>Không có yêu cầu nào</Text>
+          )}
+        </View>
+
+        {/* Detail panel */}
+        <View style={styles.card}>
+          <View style={styles.detailHeader}>
+            <Text style={styles.cardTitle}>Chi tiết & Matching</Text>
+            {loading && selectedRequestId ? (
+              <ActivityIndicator color={colors.primary} size="small" />
             ) : null}
-            <Text style={styles.meta}>
-              Trạng thái: {formatRequestStatus(selectedRequest.status)}
-            </Text>
-            <Text style={styles.meta}>Tạo lúc: {formatDateTime(selectedRequest.createdAt)}</Text>
-          </>
-        ) : null}
-        <ActionButton
-          label={loading ? "Đang tải..." : "Tải dữ liệu liên kết"}
-          onPress={() => void loadLinkedData(selectedRequestId)}
-          disabled={loading || !selectedRequestId}
-          variant="secondary"
-        />
-        <Text style={styles.meta}>Công việc: {assignments.length}</Text>
-        <Text style={styles.meta}>Kết quả matching: {matches.length}</Text>
-      </View>
-    </ScreenLayout>
+          </View>
+
+          {selectedRequest ? (
+            <>
+              <View style={styles.detailInfo}>
+                <Text style={styles.detailDesc}>{selectedRequest.description}</Text>
+                <View style={styles.detailGrid}>
+                  <Text style={styles.metaText}>👤 {customerProfile?.fullName ?? "-"}</Text>
+                  <Text style={styles.metaText}>📞 {customerProfile?.phoneNumber || "-"}</Text>
+                  <Text style={styles.metaText}>
+                    📍 {selectedRequest.addressText || "Chưa nhập địa chỉ"}
+                  </Text>
+                  {selectedRequest.serviceDefinitionId ? (
+                    <Text style={styles.metaText}>
+                      🛠 {serviceNamesById[selectedRequest.serviceDefinitionId] ?? formatShortId(selectedRequest.serviceDefinitionId)}
+                    </Text>
+                  ) : null}
+                  <Text style={styles.metaText}>🕐 {formatDateTime(selectedRequest.createdAt)}</Text>
+                </View>
+              </View>
+              <View style={styles.countRow}>
+                <View style={styles.countBadge}>
+                  <Text style={styles.countNumber}>{assignments.length}</Text>
+                  <Text style={styles.countLabel}>Công việc</Text>
+                </View>
+                <View style={styles.countBadge}>
+                  <Text style={styles.countNumber}>{matches.length}</Text>
+                  <Text style={styles.countLabel}>Matching</Text>
+                </View>
+              </View>
+            </>
+          ) : (
+            <Text style={styles.emptyText}>Nhấn vào yêu cầu phía trên để xem chi tiết</Text>
+          )}
+
+          <ActionButton
+            label={loading ? "Đang tải..." : "Tải dữ liệu liên kết"}
+            onPress={() => void loadLinkedData(selectedRequestId)}
+            disabled={loading || !selectedRequestId}
+            variant="secondary"
+          />
+        </View>
+
+        <View style={{ height: 80 }} />
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  filterRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8
-  },
+  safeArea: { flex: 1, backgroundColor: "#f0f4ff" },
+  scroll: { flex: 1 },
+  content: { paddingTop: 16, paddingBottom: 20, gap: 14 },
+
+  header: { paddingHorizontal: 20, gap: 4 },
+  headerTitle: { fontSize: 22, fontWeight: "800", color: "#0f172a" },
+  headerSub: { fontSize: 13, color: "#64748b" },
+
+  filterScroll: { paddingHorizontal: 20, gap: 8 },
   filterChip: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    borderColor: "#e2e8f0",
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     backgroundColor: "#fff"
   },
-  filterChipActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySoft
-  },
-  filterText: {
-    fontSize: 11,
-    color: colors.textMuted,
-    fontWeight: "700"
-  },
-  filterTextActive: {
-    color: colors.primary
-  },
-  card: {
-    backgroundColor: colors.surface,
+  filterChipActive: { borderColor: colors.primary, backgroundColor: "#eff6ff" },
+  filterText: { fontSize: 12, color: "#64748b", fontWeight: "700" },
+  filterTextActive: { color: colors.primary },
+
+  errorBox: {
+    marginHorizontal: 20,
+    backgroundColor: "#fef2f2",
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: "#fecaca",
     borderRadius: 12,
-    padding: 14,
+    padding: 12
+  },
+  errorText: { fontSize: 13, color: colors.danger },
+  loadingRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 8 },
+  loadingText: { fontSize: 13, color: "#64748b" },
+
+  card: {
+    marginHorizontal: 20,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 20,
+    padding: 16,
+    gap: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2
+  },
+  cardTitle: { fontSize: 15, fontWeight: "800", color: "#0f172a" },
+
+  requestRow: {
+    backgroundColor: "#f0f4ff",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 14,
+    padding: 12,
     gap: 8
   },
-  title: {
-    color: colors.text,
-    fontWeight: "700",
-    fontSize: 15
-  },
-  row: {
+  requestRowSelected: { borderColor: colors.primary, backgroundColor: "#eff6ff" },
+  requestRowHeader: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  requestDesc: { flex: 1, fontSize: 13, fontWeight: "700", color: "#0f172a", lineHeight: 19 },
+  statusPill: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, flexShrink: 0 },
+  statusText: { fontSize: 10, fontWeight: "800" },
+  requestMeta: { gap: 3 },
+  metaText: { fontSize: 11, color: "#64748b" },
+
+  detailHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  detailInfo: { gap: 8 },
+  detailDesc: { fontSize: 14, fontWeight: "700", color: "#0f172a", lineHeight: 20 },
+  detailGrid: { gap: 4 },
+
+  countRow: { flexDirection: "row", gap: 12 },
+  countBadge: {
+    flex: 1,
+    backgroundColor: "#f0f4ff",
+    borderRadius: 14,
+    padding: 14,
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    padding: 10,
-    gap: 2,
-    backgroundColor: "#fff"
+    borderColor: "#e2e8f0"
   },
-  rowSelected: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySoft
-  },
-  rowTitle: {
-    color: colors.text,
-    fontWeight: "700",
-    fontSize: 13
-  },
-  meta: {
-    color: colors.textMuted,
-    fontSize: 12
-  },
-  selected: {
-    color: colors.primary,
-    fontSize: 12,
-    fontWeight: "700"
-  },
-  hint: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontStyle: "italic"
-  },
-  error: {
-    color: colors.danger,
-    fontSize: 13
-  }
+  countNumber: { fontSize: 24, fontWeight: "800", color: colors.primary },
+  countLabel: { fontSize: 11, color: "#64748b", marginTop: 2 },
+
+  emptyText: { color: "#94a3b8", fontSize: 13, textAlign: "center", paddingVertical: 8 }
 });

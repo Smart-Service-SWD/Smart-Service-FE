@@ -2,8 +2,16 @@ import { useEffect, useMemo, useState } from "react";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import type { RouteProp } from "@react-navigation/native";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import ScreenLayout from "../../../shared/ui/ScreenLayout";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "../../../app/theme/colors";
 import { useAuth } from "../../auth/AuthContext";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
@@ -18,8 +26,6 @@ import type {
   ServiceFeedbackItem,
   ServiceRequestItem
 } from "../../../shared/types/domain";
-import LabeledInput from "../../../shared/ui/LabeledInput";
-import ActionButton from "../../../shared/ui/ActionButton";
 import { createServiceFeedback } from "../api/customerApi";
 import type { CustomerTabParamList } from "../../../app/navigation/types";
 
@@ -34,6 +40,8 @@ interface CompletedRequestsResponse {
 interface ServiceAgentsResponse {
   getServiceAgents: ServiceAgentItem[];
 }
+
+const STARS = [1, 2, 3, 4, 5] as const;
 
 export default function FeedbackScreen() {
   const { session } = useAuth();
@@ -60,10 +68,7 @@ export default function FeedbackScreen() {
   );
 
   const requestLabelsById = useMemo(
-    () =>
-      Object.fromEntries(
-        completedRequests.map((item) => [item.id, item.description])
-      ),
+    () => Object.fromEntries(completedRequests.map((item) => [item.id, item.description])),
     [completedRequests]
   );
 
@@ -74,9 +79,7 @@ export default function FeedbackScreen() {
     availableRequests.find((item) => item.id === requestId) ?? null;
 
   const load = async () => {
-    if (!session) {
-      return;
-    }
+    if (!session) return;
     try {
       const [feedbackData, requestData, agentData] = await Promise.all([
         graphqlRequest<MyFeedbackResponse>(
@@ -101,27 +104,20 @@ export default function FeedbackScreen() {
       setAgentNamesById(
         Object.fromEntries(agentData.getServiceAgents.map((agent) => [agent.id, agent.fullName]))
       );
-      const availableRequestIds = requestData.getMyServiceRequests
+      const availableIds = requestData.getMyServiceRequests
         .filter(
-          (request) =>
+          (req) =>
             !feedbackData.getMyServiceFeedbacks.some(
-              (feedback) => feedback.serviceRequestId === request.id
+              (fb) => fb.serviceRequestId === req.id
             )
         )
-        .map((request) => request.id);
+        .map((req) => req.id);
 
       setRequestId((current) => {
-        const routeRequestId = route.params?.requestId;
-
-        if (current && availableRequestIds.includes(current)) {
-          return current;
-        }
-
-        if (routeRequestId && availableRequestIds.includes(routeRequestId)) {
-          return routeRequestId;
-        }
-
-        return availableRequestIds[0] ?? "";
+        const routeReqId = route.params?.requestId;
+        if (current && availableIds.includes(current)) return current;
+        if (routeReqId && availableIds.includes(routeReqId)) return routeReqId;
+        return availableIds[0] ?? "";
       });
     } catch (loadError) {
       setError(asErrorMessage(loadError));
@@ -133,29 +129,24 @@ export default function FeedbackScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.accessToken]);
 
-  // Sync requestId when navigated with params (e.g. from MyRequests)
   useEffect(() => {
     if (route.params?.requestId) {
-      const nextRequestId = route.params.requestId;
-      if (availableRequests.some((item) => item.id === nextRequestId)) {
-        setRequestId(nextRequestId);
+      const nextId = route.params.requestId;
+      if (availableRequests.some((item) => item.id === nextId)) {
+        setRequestId(nextId);
         setError("");
-      } else if (reviewedRequestIds.has(nextRequestId)) {
+      } else if (reviewedRequestIds.has(nextId)) {
         setError("Yêu cầu này đã được đánh giá rồi.");
       } else {
         setError("Chỉ có thể đánh giá các yêu cầu đã hoàn thành.");
       }
-      // Reset param to avoid re-setting on subsequent focus
       navigation.setParams({ requestId: undefined });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [availableRequests, navigation, reviewedRequestIds, route.params?.requestId]);
 
   const handleCreate = async () => {
-    if (!session) {
-      return;
-    }
-
+    if (!session) return;
     const ratingNumber = Number.parseInt(rating, 10);
     if (Number.isNaN(ratingNumber) || ratingNumber < 1 || ratingNumber > 5) {
       setError("Điểm đánh giá phải từ 1 đến 5");
@@ -180,7 +171,7 @@ export default function FeedbackScreen() {
         rating: ratingNumber,
         comment: comment.trim() || null
       });
-      setSuccess(`Đã gửi đánh giá thành công. Mã đánh giá: ${feedbackId}`);
+      setSuccess(`Đã gửi đánh giá thành công. Mã: ${feedbackId}`);
       setRequestId("");
       setComment("");
       await load();
@@ -191,162 +182,337 @@ export default function FeedbackScreen() {
     }
   };
 
+  const ratingNum = Number.parseInt(rating, 10);
+
   return (
-    <ScreenLayout
-      title="Đánh giá dịch vụ"
-      subtitle="Gửi phản hồi sau khi yêu cầu hoàn thành và xem lại các đánh giá đã gửi"
-    >
-      <View style={styles.noteCard}>
-        <Text style={styles.title}>Lưu ý</Text>
-        <Text style={styles.rowMeta}>- Chỉ nên đánh giá sau khi yêu cầu đã hoàn thành.</Text>
-        <Text style={styles.rowMeta}>- Điểm 5 là rất hài lòng, điểm 1 là chưa hài lòng.</Text>
-      </View>
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Đánh giá dịch vụ ⭐</Text>
+          <Text style={styles.headerSub}>Gửi phản hồi sau khi yêu cầu hoàn thành</Text>
+        </View>
 
-      <View style={styles.card}>
-        <Text style={styles.title}>Tạo đánh giá mới</Text>
-        <Text style={styles.rowMeta}>Chọn yêu cầu đã hoàn thành và chưa đánh giá.</Text>
-        {availableRequests.map((item) => {
-          const active = item.id === requestId;
+        {/* Note */}
+        <View style={styles.noteCard}>
+          <Text style={styles.noteText}>💡 Chỉ đánh giá yêu cầu đã hoàn thành · 5 sao = Rất hài lòng</Text>
+        </View>
 
-          return (
-            <Pressable
-              key={item.id}
-              style={[styles.row, active && styles.rowActive]}
-              onPress={() => setRequestId(item.id)}
-            >
-              <Text style={styles.rowTitle}>{item.description}</Text>
-              <Text style={styles.rowMeta}>Mã: {formatShortId(item.id)}</Text>
-              <Text style={styles.rowMeta}>
-                Tạo yêu cầu lúc: {formatDateTime(item.createdAt)}
+        {/* Create feedback card */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Tạo đánh giá mới</Text>
+
+          {/* Request selector */}
+          {availableRequests.length > 0 ? (
+            <View style={styles.requestList}>
+              {availableRequests.map((item) => {
+                const active = item.id === requestId;
+                return (
+                  <Pressable
+                    key={item.id}
+                    style={[styles.requestRow, active && styles.requestRowActive]}
+                    onPress={() => setRequestId(item.id)}
+                  >
+                    <View style={styles.requestRowLeft}>
+                      <View style={[styles.radioOuter, active && styles.radioOuterActive]}>
+                        {active && <View style={styles.radioInner} />}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.requestDesc} numberOfLines={1}>
+                          {item.description}
+                        </Text>
+                        <Text style={styles.requestMeta}>
+                          {formatDateTime(item.assignedProviderId ? item.createdAt : item.createdAt)} · Thợ: {getAgentName(item.assignedProviderId)}
+                        </Text>
+                      </View>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyText}>
+                {completedRequests.length === 0
+                  ? "Chưa có yêu cầu hoàn thành nào"
+                  : "Tất cả yêu cầu đã được đánh giá 🎉"}
               </Text>
-              <Text style={styles.rowMeta}>
-                Thợ sửa chữa: {getAgentName(item.assignedProviderId)}
+            </View>
+          )}
+
+          {selectedRequest && (
+            <View style={styles.selectedBadge}>
+              <Text style={styles.selectedBadgeText}>
+                ✅ Đang đánh giá: {selectedRequest.description}
               </Text>
-            </Pressable>
-          );
-        })}
-        {!completedRequests.length ? (
-          <Text style={styles.rowMeta}>Chưa có yêu cầu hoàn thành nào để đánh giá.</Text>
-        ) : !availableRequests.length ? (
-          <Text style={styles.rowMeta}>
-            Tất cả yêu cầu hoàn thành của bạn đã được đánh giá.
-          </Text>
-        ) : null}
-        {selectedRequest ? (
-          <Text style={styles.selectedText}>
-            Đang đánh giá: {selectedRequest.description} · Thợ:{" "}
-            {getAgentName(selectedRequest.assignedProviderId)}
-          </Text>
-        ) : null}
-        <LabeledInput
-          label="Điểm đánh giá (1-5)"
-          value={rating}
-          onChangeText={setRating}
-          keyboardType="number-pad"
-        />
-        <LabeledInput
-          label="Nhận xét"
-          value={comment}
-          onChangeText={setComment}
-          multiline
-          style={styles.commentInput}
-          placeholder="Ví dụ: đến đúng giờ, xử lý nhanh, thái độ tốt..."
-        />
-        <ActionButton
-          label={busy ? "Đang gửi..." : "Gửi đánh giá"}
-          onPress={() => void handleCreate()}
-          disabled={busy || !requestId}
-        />
-      </View>
+            </View>
+          )}
 
-      {!!error ? <Text style={styles.error}>{error}</Text> : null}
-      {!!success ? <Text style={styles.success}>{success}</Text> : null}
-
-      <View style={styles.card}>
-        <Text style={styles.title}>Đánh giá của tôi ({items.length})</Text>
-        {items.map((item) => (
-          <View key={item.id} style={styles.row}>
-            <Text style={styles.rowTitle}>
-              Yêu cầu: {requestLabelsById[item.serviceRequestId] ?? formatShortId(item.serviceRequestId)}
-            </Text>
-            <Text style={styles.rowMeta}>Mã: {formatShortId(item.serviceRequestId)}</Text>
-            <Text style={styles.rowMeta}>
-              Thợ sửa chữa:{" "}
-              {getAgentName(
-                completedRequests.find((request) => request.id === item.serviceRequestId)
-                  ?.assignedProviderId
-              )}
-            </Text>
-            <Text style={styles.rowMeta}>Điểm: {item.rating}/5</Text>
-            <Text style={styles.rowMeta}>Nhận xét: {item.comment || "-"}</Text>
-            <Text style={styles.rowMeta}>Tạo lúc: {formatDateTime(item.createdAt)}</Text>
+          {/* Star rating */}
+          <View>
+            <Text style={styles.fieldLabel}>Điểm đánh giá</Text>
+            <View style={styles.starsRow}>
+              {STARS.map((star) => (
+                <Pressable
+                  key={star}
+                  onPress={() => setRating(String(star))}
+                  style={styles.starBtn}
+                >
+                  <Text style={[styles.starIcon, star <= ratingNum && styles.starActive]}>
+                    ★
+                  </Text>
+                </Pressable>
+              ))}
+              <Text style={styles.ratingLabel}>{ratingNum}/5</Text>
+            </View>
           </View>
-        ))}
-        {!items.length ? <Text style={styles.rowMeta}>Bạn chưa gửi đánh giá nào</Text> : null}
-      </View>
-    </ScreenLayout>
+
+          {/* Comment */}
+          <View>
+            <Text style={styles.fieldLabel}>Nhận xét (tuỳ chọn)</Text>
+            <TextInput
+              style={styles.commentInput}
+              placeholder="Ví dụ: đến đúng giờ, xử lý nhanh, thái độ tốt..."
+              placeholderTextColor="#94a3b8"
+              value={comment}
+              onChangeText={setComment}
+              multiline
+            />
+          </View>
+
+          {!!error && (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorText}>⚠️ {error}</Text>
+            </View>
+          )}
+          {!!success && (
+            <View style={styles.successBox}>
+              <Text style={styles.successText}>✅ {success}</Text>
+            </View>
+          )}
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.submitBtn,
+              (busy || !requestId || pressed) && styles.submitBtnDisabled
+            ]}
+            onPress={() => void handleCreate()}
+            disabled={busy || !requestId}
+          >
+            {busy ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text style={styles.submitText}>Gửi đánh giá ✈️</Text>
+            )}
+          </Pressable>
+        </View>
+
+        {/* My feedbacks */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Đánh giá của tôi ({items.length})</Text>
+          {items.length === 0 ? (
+            <Text style={styles.emptyText}>Bạn chưa gửi đánh giá nào</Text>
+          ) : (
+            <View style={styles.feedbackList}>
+              {items.map((item) => (
+                <View key={item.id} style={styles.feedbackItem}>
+                  <View style={styles.feedbackHeader}>
+                    <Text style={styles.feedbackReqDesc} numberOfLines={1}>
+                      {requestLabelsById[item.serviceRequestId] ?? formatShortId(item.serviceRequestId)}
+                    </Text>
+                    <View style={styles.ratingPill}>
+                      <Text style={styles.ratingPillText}>⭐ {item.rating}/5</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.feedbackMeta}>
+                    Thợ: {getAgentName(
+                      completedRequests.find((r) => r.id === item.serviceRequestId)?.assignedProviderId
+                    )}
+                  </Text>
+                  {item.comment ? (
+                    <Text style={styles.feedbackComment}>"{item.comment}"</Text>
+                  ) : null}
+                  <Text style={styles.feedbackDate}>{formatDateTime(item.createdAt)}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
+        <View style={{ height: 80 }} />
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: "#f0f4ff" },
+  scroll: { flex: 1 },
+  content: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20, gap: 16 },
+
+  header: { gap: 4 },
+  headerTitle: { fontSize: 22, fontWeight: "800", color: "#0f172a" },
+  headerSub: { fontSize: 13, color: "#64748b" },
+
   noteCard: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: "#eff6ff",
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 16,
-    padding: 14,
-    gap: 4
+    borderColor: "#bfdbfe",
+    borderRadius: 14,
+    padding: 12
   },
+  noteText: { fontSize: 13, color: "#1e40af", fontWeight: "600" },
+
   card: {
-    backgroundColor: colors.surface,
+    backgroundColor: "#fff",
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 16,
-    padding: 14,
-    gap: 8
+    borderColor: "#e2e8f0",
+    borderRadius: 20,
+    padding: 18,
+    gap: 14,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2
   },
-  title: {
-    color: colors.text,
-    fontWeight: "700",
-    fontSize: 15
-  },
-  commentInput: {
-    minHeight: 80,
-    textAlignVertical: "top",
-    paddingTop: 10
-  },
-  error: {
-    color: colors.danger,
-    fontSize: 13
-  },
-  success: {
-    color: colors.success,
-    fontSize: 13
-  },
-  row: {
+  cardTitle: { fontSize: 16, fontWeight: "800", color: "#0f172a" },
+
+  requestList: { gap: 8 },
+  requestRow: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    padding: 10,
-    gap: 2,
-    backgroundColor: "#fff"
+    borderColor: "#e2e8f0",
+    borderRadius: 14,
+    padding: 12,
+    backgroundColor: "#f0f4ff"
   },
-  rowActive: {
+  requestRowActive: {
     borderColor: colors.primary,
-    backgroundColor: colors.primarySoft
+    backgroundColor: "#eff6ff"
   },
-  rowTitle: {
-    color: colors.text,
-    fontWeight: "700",
-    fontSize: 13
+  requestRowLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
+  radioOuter: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: "#cbd5e1",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0
   },
-  rowMeta: {
-    color: colors.textMuted,
-    fontSize: 12
+  radioOuterActive: { borderColor: colors.primary },
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.primary
   },
-  selectedText: {
-    color: colors.primary,
+  requestDesc: { fontSize: 13, fontWeight: "700", color: "#0f172a" },
+  requestMeta: { fontSize: 11, color: "#94a3b8", marginTop: 2 },
+
+  emptyCard: { padding: 20, alignItems: "center" },
+  emptyText: { color: "#94a3b8", fontSize: 13 },
+
+  selectedBadge: {
+    backgroundColor: "#eff6ff",
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "#bfdbfe"
+  },
+  selectedBadgeText: { fontSize: 12, color: "#1d4ed8", fontWeight: "700" },
+
+  fieldLabel: {
     fontSize: 12,
-    fontWeight: "700"
-  }
+    fontWeight: "700",
+    color: "#64748b",
+    textTransform: "uppercase",
+    letterSpacing: 0.5
+  },
+  starsRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 },
+  starBtn: { padding: 2 },
+  starIcon: { fontSize: 28, color: "#e2e8f0" },
+  starActive: { color: "#f59e0b" },
+  ratingLabel: { fontSize: 14, fontWeight: "800", color: "#0f172a", marginLeft: 8 },
+
+  commentInput: {
+    backgroundColor: "#f0f4ff",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 14,
+    padding: 14,
+    fontSize: 14,
+    color: "#0f172a",
+    minHeight: 90,
+    textAlignVertical: "top",
+    marginTop: 8
+  },
+
+  errorBox: {
+    backgroundColor: "#fef2f2",
+    borderWidth: 1,
+    borderColor: "#fecaca",
+    borderRadius: 12,
+    padding: 12
+  },
+  errorText: { fontSize: 13, color: colors.danger },
+  successBox: {
+    backgroundColor: "#eff6ff",
+    borderWidth: 1,
+    borderColor: "#bfdbfe",
+    borderRadius: 12,
+    padding: 12
+  },
+  successText: { fontSize: 13, color: "#1d4ed8", fontWeight: "600" },
+
+  submitBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: "center",
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 3
+  },
+  submitBtnDisabled: { opacity: 0.6 },
+  submitText: { color: "#fff", fontSize: 15, fontWeight: "800" },
+
+  feedbackList: { gap: 12 },
+  feedbackItem: {
+    backgroundColor: "#f0f4ff",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 14,
+    padding: 14,
+    gap: 6
+  },
+  feedbackHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between"
+  },
+  feedbackReqDesc: { flex: 1, fontSize: 13, fontWeight: "700", color: "#0f172a" },
+  ratingPill: {
+    backgroundColor: "#fef3c7",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginLeft: 8
+  },
+  ratingPillText: { fontSize: 11, fontWeight: "800", color: "#92400e" },
+  feedbackMeta: { fontSize: 12, color: "#64748b" },
+  feedbackComment: {
+    fontSize: 13,
+    color: "#0f172a",
+    fontStyle: "italic",
+    lineHeight: 20
+  },
+  feedbackDate: { fontSize: 11, color: "#94a3b8" }
 });
