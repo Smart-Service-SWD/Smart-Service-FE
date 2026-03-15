@@ -19,11 +19,13 @@ import { graphqlRequest } from "../../../shared/api/graphqlClient";
 import {
   MY_FEEDBACKS_QUERY,
   MY_REQUESTS_QUERY,
-  SERVICE_AGENTS_QUERY
+  SERVICE_AGENTS_QUERY,
+  SERVICE_DEFINITIONS_QUERY
 } from "../../../shared/api/graphqlDocuments";
 import { asErrorMessage, formatDateTime, formatShortId } from "../../../shared/utils/format";
 import type {
   ServiceAgentItem,
+  ServiceDefinition,
   ServiceFeedbackItem,
   ServiceRequestItem
 } from "../../../shared/types/domain";
@@ -42,6 +44,10 @@ interface ServiceAgentsResponse {
   getServiceAgents: ServiceAgentItem[];
 }
 
+interface ServiceDefinitionsResponse {
+  getServiceDefinitions: ServiceDefinition[];
+}
+
 const STARS = [1, 2, 3, 4, 5] as const;
 
 export default function FeedbackScreen() {
@@ -54,6 +60,7 @@ export default function FeedbackScreen() {
   const [items, setItems] = useState<ServiceFeedbackItem[]>([]);
   const [completedRequests, setCompletedRequests] = useState<ServiceRequestItem[]>([]);
   const [agentNamesById, setAgentNamesById] = useState<Record<string, string>>({});
+  const [serviceNamesById, setServiceNamesById] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -82,7 +89,7 @@ export default function FeedbackScreen() {
   const load = async () => {
     if (!session) return;
     try {
-      const [feedbackData, requestData, agentData] = await Promise.all([
+      const [feedbackData, requestData, agentData, serviceDefData] = await Promise.all([
         graphqlRequest<MyFeedbackResponse>(
           MY_FEEDBACKS_QUERY,
           undefined,
@@ -97,13 +104,19 @@ export default function FeedbackScreen() {
           SERVICE_AGENTS_QUERY,
           undefined,
           session.accessToken
-        )
+        ),
+        graphqlRequest<ServiceDefinitionsResponse>(SERVICE_DEFINITIONS_QUERY)
       ]);
 
       setItems(feedbackData.getMyServiceFeedbacks);
       setCompletedRequests(requestData.getMyServiceRequests);
       setAgentNamesById(
         Object.fromEntries(agentData.getServiceAgents.map((agent) => [agent.id, agent.fullName]))
+      );
+      setServiceNamesById(
+        Object.fromEntries(
+          serviceDefData.getServiceDefinitions.map((service) => [service.id, service.name])
+        )
       );
       const availableIds = requestData.getMyServiceRequests
         .filter(
@@ -231,6 +244,9 @@ export default function FeedbackScreen() {
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.requestDesc} numberOfLines={1}>
+                          {item.serviceDefinitionId ? serviceNamesById[item.serviceDefinitionId] ?? "Dịch vụ" : "Dịch vụ"}
+                        </Text>
+                        <Text style={styles.requestDesc} numberOfLines={1}>
                           {item.description}
                         </Text>
                         <Text style={styles.requestMeta}>
@@ -314,7 +330,7 @@ export default function FeedbackScreen() {
             {busy ? (
               <ActivityIndicator color="#fff" size="small" />
             ) : (
-              <Text style={styles.submitText}>Gửi đánh giá ✈️</Text>
+              <Text style={styles.submitText}>Gửi đánh giá 📤</Text>
             )}
           </Pressable>
         </View>
@@ -328,6 +344,11 @@ export default function FeedbackScreen() {
             <View style={styles.feedbackList}>
               {items.map((item) => (
                 <View key={item.id} style={styles.feedbackItem}>
+                  <Text style={styles.feedbackReqDesc} numberOfLines={1}>
+                    {completedRequests.find(r => r.id === item.serviceRequestId)?.serviceDefinitionId
+                      ? serviceNamesById[completedRequests.find(r => r.id === item.serviceRequestId)?.serviceDefinitionId ?? ""] ?? "Dịch vụ"
+                      : "Dịch vụ"}
+                  </Text>
                   <View style={styles.feedbackHeader}>
                     <Text style={styles.feedbackReqDesc} numberOfLines={1}>
                       {requestLabelsById[item.serviceRequestId] ?? formatShortId(item.serviceRequestId)}
@@ -542,7 +563,8 @@ const styles = StyleSheet.create({
   feedbackHeader: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between"
+    justifyContent: "space-between",
+    marginTop: 6
   },
   feedbackReqDesc: { flex: 1, fontSize: 13, fontWeight: "700", color: "#0f172a" },
   ratingPill: {
