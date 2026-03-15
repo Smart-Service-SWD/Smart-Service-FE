@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useNavigation } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
-import ScreenLayout from "../../../shared/ui/ScreenLayout";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "../../../app/theme/colors";
+import BrandLogo from "../../../shared/ui/BrandLogo";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
 import { asErrorMessage } from "../../../shared/utils/format";
 import { useAuth } from "../../auth/AuthContext";
@@ -52,6 +53,8 @@ export default function CreateRequestScreen() {
   const [createdRequestId, setCreatedRequestId] = useState("");
   const [busy, setBusy] = useState(false);
   const [servicesLoading, setServicesLoading] = useState(false);
+  const [isServiceExpanded, setIsServiceExpanded] = useState(false);
+  const [isImageExpanded, setIsImageExpanded] = useState(false);
 
   const selectedService = useMemo(
     () => services.find((service) => service.id === selectedServiceDefinitionId) ?? null,
@@ -245,24 +248,26 @@ export default function CreateRequestScreen() {
   };
 
   return (
-    <ScreenLayout
-      title="Tạo yêu cầu dịch vụ"
-      subtitle="Điền thông tin theo từng bước để gửi yêu cầu nhanh và dễ theo dõi"
-    >
-      <View style={styles.heroCard}>
-        <Text style={styles.sectionTitle}>Các bước tạo yêu cầu</Text>
-        <Text style={styles.value}>Bước 1: Chọn danh mục phù hợp.</Text>
-        <Text style={styles.value}>
-          Bước 2: Chọn đúng dịch vụ cụ thể để hệ thống tiếp nhận đúng loại yêu cầu.
-        </Text>
-        <Text style={styles.value}>Bước 3: Mô tả vấn đề càng rõ càng tốt.</Text>
-        <Text style={styles.value}>Bước 4: Có thể chọn hoặc chụp ảnh minh họa.</Text>
-        <Text style={styles.value}>
-          Bước 5: Nhấn “Gửi yêu cầu”, hệ thống sẽ phân tích thông tin và tạo đơn.
-        </Text>
-      </View>
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <View style={styles.logoBox}>
+              <BrandLogo size={40} />
+            </View>
+            <View>
+              <Text style={styles.headerTitle}>Tạo yêu cầu</Text>
+              <Text style={styles.headerSub}>Điền thông tin từng bước</Text>
+            </View>
+          </View>
+        </View>
 
-      <View style={styles.card}>
+        <View style={styles.card}>
         <Text style={styles.label}>Bước 1 · Chọn danh mục</Text>
         <View style={styles.categoryGrid}>
           {categories.map((category) => {
@@ -283,7 +288,20 @@ export default function CreateRequestScreen() {
           })}
         </View>
 
-        <Text style={styles.label}>Bước 2 · Chọn dịch vụ</Text>
+        <Pressable
+          style={styles.collapsibleHeader}
+          onPress={() => setIsServiceExpanded((v) => !v)}
+        >
+          <Text style={styles.label}>Bước 2 · Chọn dịch vụ</Text>
+          <Text style={styles.chevronText}>{isServiceExpanded ? "▲" : "▼"}</Text>
+        </Pressable>
+        {!isServiceExpanded && selectedService ? (
+          <View style={styles.collapsedPreview}>
+            <Text style={styles.collapsedPreviewText}>Đã chọn: {selectedService.name}</Text>
+          </View>
+        ) : null}
+        {isServiceExpanded && (
+          <>
         {servicesLoading ? (
           <Text style={styles.value}>Đang tải dịch vụ theo danh mục đã chọn...</Text>
         ) : services.length > 0 ? (
@@ -327,6 +345,8 @@ export default function CreateRequestScreen() {
             Hãy chọn một dịch vụ trước khi gửi yêu cầu.
           </Text>
         ) : null}
+          </>
+        )}
 
         <LabeledInput
           label="Bước 3 · Mô tả yêu cầu"
@@ -347,7 +367,21 @@ export default function CreateRequestScreen() {
         />
 
         <View style={styles.imageCard}>
+        <Pressable
+          style={styles.collapsibleHeader}
+          onPress={() => setIsImageExpanded((v) => !v)}
+        >
           <Text style={styles.sectionTitle}>Bước 4 · Ảnh minh họa (tùy chọn)</Text>
+          <Text style={styles.chevronText}>{isImageExpanded ? "▲" : "▼"}</Text>
+        </Pressable>
+        {!isImageExpanded && selectedImage ? (
+          <View style={styles.collapsedPreview}>
+            <Image source={{ uri: selectedImage.uri }} style={styles.collapsedThumbnail} />
+            <Text style={styles.collapsedPreviewText}>{selectedImage.fileName || "request-image.jpg"}</Text>
+          </View>
+        ) : null}
+        {isImageExpanded && (
+          <>
           <Text style={styles.value}>
             Nếu có ảnh lỗi, ảnh thiết bị hoặc tài liệu liên quan, bạn có thể gửi kèm để hỗ trợ xử lý.
           </Text>
@@ -390,6 +424,8 @@ export default function CreateRequestScreen() {
               </Text>
             </View>
           ) : null}
+          </>
+        )}
         </View>
       </View>
 
@@ -500,11 +536,65 @@ export default function CreateRequestScreen() {
           disabled={!canSubmitRequest}
         />
       </View>
-    </ScreenLayout>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: "#f0f4ff"
+  },
+  scroll: { flex: 1 },
+  content: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 20,
+    gap: 16
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.55)",
+    borderRadius: 28,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    gap: 14,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 1,
+    shadowRadius: 24,
+    elevation: 3,
+    marginBottom: 8
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1
+  },
+  logoBox: {
+    width: 50,
+    height: 50,
+    borderRadius: 14,
+    overflow: "hidden",
+    backgroundColor: colors.surfaceRaised
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0f172a"
+  },
+  headerSub: {
+    fontSize: 12,
+    color: "#64748b",
+    marginTop: 2
+  },
+
   heroCard: {
     backgroundColor: "#eff6ff",
     borderWidth: 1,
@@ -690,5 +780,38 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.7
+  },
+
+  // Collapsible sections
+  collapsibleHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 4
+  },
+  chevronText: {
+    fontSize: 12,
+    color: "#94a3b8",
+    fontWeight: "700"
+  },
+  collapsedPreview: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#f0f4ff",
+    borderRadius: 10,
+    padding: 10
+  },
+  collapsedPreviewText: {
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: "600",
+    flex: 1
+  },
+  collapsedThumbnail: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: "#e2e8f0"
   }
 });

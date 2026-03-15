@@ -1,5 +1,6 @@
 import { Text } from "react-native";
 import type { BottomTabNavigationOptions } from "@react-navigation/bottom-tabs";
+import { initialWindowMetrics } from "react-native-safe-area-context";
 import { colors } from "../theme/colors";
 
 interface TabMeta {
@@ -34,6 +35,8 @@ export const getTabScreenOptions = ({
     icon: "•"
   };
 
+  const bottomInset = initialWindowMetrics?.insets?.bottom ?? 0;
+
   return {
     headerShown: false,
     tabBarHideOnKeyboard: true,
@@ -51,14 +54,9 @@ export const getTabScreenOptions = ({
     },
     tabBarActiveBackgroundColor: colors.primarySoft,
     tabBarStyle: {
-      position: "absolute",
-      left: 12,
-      right: 12,
-      bottom: 12,
-      height: 76,
+      height: 60 + Math.max(0, bottomInset - 8),
       paddingTop: 8,
-      paddingBottom: 10,
-      paddingHorizontal: 8,
+      paddingBottom: Math.max(8, bottomInset),
       backgroundColor: colors.surface,
       borderTopWidth: 0,
       borderRadius: 26,

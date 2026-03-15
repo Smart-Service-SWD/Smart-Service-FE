@@ -7,10 +7,12 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "../../../app/theme/colors";
+import BrandLogo from "../../../shared/ui/BrandLogo";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
 import { HOME_BOOTSTRAP_QUERY } from "../../../shared/api/graphqlDocuments";
 import { asErrorMessage, formatCurrency } from "../../../shared/utils/format";
@@ -62,6 +64,14 @@ function CategoryCard({
   onToggle,
   onCreateRequest
 }: CategoryCardProps) {
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredServices = searchQuery.trim()
+    ? services.filter((s) =>
+        s.name.toLowerCase().includes(searchQuery.trim().toLowerCase())
+      )
+    : services;
+
   return (
     <View style={catStyles.card}>
       {/* Header — always visible */}
@@ -88,13 +98,38 @@ function CategoryCard({
             <Text style={catStyles.categoryDesc}>{category.description}</Text>
           ) : null}
 
-          {services.length === 0 ? (
+          {/* Search bar */}
+          {services.length > 0 && (
+            <View style={catStyles.searchWrap}>
+              <Text style={catStyles.searchIcon}>🔍</Text>
+              <TextInput
+                style={catStyles.searchInput}
+                placeholder="Tìm dịch vụ..."
+                placeholderTextColor="#94a3b8"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {searchQuery.length > 0 && (
+                <Pressable onPress={() => setSearchQuery("")}>
+                  <Text style={catStyles.searchClear}>✕</Text>
+                </Pressable>
+              )}
+            </View>
+          )}
+
+          {filteredServices.length === 0 ? (
             <View style={catStyles.emptyWrap}>
-              <Text style={catStyles.emptyText}>Chưa có dịch vụ trong danh mục này</Text>
+              <Text style={catStyles.emptyText}>
+                {searchQuery.trim()
+                  ? `Không tìm thấy dịch vụ "${searchQuery.trim()}"`
+                  : "Chưa có dịch vụ trong danh mục này"}
+              </Text>
             </View>
           ) : (
             <View style={catStyles.serviceList}>
-              {services.map((svc, idx) => (
+              {filteredServices.map((svc, idx) => (
                 <View key={svc.id}>
                   {idx > 0 && <View style={catStyles.divider} />}
                   <Pressable
@@ -196,19 +231,13 @@ export default function HomeScreen() {
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <View style={styles.logoBox}>
-              <Text style={styles.logoIcon}>⚙️</Text>
+              <BrandLogo size={40} />
             </View>
             <View>
               <Text style={styles.headerTitle}>Trung tâm dịch vụ</Text>
               <Text style={styles.headerSub}>Chào mừng, {firstName} 👋</Text>
             </View>
           </View>
-          <Pressable
-            style={styles.notifBtn}
-            onPress={() => navigation.navigate("MyRequests")}
-          >
-            <Text style={styles.notifIcon}>🔔</Text>
-          </Pressable>
         </View>
 
         {/* ── Loading / Error ── */}
@@ -545,6 +574,37 @@ const catStyles = StyleSheet.create({
     color: "#fff",
     fontSize: 11,
     fontWeight: "700"
+  },
+
+  // Search bar
+  searchWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 4,
+    backgroundColor: "#f8fafc",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 2,
+    gap: 8
+  },
+  searchIcon: {
+    fontSize: 14
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: "#0f172a",
+    paddingVertical: 10
+  },
+  searchClear: {
+    fontSize: 14,
+    color: "#94a3b8",
+    fontWeight: "600",
+    padding: 4
   }
 });
 

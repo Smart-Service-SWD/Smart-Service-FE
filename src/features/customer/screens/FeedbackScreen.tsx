@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "../../../app/theme/colors";
+import BrandLogo from "../../../shared/ui/BrandLogo";
 import { useAuth } from "../../auth/AuthContext";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
 import {
@@ -193,8 +194,15 @@ export default function FeedbackScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Đánh giá dịch vụ ⭐</Text>
-          <Text style={styles.headerSub}>Gửi phản hồi sau khi yêu cầu hoàn thành</Text>
+          <View style={styles.headerLeft}>
+            <View style={styles.logoBox}>
+              <BrandLogo size={40} />
+            </View>
+            <View>
+              <Text style={styles.headerTitle}>Đánh giá dịch vụ</Text>
+              <Text style={styles.headerSub}>Gửi phản hồi sau hoàn thành</Text>
+            </View>
+          </View>
         </View>
 
         {/* Note */}
@@ -354,9 +362,47 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   content: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20, gap: 16 },
 
-  header: { gap: 4 },
-  headerTitle: { fontSize: 22, fontWeight: "800", color: "#0f172a" },
-  headerSub: { fontSize: 13, color: "#64748b" },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.55)",
+    borderRadius: 28,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    gap: 14,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 1,
+    shadowRadius: 24,
+    elevation: 3,
+    marginBottom: 8
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1
+  },
+  logoBox: {
+    width: 50,
+    height: 50,
+    borderRadius: 14,
+    overflow: "hidden",
+    backgroundColor: colors.surfaceRaised
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0f172a"
+  },
+  headerSub: {
+    fontSize: 12,
+    color: "#64748b",
+    marginTop: 2
+  },
 
   noteCard: {
     backgroundColor: "#eff6ff",
