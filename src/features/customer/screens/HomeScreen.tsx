@@ -10,6 +10,7 @@ import {
   TextInput,
   View
 } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "../../../app/theme/colors";
 import BrandLogo from "../../../shared/ui/BrandLogo";
@@ -30,27 +31,39 @@ const formatComplexityRange = (range?: number[] | null): string => {
   return `${range[0]}-${range[1]}`;
 };
 
-// Map category names to emoji icons
+// Map category names to MaterialIcons icon names
 const CATEGORY_ICONS: Record<string, string> = {
-  default: "🔧"
+  default: "build"
 };
-const CATEGORY_ICON_LIST = ["⚡", "🖥️", "🧹", "⚖️", "🔧", "🏠", "📱", "🚗"];
+const CATEGORY_ICON_LIST = ["flash-on", "computer", "cleaning-services", "balance", "build", "home", "phone-android", "directions-car"];
 
 function getCategoryIcon(name: string, index: number): string {
-  return CATEGORY_ICONS[name] ?? CATEGORY_ICON_LIST[index % CATEGORY_ICON_LIST.length] ?? "🔧";
+  return CATEGORY_ICONS[name] ?? CATEGORY_ICON_LIST[index % CATEGORY_ICON_LIST.length] ?? "build";
 }
 
-function getDurationLabel(minutes: number): string {
-  if (minutes < 60) return `${minutes} phút`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m > 0 ? `${h} giờ ${m} phút` : `${h} giờ`;
-}
+const formatDuration = (totalMinutes: number): string => {
+  if (totalMinutes < 60) {
+    return `${totalMinutes} phút`;
+  }
+
+  const weeks = Math.floor(totalMinutes / (7 * 24 * 60));
+  const days = Math.floor((totalMinutes % (7 * 24 * 60)) / (24 * 60));
+  const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+  const minutes = totalMinutes % 60;
+
+  const parts: string[] = [];
+  if (weeks > 0) parts.push(`${weeks} tuần`);
+  if (days > 0) parts.push(`${days} ngày`);
+  if (hours > 0) parts.push(`${hours} giờ`);
+  if (minutes > 0) parts.push(`${minutes} phút`);
+
+  return parts.join(" ");
+};
 
 interface CategoryCardProps {
   category: ServiceCategory;
   services: ServiceDefinition[];
-  iconEmoji: string;
+  iconName: string;
   isExpanded: boolean;
   onToggle: () => void;
   onCreateRequest: () => void;
@@ -59,7 +72,7 @@ interface CategoryCardProps {
 function CategoryCard({
   category,
   services,
-  iconEmoji,
+  iconName,
   isExpanded,
   onToggle,
   onCreateRequest
@@ -68,8 +81,8 @@ function CategoryCard({
 
   const filteredServices = searchQuery.trim()
     ? services.filter((s) =>
-        s.name.toLowerCase().includes(searchQuery.trim().toLowerCase())
-      )
+      s.name.toLowerCase().includes(searchQuery.trim().toLowerCase())
+    )
     : services;
 
   return (
@@ -80,7 +93,7 @@ function CategoryCard({
         onPress={onToggle}
       >
         <View style={catStyles.iconWrap}>
-          <Text style={catStyles.icon}>{iconEmoji}</Text>
+          <MaterialIcons name={iconName as keyof typeof MaterialIcons.glyphMap} size={22} color={colors.text} />
         </View>
         <View style={catStyles.headerText}>
           <Text style={catStyles.categoryName}>{category.name}</Text>
@@ -101,7 +114,7 @@ function CategoryCard({
           {/* Search bar */}
           {services.length > 0 && (
             <View style={catStyles.searchWrap}>
-              <Text style={catStyles.searchIcon}>🔍</Text>
+              <MaterialIcons name="search" size={16} color="#94a3b8" />
               <TextInput
                 style={catStyles.searchInput}
                 placeholder="Tìm dịch vụ..."
@@ -113,7 +126,7 @@ function CategoryCard({
               />
               {searchQuery.length > 0 && (
                 <Pressable onPress={() => setSearchQuery("")}>
-                  <Text style={catStyles.searchClear}>✕</Text>
+                  <MaterialIcons name="close" size={14} color="#94a3b8" />
                 </Pressable>
               )}
             </View>
@@ -141,7 +154,7 @@ function CategoryCard({
                         <Text style={catStyles.serviceName}>{svc.name}</Text>
                         {svc.isDangerous && (
                           <View style={catStyles.dangerBadge}>
-                            <Text style={catStyles.dangerBadgeText}>⚠️ Rủi ro</Text>
+                            <Text style={catStyles.dangerBadgeText}><MaterialIcons name="warning-amber" size={10} color="#dc2626" /> Rủi ro</Text>
                           </View>
                         )}
                       </View>
@@ -151,10 +164,10 @@ function CategoryCard({
                         </Text>
                       ) : null}
                       <View style={catStyles.serviceMeta}>
-                        <Text style={catStyles.metaChip}>🕐 {getDurationLabel(svc.estimatedDuration)}</Text>
-                        <Text style={catStyles.metaChip}>📋 AI: {formatComplexityRange(svc.complexityRange)}</Text>
+                        <Text style={catStyles.metaChip}><MaterialIcons name="schedule" size={11} color="#64748b" /> {formatDuration(svc.estimatedDuration)}</Text>
+                        <Text style={catStyles.metaChip}><MaterialIcons name="assignment" size={11} color="#64748b" /> AI: {formatComplexityRange(svc.complexityRange)}</Text>
                         {svc.bookingCount > 0 && (
-                          <Text style={catStyles.metaChip}>🔥 {svc.bookingCount} lượt</Text>
+                          <Text style={catStyles.metaChip}><MaterialIcons name="local-fire-department" size={11} color="#64748b" /> {svc.bookingCount} lượt</Text>
                         )}
                       </View>
                     </View>
@@ -235,7 +248,7 @@ export default function HomeScreen() {
             </View>
             <View>
               <Text style={styles.headerTitle}>Trung tâm dịch vụ</Text>
-              <Text style={styles.headerSub}>Chào mừng, {firstName} 👋</Text>
+              <Text style={styles.headerSub}>Chào mừng, {firstName}</Text>
             </View>
           </View>
         </View>
@@ -249,7 +262,7 @@ export default function HomeScreen() {
         )}
         {!!error && (
           <View style={styles.errorBox}>
-            <Text style={styles.errorText}>⚠️ {error}</Text>
+            <Text style={styles.errorText}><MaterialIcons name="warning-amber" size={14} color={colors.danger} /> {error}</Text>
           </View>
         )}
 
@@ -284,14 +297,14 @@ export default function HomeScreen() {
               </Pressable>
             </View>
           </View>
-          <Text style={styles.heroBgEmoji}>⚡</Text>
+          <MaterialIcons name="flash-on" size={40} color="rgba(255,255,255,0.18)" style={styles.heroBgIcon} />
         </View>
 
         {/* ── Summary Stats ── */}
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
             <View style={[styles.statIconWrap, { backgroundColor: "#eff6ff" }]}>
-              <Text style={styles.statIcon}>📁</Text>
+              <MaterialIcons name="folder" size={20} color={colors.text} />
             </View>
             <View>
               <Text style={styles.statCount}>{categories.length}</Text>
@@ -300,7 +313,7 @@ export default function HomeScreen() {
           </View>
           <View style={styles.statCard}>
             <View style={[styles.statIconWrap, { backgroundColor: "#eff6ff" }]}>
-              <Text style={styles.statIcon}>🛠️</Text>
+              <MaterialIcons name="build" size={20} color={colors.text} />
             </View>
             <View>
               <Text style={styles.statCount}>{services.length}</Text>
@@ -313,7 +326,7 @@ export default function HomeScreen() {
         {featured.length > 0 && (
           <View style={styles.carouselSectionWrap}>
             <View style={[styles.sectionHeader, { paddingHorizontal: 20 }]}>
-              <Text style={styles.sectionTitle}>Dịch vụ nổi bật 🔥</Text>
+              <Text style={styles.sectionTitle}>Dịch vụ nổi bật <MaterialIcons name="local-fire-department" size={16} color="#ef4444" /></Text>
             </View>
             <ScrollView
               horizontal
@@ -329,7 +342,7 @@ export default function HomeScreen() {
                   onPress={() => navigation.navigate("CreateRequest")}
                 >
                   <View style={styles.featuredImageBg}>
-                    <Text style={styles.featuredImageFallback}>🔧</Text>
+                    <MaterialIcons name="build" size={28} color="#94a3b8" />
                     <View style={styles.featuredBadge}>
                       <Text style={styles.featuredBadgeText}>Phổ biến</Text>
                     </View>
@@ -342,11 +355,11 @@ export default function HomeScreen() {
                     </View>
                     <View style={styles.featuredDetails}>
                       <View style={styles.featuredDetailItem}>
-                        <Text style={styles.featuredDetailIcon}>🕐</Text>
-                        <Text style={styles.featuredDetailText}>{getDurationLabel(svc.estimatedDuration)}</Text>
+                        <MaterialIcons name="schedule" size={12} color="#64748b" />
+                        <Text style={styles.featuredDetailText}>{formatDuration(svc.estimatedDuration)}</Text>
                       </View>
                       <View style={styles.featuredDetailItem}>
-                        <Text style={styles.featuredDetailIcon}>🔥</Text>
+                        <MaterialIcons name="local-fire-department" size={12} color="#64748b" />
                         <Text style={styles.featuredDetailText}>{svc.bookingCount} lượt</Text>
                       </View>
                     </View>
@@ -375,7 +388,7 @@ export default function HomeScreen() {
                 key={cat.id}
                 category={cat}
                 services={servicesByCategory(cat.name)}
-                iconEmoji={getCategoryIcon(cat.name, index)}
+                iconName={getCategoryIcon(cat.name, index)}
                 isExpanded={expandedId === cat.id}
                 onToggle={() => toggleCategory(cat.id)}
                 onCreateRequest={() => navigation.navigate("CreateRequest")}
@@ -786,11 +799,10 @@ const styles = StyleSheet.create({
     opacity: 0.85,
     transform: [{ scale: 0.98 }]
   },
-  heroBgEmoji: {
+  heroBgIcon: {
     position: "absolute",
     right: -10,
     bottom: -10,
-    fontSize: 110,
     opacity: 0.07,
     zIndex: 0
   },

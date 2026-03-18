@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
-import ScreenLayout from "../../../shared/ui/ScreenLayout";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View
+} from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "../../../app/theme/colors";
+import BrandLogo from "../../../shared/ui/BrandLogo";
 import { useAuth } from "../../auth/AuthContext";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
 import {
@@ -11,9 +20,6 @@ import {
 import { asErrorMessage, formatCurrency } from "../../../shared/utils/format";
 import type { UserProfile } from "../../../shared/types/domain";
 import ActionButton from "../../../shared/ui/ActionButton";
-import SectionCard from "../../../shared/ui/SectionCard";
-import MetricTile from "../../../shared/ui/MetricTile";
-import StatusBadge from "../../../shared/ui/StatusBadge";
 
 interface DashboardSummary {
   totalUsers: number;
@@ -56,6 +62,14 @@ export default function AdminDashboardScreen() {
   const [customers, setCustomers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+
+  const toggleGroup = (key: string) => {
+    setExpandedGroups((prev) => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
 
   const load = async () => {
     if (!session) {
@@ -105,30 +119,10 @@ export default function AdminDashboardScreen() {
 
   const overviewTiles = useMemo(
     () => [
-      {
-        label: "Người dùng",
-        value: summary?.totalUsers ?? 0,
-        helper: "Tổng tài khoản trên hệ thống",
-        tone: "primary" as const
-      },
-      {
-        label: "Yêu cầu",
-        value: summary?.totalRequests ?? 0,
-        helper: `${summary?.pendingRequests ?? 0} đơn chờ xử lý`,
-        tone: "default" as const
-      },
-      {
-        label: "Doanh thu hôm nay",
-        value: formatCurrency(summary?.todayRevenue ?? 0),
-        helper: "Giá trị phát sinh trong ngày",
-        tone: "success" as const
-      },
-      {
-        label: "Doanh thu tháng",
-        value: formatCurrency(summary?.monthlyRevenue ?? 0),
-        helper: `${summary?.completedRequests ?? 0} đơn đã hoàn thành`,
-        tone: "warning" as const
-      }
+      { label: "Người dùng", value: summary?.totalUsers ?? 0, icon: "group" as const },
+      { label: "Yêu cầu", value: summary?.totalRequests ?? 0, icon: "assignment" as const },
+      { label: "Hôm nay", value: formatCurrency(summary?.todayRevenue ?? 0), icon: "attach-money" as const },
+      { label: "Tháng", value: formatCurrency(summary?.monthlyRevenue ?? 0), icon: "bar-chart" as const }
     ],
     [summary]
   );
@@ -137,175 +131,295 @@ export default function AdminDashboardScreen() {
     {
       title: "Thợ kỹ thuật",
       users: agents,
-      tone: "primary" as const,
       emptyText: "Chưa có thợ kỹ thuật nào trong hệ thống."
     },
     {
       title: "Nhân viên",
       users: staffs,
-      tone: "success" as const,
       emptyText: "Chưa có tài khoản staff nào trong hệ thống."
     },
     {
       title: "Khách hàng",
       users: customers,
-      tone: "warning" as const,
       emptyText: "Chưa có khách hàng nào trong hệ thống."
     }
   ];
 
   return (
-    <ScreenLayout title="Bảng điều khiển Admin" subtitle="Tổng quan hệ thống theo góc nhìn mobile">
-      <SectionCard
-        title="Tổng quan nhanh"
-        subtitle="Theo dõi quy mô hệ thống, tiến độ yêu cầu và doanh thu ngay trên một màn hình"
-        tone="primary"
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
       >
-        <View style={styles.metricGrid}>
-          {overviewTiles.map((tile) => (
-            <MetricTile
-              key={tile.label}
-              label={tile.label}
-              value={tile.value}
-              helper={tile.helper}
-              tone={tile.tone}
-            />
-          ))}
-        </View>
-        <ActionButton
-          label={loading ? "Đang làm mới..." : "Làm mới dữ liệu"}
-          onPress={() => void load()}
-          disabled={loading}
-          variant="secondary"
-        />
-      </SectionCard>
-
-      {!!error ? (
-        <SectionCard tone="danger">
-          <Text style={styles.error}>{error}</Text>
-        </SectionCard>
-      ) : null}
-
-      {summary ? (
-        <SectionCard
-          title="Cân bằng vận hành"
-          subtitle="Các con số này giúp admin nhìn nhanh lượng người dùng và khối lượng đơn"
-        >
-          <View style={styles.badgeRow}>
-            <StatusBadge label={`Staff ${summary.totalStaff}`} tone="success" />
-            <StatusBadge label={`Agent ${summary.totalAgents}`} tone="primary" />
-            <StatusBadge label={`Dịch vụ ${summary.totalServices}`} tone="warning" />
-            <StatusBadge label={`Hoàn thành ${summary.completedRequests}`} tone="neutral" />
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <View style={styles.logoBox}>
+              <BrandLogo size={40} />
+            </View>
+            <View>
+              <Text style={styles.headerTitle}>Bảng điều khiển</Text>
+              <Text style={styles.headerSub}>Tổng quan hệ thống</Text>
+            </View>
           </View>
-          <Text style={styles.metaText}>
-            Tổng số yêu cầu đang chờ xử lý: {summary.pendingRequests}. Tổng dịch vụ đang phục vụ: {summary.totalServices}.
-          </Text>
-        </SectionCard>
-      ) : null}
+        </View>
 
-      {groups.map((group) => (
-        <SectionCard
-          key={group.title}
-          title={`${group.title} (${group.users.length})`}
-          subtitle="Danh sách rút gọn theo role để admin xem nhanh trên mobile"
-        >
-          <View style={styles.userList}>
-            {group.users.map((user) => (
-              <View key={user.id} style={styles.userCard}>
-                <View style={styles.userAvatar}>
-                  <Text style={styles.userAvatarText}>{getUserInitials(user.fullName)}</Text>
-                </View>
-                <View style={styles.userContent}>
-                  <View style={styles.userHeader}>
-                    <Text style={styles.userName}>{user.fullName}</Text>
-                    <StatusBadge
-                      label={user.isLocked ? "Khóa" : "Hoạt động"}
-                      tone={user.isLocked ? "danger" : group.tone}
-                    />
-                  </View>
-                  <Text style={styles.userEmail}>{user.email}</Text>
-                </View>
+        {/* Error */}
+        {!!error && (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}><MaterialIcons name="warning-amber" size={14} color={colors.danger} /> {error}</Text>
+          </View>
+        )}
+
+        {loading && (
+          <View style={styles.loadingRow}>
+            <ActivityIndicator color={colors.primary} size="small" />
+            <Text style={styles.loadingText}>Đang tải...</Text>
+          </View>
+        )}
+
+        {/* Overview metrics */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Tổng quan nhanh</Text>
+          <View style={styles.metricGrid}>
+            {overviewTiles.map((tile) => (
+              <View key={tile.label} style={styles.metricTile}>
+                <MaterialIcons name={tile.icon} size={22} color={colors.text} />
+                <Text style={styles.metricValue}>{tile.value}</Text>
+                <Text style={styles.metricLabel}>{tile.label}</Text>
               </View>
             ))}
           </View>
-          {!group.users.length ? <Text style={styles.empty}>{group.emptyText}</Text> : null}
-        </SectionCard>
-      ))}
-    </ScreenLayout>
+          <ActionButton
+            label={loading ? "Đang làm mới..." : "Làm mới dữ liệu"}
+            onPress={() => void load()}
+            disabled={loading}
+            variant="secondary"
+          />
+        </View>
+
+        {/* Operation balance */}
+        {summary ? (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Cân bằng vận hành</Text>
+            <View style={styles.badgeRow}>
+              <View style={[styles.statusPill, { backgroundColor: "#eff6ff" }]}>
+                <Text style={[styles.statusText, { color: "#2563eb" }]}>Staff {summary.totalStaff}</Text>
+              </View>
+              <View style={[styles.statusPill, { backgroundColor: "#f0fdf4" }]}>
+                <Text style={[styles.statusText, { color: "#16a34a" }]}>Agent {summary.totalAgents}</Text>
+              </View>
+              <View style={[styles.statusPill, { backgroundColor: "#fefce8" }]}>
+                <Text style={[styles.statusText, { color: "#ca8a04" }]}>Dịch vụ {summary.totalServices}</Text>
+              </View>
+              <View style={[styles.statusPill, { backgroundColor: "#f0f4ff" }]}>
+                <Text style={[styles.statusText, { color: "#64748b" }]}>Hoàn thành {summary.completedRequests}</Text>
+              </View>
+            </View>
+            <Text style={styles.metaText}>
+              Chờ xử lý: {summary.pendingRequests} • Dịch vụ: {summary.totalServices}
+            </Text>
+          </View>
+        ) : null}
+
+        {/* User groups */}
+        {groups.map((group) => {
+          const key = group.title;
+          const expanded = !!expandedGroups[key];
+
+          return (
+            <View key={key} style={styles.card}>
+              <View style={styles.groupHeader}>
+                <Pressable
+                  style={styles.groupHeaderPressable}
+                  onPress={() => toggleGroup(key)}
+                  hitSlop={8}
+                >
+                  <Text style={styles.cardTitle}>{group.title} ({group.users.length})</Text>
+                  <MaterialIcons
+                    name={expanded ? "expand-less" : "expand-more"}
+                    size={22}
+                    color={colors.text}
+                  />
+                </Pressable>
+              </View>
+
+              {expanded ? (
+                <>
+                  <View style={styles.userList}>
+                    {group.users.map((user) => (
+                      <View key={user.id} style={styles.userCard}>
+                        <View style={styles.userAvatar}>
+                          <Text style={styles.userAvatarText}>{getUserInitials(user.fullName)}</Text>
+                        </View>
+                        <View style={styles.userContent}>
+                          <View style={styles.userHeader}>
+                            <Text style={styles.userName}>{user.fullName}</Text>
+                            <View
+                              style={[
+                                styles.statusPill,
+                                { backgroundColor: user.isLocked ? "#fef2f2" : "#eff6ff" }
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.statusText,
+                                  { color: user.isLocked ? "#dc2626" : "#2563eb" }
+                                ]}
+                              >
+                                {user.isLocked ? "Khóa" : "Hoạt động"}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={styles.userEmail}>{user.email}</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                  {!group.users.length ? (
+                    <Text style={styles.emptyText}>{group.emptyText}</Text>
+                  ) : null}
+                </>
+              ) : null}
+            </View>
+          );
+        })}
+
+        <View style={{ height: 80 }} />
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: "#f0f4ff" },
+  scroll: { flex: 1 },
+  content: { paddingTop: 16, paddingBottom: 20, gap: 14 },
+
+  header: {
+    flexDirection: "row",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderRadius: 28,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.55)",
+    gap: 14,
+    alignItems: "flex-start",
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
+    marginBottom: 8,
+    marginHorizontal: 20
+  },
+  headerLeft: { flexDirection: "row", gap: 12, flex: 1, alignItems: "flex-start" },
+  logoBox: { width: 50, height: 50, borderRadius: 14, overflow: "hidden", flexShrink: 0 },
+  headerTitle: { fontSize: 18, fontWeight: "700", color: "#0f172a" },
+  headerSub: { fontSize: 12, color: "#64748b", marginTop: 2 },
+
+  errorBox: {
+    marginHorizontal: 20,
+    backgroundColor: "#fef2f2",
+    borderWidth: 1,
+    borderColor: "#fecaca",
+    borderRadius: 12,
+    padding: 12
+  },
+  errorText: { fontSize: 13, color: colors.danger },
+  loadingRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 8 },
+  loadingText: { fontSize: 13, color: "#64748b" },
+
+  card: {
+    marginHorizontal: 20,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 20,
+    padding: 16,
+    gap: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2
+  },
+  cardTitle: { fontSize: 15, fontWeight: "800", color: "#0f172a" },
+
   metricGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10
   },
+  metricTile: {
+    flex: 1,
+    minWidth: "45%",
+    backgroundColor: "#f0f4ff",
+    borderRadius: 14,
+    padding: 14,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    gap: 4
+  },
+  metricIcon: { fontSize: 20 },
+  metricValue: { fontSize: 20, fontWeight: "800", color: colors.text },
+  metricLabel: { fontSize: 11, color: "#64748b" },
+
   badgeRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8
   },
-  metaText: {
-    color: colors.textSoft,
-    fontSize: 13,
-    lineHeight: 19
+  statusPill: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  statusText: { fontSize: 10, fontWeight: "800" },
+  metaText: { fontSize: 11, color: "#64748b" },
+
+  userList: { gap: 10 },
+  groupHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10
   },
-  userList: {
+  groupHeaderPressable: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10
   },
   userCard: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+    backgroundColor: "#f0f4ff",
     borderWidth: 1,
-    borderColor: "rgba(100, 116, 139, 0.16)",
-    borderRadius: 20,
-    padding: 12,
-    backgroundColor: colors.surfaceRaised
+    borderColor: "#e2e8f0",
+    borderRadius: 14,
+    padding: 12
   },
   userAvatar: {
     width: 44,
     height: 44,
     borderRadius: 16,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: "#dbeafe",
     alignItems: "center",
     justifyContent: "center"
   },
   userAvatarText: {
-    color: colors.primaryStrong,
+    color: "#2563eb",
     fontSize: 16,
     fontWeight: "800"
   },
-  userContent: {
-    flex: 1,
-    gap: 4
-  },
+  userContent: { flex: 1, gap: 4 },
   userHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10
   },
-  userName: {
-    flex: 1,
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: "800"
-  },
-  userEmail: {
-    color: colors.textMuted,
-    fontSize: 12,
-    lineHeight: 18
-  },
-  error: {
-    color: colors.danger,
-    fontSize: 13,
-    lineHeight: 18
-  },
-  empty: {
-    color: colors.textMuted,
-    fontSize: 13,
-    lineHeight: 18
-  }
+  userName: { flex: 1, color: "#0f172a", fontSize: 14, fontWeight: "800" },
+  userEmail: { color: "#64748b", fontSize: 12, lineHeight: 18 },
+  emptyText: { color: "#94a3b8", fontSize: 13, textAlign: "center", paddingVertical: 8 }
 });

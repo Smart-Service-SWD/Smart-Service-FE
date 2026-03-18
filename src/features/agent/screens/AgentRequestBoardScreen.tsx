@@ -7,6 +7,7 @@ import {
   Text,
   View
 } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "../../../app/theme/colors";
 import BrandLogo from "../../../shared/ui/BrandLogo";
@@ -211,8 +212,8 @@ export default function AgentRequestBoardScreen() {
             style={({ pressed }) => [styles.dropdownButton, pressed && styles.dropdownButtonPressed]}
             onPress={() => setDropdownOpen((v) => !v)}
           >
-            <Text style={styles.dropdownButtonText}>🔽 {dropdownLabel}</Text>
-            <Text style={styles.dropdownChevron}>{dropdownOpen ? "▲" : "▼"}</Text>
+            <Text style={styles.dropdownButtonText}><MaterialIcons name="filter-list" size={14} color="#0f172a" /> {dropdownLabel}</Text>
+            <MaterialIcons name={dropdownOpen ? "keyboard-arrow-up" : "keyboard-arrow-down"} size={18} color="#94a3b8" />
           </Pressable>
 
           {dropdownOpen && (
@@ -222,7 +223,7 @@ export default function AgentRequestBoardScreen() {
                   style={styles.dropdownClearRow}
                   onPress={() => setSelectedStatuses([])}
                 >
-                  <Text style={styles.dropdownClearText}>✕ Bỏ chọn tất cả</Text>
+                  <Text style={styles.dropdownClearText}><MaterialIcons name="close" size={12} color={colors.danger} /> Bỏ chọn tất cả</Text>
                 </Pressable>
               )}
               {statusOptions.map((opt) => {
@@ -234,7 +235,7 @@ export default function AgentRequestBoardScreen() {
                     onPress={() => toggleStatus(opt.value)}
                   >
                     <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
-                      {checked && <Text style={styles.checkMark}>✓</Text>}
+                      {checked && <MaterialIcons name="check" size={13} color="#fff" />}
                     </View>
                     <Text style={[styles.dropdownItemText, checked && styles.dropdownItemTextChecked]}>
                       {opt.label}
@@ -249,7 +250,7 @@ export default function AgentRequestBoardScreen() {
         {/* Error / Loading */}
         {!!error && (
           <View style={styles.errorBox}>
-            <Text style={styles.errorText}>⚠️ {error}</Text>
+            <Text style={styles.errorText}><MaterialIcons name="warning-amber" size={14} color={colors.danger} /> {error}</Text>
           </View>
         )}
         {loading && !selectedRequestId && (
@@ -284,7 +285,7 @@ export default function AgentRequestBoardScreen() {
                 </View>
                 <View style={styles.requestMeta}>
                   <Text style={styles.metaText}>{item.description}</Text>
-                  <Text style={styles.metaText}>🕐 {formatDateTime(item.createdAt)}</Text>
+                  <Text style={styles.metaText}><MaterialIcons name="schedule" size={12} color="#64748b" /> {formatDateTime(item.createdAt)}</Text>
                 </View>
               </Pressable>
             );
@@ -313,12 +314,12 @@ export default function AgentRequestBoardScreen() {
                 ) : null}
                 <Text style={styles.metaText}>{selectedRequest.description}</Text>
                 <View style={styles.detailGrid}>
-                  <Text style={styles.metaText}>👤 {customerProfile?.fullName ?? "-"}</Text>
-                  <Text style={styles.metaText}>📞 {customerProfile?.phoneNumber || "-"}</Text>
+                  <Text style={styles.metaText}><MaterialIcons name="person-outline" size={14} color="#64748b" /> {customerProfile?.fullName ?? "-"}</Text>
+                  <Text style={styles.metaText}><MaterialIcons name="phone" size={14} color="#64748b" /> {customerProfile?.phoneNumber || "-"}</Text>
                   <Text style={styles.metaText}>
-                    📍 {selectedRequest.addressText || "Chưa nhập địa chỉ"}
+                    <MaterialIcons name="place" size={14} color="#64748b" /> {selectedRequest.addressText || "Chưa nhập địa chỉ"}
                   </Text>
-                  <Text style={styles.metaText}>🕐 {formatDateTime(selectedRequest.createdAt)}</Text>
+                  <Text style={styles.metaText}><MaterialIcons name="schedule" size={14} color="#64748b" /> {formatDateTime(selectedRequest.createdAt)}</Text>
                 </View>
               </View>
               <View style={styles.countRow}>

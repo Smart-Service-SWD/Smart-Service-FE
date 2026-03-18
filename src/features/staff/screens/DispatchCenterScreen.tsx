@@ -6,9 +6,18 @@ import {
   useRoute,
   type RouteProp
 } from "@react-navigation/native";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import ScreenLayout from "../../../shared/ui/ScreenLayout";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View
+} from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "../../../app/theme/colors";
+import BrandLogo from "../../../shared/ui/BrandLogo";
 import type { StaffTabParamList } from "../../../app/navigation/types";
 import { useAuth } from "../../auth/AuthContext";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
@@ -34,9 +43,6 @@ import type {
 } from "../../../shared/types/domain";
 import LabeledInput from "../../../shared/ui/LabeledInput";
 import ActionButton from "../../../shared/ui/ActionButton";
-import SectionCard from "../../../shared/ui/SectionCard";
-import MetricTile from "../../../shared/ui/MetricTile";
-import StatusBadge from "../../../shared/ui/StatusBadge";
 import {
   assignProvider,
   createActivityLog,
@@ -81,6 +87,16 @@ const workspaceTabLabels: Record<WorkspaceTab, string> = {
   agent: "Thợ"
 };
 
+const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
+  URGENT_DISPATCH: { bg: "#fef2f2", text: "#dc2626" },
+  PENDING_REVIEW: { bg: "#fefce8", text: "#ca8a04" },
+  COMPLETED: { bg: "#f0fdf4", text: "#16a34a" },
+  ASSIGNED: { bg: "#eff6ff", text: "#2563eb" }
+};
+
+const getStatusStyle = (status?: string | null) =>
+  STATUS_COLORS[status ?? ""] ?? { bg: "#f0f4ff", text: "#64748b" };
+
 const isDispatchFlow = (request: ServiceRequestItem) =>
   request.status === "CREATED" ||
   request.status === "URGENT_DISPATCH" ||
@@ -92,35 +108,10 @@ const canAssignProvider = (request: ServiceRequestItem | null) =>
 const canEvaluateComplexity = (request: ServiceRequestItem | null) =>
   request?.status === "CREATED" || request?.status === "PENDING_REVIEW";
 
-const getStatusTone = (status?: string | null) => {
-  if (status === "URGENT_DISPATCH") {
-    return "danger" as const;
-  }
-
-  if (status === "PENDING_REVIEW") {
-    return "warning" as const;
-  }
-
-  if (status === "ASSIGNED" || status === "COMPLETED") {
-    return "success" as const;
-  }
-
-  return "primary" as const;
-};
-
 const getNextWorkspaceTab = (request: ServiceRequestItem | null): WorkspaceTab => {
-  if (!request) {
-    return "overview";
-  }
-
-  if (canEvaluateComplexity(request)) {
-    return "complexity";
-  }
-
-  if (canAssignProvider(request)) {
-    return request.serviceDefinitionId ? "agent" : "service";
-  }
-
+  if (!request) return "overview";
+  if (canEvaluateComplexity(request)) return "complexity";
+  if (canAssignProvider(request)) return request.serviceDefinitionId ? "agent" : "service";
   return "overview";
 };
 
@@ -134,9 +125,7 @@ const buildAgentMatch = (
   const capability =
     capabilities.find((item) => item.categoryId === request.categoryId) ?? null;
 
-  if (!agent.isActive || !capability) {
-    return null;
-  }
+  if (!agent.isActive || !capability) return null;
 
   const maxComplexity = capability.maxComplexity?.level ?? 0;
   const supportsComplexity = maxComplexity >= requestLevel;
@@ -213,10 +202,7 @@ export default function DispatchCenterScreen() {
           const rightPriority =
             right.status === "URGENT_DISPATCH" ? 0 : right.status === "CREATED" ? 1 : 2;
 
-          if (leftPriority !== rightPriority) {
-            return leftPriority - rightPriority;
-          }
-
+          if (leftPriority !== rightPriority) return leftPriority - rightPriority;
           return new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
         }),
     [requests]
@@ -235,26 +221,16 @@ export default function DispatchCenterScreen() {
   const selectedRequestLevel = selectedRequest?.complexity?.level ?? complexityLevel;
 
   const agentMatches = useMemo(() => {
-    if (!selectedRequest || !selectedServiceId) {
-      return [];
-    }
-
+    if (!selectedRequest || !selectedServiceId) return [];
     return agents
       .map((agent) => buildAgentMatch(agent, selectedRequest, selectedServiceId))
       .filter((item): item is AgentMatchCandidate => item !== null)
       .sort((left, right) => {
-        if (left.recommended !== right.recommended) {
-          return left.recommended ? -1 : 1;
-        }
-
-        if (left.supportsSelectedService !== right.supportsSelectedService) {
+        if (left.recommended !== right.recommended) return left.recommended ? -1 : 1;
+        if (left.supportsSelectedService !== right.supportsSelectedService)
           return left.supportsSelectedService ? -1 : 1;
-        }
-
-        if (left.supportsComplexity !== right.supportsComplexity) {
+        if (left.supportsComplexity !== right.supportsComplexity)
           return left.supportsComplexity ? -1 : 1;
-        }
-
         return right.score - left.score;
       });
   }, [agents, selectedRequest, selectedServiceId]);
@@ -289,14 +265,8 @@ export default function DispatchCenterScreen() {
       ? agents.find((agent) => agent.id === agentId)?.fullName ?? formatShortId(agentId)
       : "Chưa gán";
 
-  const getAiValueLabel = (
-    value?: string | null,
-    wasAnalyzedByAI?: boolean
-  ) => {
-    if (value?.trim()) {
-      return value;
-    }
-
+  const getAiValueLabel = (value?: string | null, wasAnalyzedByAI?: boolean) => {
+    if (value?.trim()) return value;
     return wasAnalyzedByAI ? "AI chưa trả về" : "Chưa phân tích AI";
   };
 
@@ -306,10 +276,7 @@ export default function DispatchCenterScreen() {
       : "Chưa có";
 
   const getRequestedServiceLabel = (request?: ServiceRequestItem | null) => {
-    if (!request?.serviceDefinitionId) {
-      return "Khách chưa chốt dịch vụ";
-    }
-
+    if (!request?.serviceDefinitionId) return "Khách chưa chốt dịch vụ";
     return (
       services.find((item) => item.id === request.serviceDefinitionId)?.name ??
       formatShortId(request.serviceDefinitionId)
@@ -317,30 +284,16 @@ export default function DispatchCenterScreen() {
   };
 
   const loadInitialData = useCallback(async () => {
-    if (!session) {
-      return;
-    }
-
+    if (!session) return;
     setLoading(true);
     setError("");
     try {
       const [agentData, requestData, userData] = await Promise.all([
-        graphqlRequest<ServiceAgentsResponse>(
-          SERVICE_AGENTS_QUERY,
-          undefined,
-          session.accessToken
-        ),
-        graphqlRequest<AllRequestsResponse>(
-          ALL_REQUESTS_QUERY,
-          undefined,
-          session.accessToken
-        ),
+        graphqlRequest<ServiceAgentsResponse>(SERVICE_AGENTS_QUERY, undefined, session.accessToken),
+        graphqlRequest<AllRequestsResponse>(ALL_REQUESTS_QUERY, undefined, session.accessToken),
         graphqlRequest<UsersResponse>(USERS_QUERY, undefined, session.accessToken)
       ]);
-
-      setCustomerNamesById(
-        Object.fromEntries(userData.getUsers.map((user) => [user.id, user.fullName]))
-      );
+      setCustomerNamesById(Object.fromEntries(userData.getUsers.map((user) => [user.id, user.fullName])));
       setAgents(agentData.getServiceAgents);
       setRequests(requestData.getServiceRequests);
     } catch (loadError) {
@@ -351,17 +304,13 @@ export default function DispatchCenterScreen() {
   }, [session]);
 
   const loadRequestContext = async (request: ServiceRequestItem) => {
-    if (!session) {
-      return;
-    }
-
+    if (!session) return;
     if (!request.categoryId) {
       setServices([]);
       setSelectedServiceId("");
       setEstimatedAmount("");
       return;
     }
-
     setLoading(true);
     setError("");
     try {
@@ -370,17 +319,14 @@ export default function DispatchCenterScreen() {
         { categoryId: request.categoryId },
         session.accessToken
       );
-
       const availableServices = serviceData.getServiceDefinitionsByCategory.filter(
         (service) => service.isActive || service.id === request.serviceDefinitionId
       );
       setServices(availableServices);
-
       const nextService =
         availableServices.find((item) => item.id === request.serviceDefinitionId) ??
         availableServices.find((item) => item.id === selectedServiceId) ??
         availableServices[0];
-
       if (nextService) {
         setSelectedServiceId(nextService.id);
         setEstimatedAmount(String(nextService.basePrice));
@@ -431,7 +377,6 @@ export default function DispatchCenterScreen() {
       setError("Hãy chọn yêu cầu cần xử lý");
       return;
     }
-
     if (!canEvaluateComplexity(selectedRequest)) {
       setError(
         selectedRequest.status === "URGENT_DISPATCH"
@@ -440,7 +385,6 @@ export default function DispatchCenterScreen() {
       );
       return;
     }
-
     setLoading(true);
     setError("");
     setSuccess("");
@@ -470,63 +414,49 @@ export default function DispatchCenterScreen() {
       setError("Hãy chọn yêu cầu cần điều phối");
       return;
     }
-
     if (!canAssignProvider(selectedRequest)) {
       setError("Hãy đánh giá độ phức tạp trước khi phân công thợ.");
       return;
     }
-
     if (!selectedServiceId.trim()) {
       setError("Hãy chọn một service đang hoạt động trước khi phân công thợ.");
       return;
     }
-
     if (!selectedAgentId.trim()) {
       setError("Hãy chọn thợ trước khi phân công");
       return;
     }
-
     if (!selectedAgentMatch?.supportsComplexity) {
       setError("Thợ đang chọn chưa đủ mức độ phức tạp cho đơn này.");
       return;
     }
-
     if (!selectedAgentMatch.supportsSelectedService) {
       setError("Thợ đang chọn chưa được gắn cho dịch vụ này. Hãy đổi dịch vụ hoặc chọn thợ khác.");
       return;
     }
-
     const amount = Number.parseFloat(estimatedAmount);
     if (Number.isNaN(amount) || amount < 0) {
       setError("Chi phí ước tính phải là số không âm");
       return;
     }
-
     setLoading(true);
     setError("");
     setSuccess("");
     try {
-      const money = {
-        amount,
-        currency: currency.trim() || "VND"
-      };
-
+      const money = { amount, currency: currency.trim() || "VND" };
       await assignProvider(session.accessToken, selectedRequest.id, {
         providerId: selectedAgentId,
         estimatedCost: money
       });
-
       const assignmentId = await createAssignment(session.accessToken, {
         serviceRequestId: selectedRequest.id,
         agentId: selectedAgentId,
         estimatedCost: money
       });
-
       await createActivityLog(session.accessToken, {
         serviceRequestId: selectedRequest.id,
         action: `Staff assigned provider ${selectedAgentId} with assignment ${assignmentId}`
       });
-
       setSuccess("Đã phân công xong đơn này. Bạn có thể quay lại hàng chờ hoặc xem lịch sử nếu cần.");
       setNeedsManualRequestSelection(true);
       setIsWorkspaceOpen(false);
@@ -547,19 +477,14 @@ export default function DispatchCenterScreen() {
   const renderActionPanel = () => (
     <View style={styles.actionPanel}>
       <Text style={styles.actionTitle}>Phân công trực tiếp</Text>
-      <Text style={styles.meta}>
-        Đơn: {selectedRequest?.description || "-"} • Service: {selectedService?.name || "-"} •
-        Thợ: {selectedAgentMatch?.agent.fullName || "-"}
+      <Text style={styles.metaText}>
+        Đơn: {selectedRequest?.description || "-"} • Service: {selectedService?.name || "-"} • Thợ: {selectedAgentMatch?.agent.fullName || "-"}
       </Text>
       {selectedAgentMatch && !selectedAgentMatch.supportsComplexity ? (
-        <Text style={styles.warningText}>
-          Thợ đang chọn chưa đủ mức độ phức tạp cho đơn này, nên chưa thể phân công.
-        </Text>
+        <Text style={styles.warningText}>Thợ đang chọn chưa đủ mức độ phức tạp cho đơn này, nên chưa thể phân công.</Text>
       ) : null}
       {selectedAgentMatch && !selectedAgentMatch.supportsSelectedService ? (
-        <Text style={styles.warningText}>
-          Thợ đang chọn chưa được gắn cho dịch vụ hiện tại. Hãy đổi dịch vụ hoặc chọn thợ khác trước khi phân công.
-        </Text>
+        <Text style={styles.warningText}>Thợ đang chọn chưa được gắn cho dịch vụ hiện tại. Hãy đổi dịch vụ hoặc chọn thợ khác trước khi phân công.</Text>
       ) : null}
       <LabeledInput
         label="Chi phí ước tính"
@@ -583,9 +508,7 @@ export default function DispatchCenterScreen() {
         }
       />
       {!canAssignProvider(selectedRequest) && selectedRequest ? (
-        <Text style={styles.warningText}>
-          Staff chỉ có thể gán thợ khi yêu cầu đã ở trạng thái Chờ duyệt.
-        </Text>
+        <Text style={styles.warningText}>Staff chỉ có thể gán thợ khi yêu cầu đã ở trạng thái Chờ duyệt.</Text>
       ) : null}
     </View>
   );
@@ -598,10 +521,7 @@ export default function DispatchCenterScreen() {
 
   useEffect(() => {
     const routeRequestId = route.params?.requestId;
-    if (!routeRequestId) {
-      return;
-    }
-
+    if (!routeRequestId) return;
     const routeRequest = requests.find((item) => item.id === routeRequestId) ?? null;
     setNeedsManualRequestSelection(false);
     setSelectedRequestId(routeRequestId);
@@ -611,13 +531,11 @@ export default function DispatchCenterScreen() {
 
   useEffect(() => {
     const stillExists = requests.some((item) => item.id === selectedRequestId);
-
     if (selectedRequestId && !stillExists) {
       setSelectedRequestId("");
       setIsWorkspaceOpen(false);
       return;
     }
-
     if (!selectedRequestId && !needsManualRequestSelection && dispatchRequests.length > 0) {
       setSelectedRequestId(dispatchRequests[0].id);
     }
@@ -630,7 +548,6 @@ export default function DispatchCenterScreen() {
       setSelectedAgentId("");
       return;
     }
-
     setComplexityLevel(selectedRequest.complexity?.level ?? 3);
     void loadRequestContext(selectedRequest);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -641,658 +558,615 @@ export default function DispatchCenterScreen() {
       applyMatchSelection(readyAgentMatches[0] ?? agentMatches[0] ?? null);
       return;
     }
-
-    if (!selectedAgentId) {
-      return;
-    }
-
+    if (!selectedAgentId) return;
     const stillEligible = agentMatches.some((item) => item.agent.id === selectedAgentId);
     if (!stillEligible) {
       applyMatchSelection(readyAgentMatches[0] ?? agentMatches[0] ?? null);
     }
   }, [agentMatches, readyAgentMatches, selectedAgentId, selectedAgentMatch]);
 
-  const screenTitle =
-    isWorkspaceOpen && selectedRequest
-      ? `Điều phối ${formatShortId(selectedRequest.id)}`
-      : "Điều phối và gán thợ";
-
-  const screenSubtitle = isWorkspaceOpen
-    ? "Đang ở màn chi tiết điều phối của một yêu cầu, vẫn giữ nguyên thanh tab để staff thao tác nhanh."
-    : "Chạm vào một yêu cầu để mở màn điều phối riêng, không còn phải kéo xuống cuối trang.";
+  // ✅ Theo yêu cầu: title luôn giữ nguyên, không đổi theo request
+  const screenTitle = "Điều phối và gán thợ";
 
   return (
-    <ScreenLayout title={screenTitle} subtitle={screenSubtitle}>
-      {!!error ? (
-        <SectionCard tone="danger">
-          <Text style={styles.error}>{error}</Text>
-        </SectionCard>
-      ) : null}
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <View style={styles.logoBox}>
+              <BrandLogo size={40} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.headerTitle}>{screenTitle}</Text>
+              <Text style={styles.headerSub}>
+                {isWorkspaceOpen ? "Đang điều phối một yêu cầu cụ thể" : "Chạm vào một yêu cầu để mở điều phối"}
+              </Text>
+            </View>
+          </View>
+        </View>
 
-      {!!success ? (
-        <SectionCard tone="success">
-          <Text style={styles.success}>{success}</Text>
-        </SectionCard>
-      ) : null}
+        {!!error && (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>
+              <MaterialIcons name="warning-amber" size={14} color={colors.danger} /> {error}
+            </Text>
+          </View>
+        )}
+        {!!success && (
+          <View style={styles.successBox}>
+            <Text style={styles.successText}>
+              <MaterialIcons name="check-circle" size={14} color="#1d4ed8" /> {success}
+            </Text>
+          </View>
+        )}
 
-      {isWorkspaceOpen ? (
-        selectedRequest ? (
-          <>
-            <SectionCard
-              tone="primary"
-              title={`Đang điều phối ${formatShortId(selectedRequest.id)}`}
-              subtitle="Thông tin yêu cầu được đưa lên đầu màn để staff không phải quay lại trang yêu cầu"
-            >
-              <View style={styles.workspaceTopRow}>
-                <Text style={styles.selectionTitle}>{selectedRequest.description}</Text>
-                <Pressable style={styles.inlineChip} onPress={closeWorkspace}>
-                  <Text style={styles.inlineChipText}>Quay lại hàng chờ</Text>
-                </Pressable>
+        {isWorkspaceOpen ? (
+          selectedRequest ? (
+            <>
+              {/* Workspace: request info */}
+              <View style={[styles.card, { borderColor: colors.primary }]}>
+                <View style={styles.workspaceTop}>
+  <Text style={styles.requestDesc} numberOfLines={2}>
+    {selectedRequest.description}
+  </Text>
+
+  <Pressable style={styles.backIconBtn} onPress={closeWorkspace} hitSlop={10}>
+    <MaterialIcons name="keyboard-return" size={20} color={colors.primary} />
+  </Pressable>
+</View>
+                <View style={styles.badgeRow}>
+                  {(() => {
+                    const statusStyle = getStatusStyle(selectedRequest.status);
+                    return (
+                      <View style={[styles.statusPill, { backgroundColor: statusStyle.bg }]}>
+                        <Text style={[styles.statusText, { color: statusStyle.text }]}>
+                          {formatRequestStatus(selectedRequest.status)}
+                        </Text>
+                      </View>
+                    );
+                  })()}
+                  <View style={[styles.statusPill, { backgroundColor: "#eff6ff" }]}>
+                    <Text style={[styles.statusText, { color: "#2563eb" }]}>
+                      {formatDateTime(selectedRequest.createdAt)}
+                    </Text>
+                  </View>
+                  <View style={[styles.statusPill, { backgroundColor: "#f0f4ff" }]}>
+                    <Text style={[styles.statusText, { color: "#64748b" }]}>
+                      Khách: {getCustomerName(selectedRequest.customerId)}
+                    </Text>
+                  </View>
+                </View>
               </View>
-              <View style={styles.badgeRow}>
-                <StatusBadge
-                  label={formatRequestStatus(selectedRequest.status)}
-                  tone={getStatusTone(selectedRequest.status)}
-                />
-                <StatusBadge label={formatDateTime(selectedRequest.createdAt)} tone="primary" />
-                <StatusBadge
-                  label={`Khách: ${getCustomerName(selectedRequest.customerId)}`}
-                  tone="neutral"
-                />
-              </View>
-            </SectionCard>
 
-            <SectionCard
-              title="Thông tin yêu cầu"
-              subtitle="Ngữ cảnh đầy đủ như trang yêu cầu để staff đối chiếu ngay trên màn điều phối"
-            >
-              <View style={styles.requestDetailStack}>
-                <View style={styles.requestDetailCard}>
+              {/* Workspace: request details */}
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Thông tin yêu cầu</Text>
+                <View style={styles.detailCard}>
                   <Text style={styles.subTitle}>Thông tin chính</Text>
-                  <Text style={styles.meta}>Mã yêu cầu: {formatShortId(selectedRequest.id)}</Text>
-                  <Text style={styles.meta}>Khách hàng: {getCustomerName(selectedRequest.customerId)}</Text>
-                  <Text style={styles.meta}>Tạo lúc: {formatDateTime(selectedRequest.createdAt)}</Text>
-                  <Text style={styles.meta}>Độ phức tạp: Mức {selectedRequestLevel}</Text>
-                  <Text style={styles.meta}>
-                    Dịch vụ khách chọn: {getRequestedServiceLabel(selectedRequest)}
-                  </Text>
-                  <Text style={styles.meta}>
-                    Service staff đang áp dụng: {selectedService?.name || "Chưa chọn"}
-                  </Text>
-                  <Text style={styles.meta}>
-                    Chi phí ước tính hiện tại: {getEstimatedCostLabel(selectedRequest)}
-                  </Text>
-                  <Text style={styles.meta}>
-                    Thợ hiện tại: {getAgentName(selectedRequest.assignedProviderId)}
-                  </Text>
+                  <Text style={styles.metaText}>Mã yêu cầu: {formatShortId(selectedRequest.id)}</Text>
+                  <Text style={styles.metaText}>Khách hàng: {getCustomerName(selectedRequest.customerId)}</Text>
+                  <Text style={styles.metaText}>Tạo lúc: {formatDateTime(selectedRequest.createdAt)}</Text>
+                  <Text style={styles.metaText}>Độ phức tạp: Mức {selectedRequestLevel}</Text>
+                  <Text style={styles.metaText}>Dịch vụ khách chọn: {getRequestedServiceLabel(selectedRequest)}</Text>
+                  <Text style={styles.metaText}>Service staff đang áp dụng: {selectedService?.name || "Chưa chọn"}</Text>
+                  <Text style={styles.metaText}>Chi phí ước tính hiện tại: {getEstimatedCostLabel(selectedRequest)}</Text>
+                  <Text style={styles.metaText}>Thợ hiện tại: {getAgentName(selectedRequest.assignedProviderId)}</Text>
                 </View>
 
-                <View style={styles.requestDetailCard}>
+                <View style={styles.detailCard}>
                   <Text style={styles.subTitle}>Hiện trường và phân tích</Text>
-                  <Text style={styles.meta}>
+                  <Text style={styles.metaText}>
                     Địa chỉ: {selectedRequest.addressText || "Khách hàng chưa nhập địa chỉ cho yêu cầu này."}
                   </Text>
-                  <Text style={styles.meta}>
+                  <Text style={styles.metaText}>
                     AI báo giá: {getAiValueLabel(selectedRequest.estimatedPrice, selectedRequest.wasAnalyzedByAI)}
                   </Text>
-                  <Text style={styles.meta}>
+                  <Text style={styles.metaText}>
                     AI dự kiến: {getAiValueLabel(selectedRequest.estimatedDuration, selectedRequest.wasAnalyzedByAI)}
                   </Text>
                   {selectedRequest.ocrExtractedText ? (
-                    <Text style={styles.meta}>Nội dung từ ảnh: {selectedRequest.ocrExtractedText}</Text>
+                    <Text style={styles.metaText}>Nội dung từ ảnh: {selectedRequest.ocrExtractedText}</Text>
                   ) : null}
+                </View>
+
+                <View style={styles.actionGroup}>
+                  {selectedRequest.assignedProviderId ? (
+                    <ActionButton
+                      label="Xem lịch sử phân công"
+                      onPress={() => navigation.navigate("DispatchHistory", { requestId: selectedRequest.id })}
+                      variant="secondary"
+                    />
+                  ) : null}
+                  <ActionButton
+                    label={loading ? "Đang làm mới..." : "Làm mới dữ liệu"}
+                    onPress={() => void loadInitialData()}
+                    disabled={loading}
+                    variant="secondary"
+                  />
                 </View>
               </View>
 
-              <View style={styles.actions}>
-                {selectedRequest.assignedProviderId ? (
-                  <ActionButton
-                    label="Xem lịch sử phân công"
-                    onPress={() => navigation.navigate("DispatchHistory", { requestId: selectedRequest.id })}
-                    variant="secondary"
-                  />
+              {/* Workspace: dispatch actions */}
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Thao tác điều phối</Text>
+                <View style={styles.chipRow}>
+                  {(Object.keys(workspaceTabLabels) as WorkspaceTab[]).map((tab) => {
+                    const active = activeTab === tab;
+                    return (
+                      <Pressable key={tab} style={[styles.chip, active && styles.chipActive]} onPress={() => setActiveTab(tab)}>
+                        <Text style={[styles.chipText, active && styles.chipTextActive]}>{workspaceTabLabels[tab]}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                {activeTab === "overview" ? (
+                  <View style={styles.panelStack}>
+                    <Text style={styles.metaText}>Trạng thái hiện tại: {formatRequestStatus(selectedRequest.status)}</Text>
+                    <Text style={styles.metaText}>Service đang áp dụng: {selectedService?.name || "Chưa chọn"}</Text>
+                    <Text style={styles.metaText}>Thợ đang nhắm tới: {selectedAgentMatch?.agent.fullName || "Chưa chọn"}</Text>
+                    <View style={styles.actionGroup}>
+                      {canEvaluateComplexity(selectedRequest) ? (
+                        <ActionButton label="Đánh giá độ khó" onPress={() => setActiveTab("complexity")} variant="secondary" />
+                      ) : null}
+                      <ActionButton label="Chọn service" onPress={() => setActiveTab("service")} variant="secondary" />
+                      <ActionButton
+                        label="Chọn thợ"
+                        onPress={() => setActiveTab(selectedServiceId ? "agent" : "service")}
+                        variant="secondary"
+                      />
+                    </View>
+                  </View>
                 ) : null}
-                <ActionButton
-                  label={loading ? "Đang làm mới..." : "Làm mới dữ liệu"}
-                  onPress={() => void loadInitialData()}
-                  disabled={loading}
-                  variant="secondary"
-                />
-              </View>
-            </SectionCard>
 
-            <SectionCard
-              title="Thao tác điều phối"
-              subtitle="Đi theo từng bước ngay trong màn chi tiết này, không còn queue và workspace nằm chung một trang dài"
-            >
-              <View style={styles.tabRow}>
-                {(Object.keys(workspaceTabLabels) as WorkspaceTab[]).map((tab) => {
-                  const active = activeTab === tab;
-                  return (
-                    <Pressable
-                      key={tab}
-                      style={[styles.tabChip, active && styles.tabChipActive]}
-                      onPress={() => setActiveTab(tab)}
-                    >
-                      <Text style={[styles.tabText, active && styles.tabTextActive]}>
-                        {workspaceTabLabels[tab]}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              {activeTab === "overview" ? (
-                <View style={styles.panelStack}>
-                  <Text style={styles.meta}>
-                    Trạng thái hiện tại: {formatRequestStatus(selectedRequest.status)}
-                  </Text>
-                  <Text style={styles.meta}>
-                    Service đang áp dụng: {selectedService?.name || "Chưa chọn"}
-                  </Text>
-                  <Text style={styles.meta}>
-                    Thợ đang nhắm tới: {selectedAgentMatch?.agent.fullName || "Chưa chọn"}
-                  </Text>
-                  <View style={styles.actions}>
-                    {canEvaluateComplexity(selectedRequest) ? (
-                      <ActionButton
-                        label="Đánh giá độ khó"
-                        onPress={() => setActiveTab("complexity")}
-                        variant="secondary"
-                      />
+                {activeTab === "complexity" ? (
+                  <View style={styles.panelStack}>
+                    <Text style={styles.metaText}>
+                      {selectedRequest.status === "PENDING_REVIEW"
+                        ? "Bạn có thể đánh giá lại độ phức tạp trước khi phân công."
+                        : selectedRequest.status === "CREATED"
+                          ? "Hãy đánh giá độ phức tạp trước khi phân công thợ."
+                          : "Yêu cầu khẩn hiện chưa có bước đánh giá riêng trên màn này."}
+                    </Text>
+                    <View style={styles.chipRow}>
+                      {complexityLevels.map((level) => {
+                        const active = level === complexityLevel;
+                        return (
+                          <Pressable key={level} style={[styles.chip, active && styles.chipActive]} onPress={() => setComplexityLevel(level)}>
+                            <Text style={[styles.chipText, active && styles.chipTextActive]}>Mức {level}</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                    <ActionButton
+                      label={
+                        loading
+                          ? "Đang đánh giá..."
+                          : selectedRequest.status === "PENDING_REVIEW"
+                            ? "Đánh giá lại độ phức tạp"
+                            : selectedRequest.status === "CREATED"
+                              ? "Đánh giá độ phức tạp"
+                              : "Không áp dụng cho trạng thái này"
+                      }
+                      onPress={() => void handleEvaluateComplexity()}
+                      disabled={loading || !canEvaluateComplexity(selectedRequest)}
+                      variant="secondary"
+                    />
+                    {canAssignProvider(selectedRequest) ? (
+                      <ActionButton label="Tiếp tục qua service" onPress={() => setActiveTab("service")} variant="secondary" />
                     ) : null}
-                    <ActionButton
-                      label="Chọn service"
-                      onPress={() => setActiveTab("service")}
-                      variant="secondary"
-                    />
-                    <ActionButton
-                      label="Chọn thợ"
-                      onPress={() => setActiveTab(selectedServiceId ? "agent" : "service")}
-                      variant="secondary"
-                    />
                   </View>
-                </View>
-              ) : null}
+                ) : null}
 
-              {activeTab === "complexity" ? (
-                <View style={styles.panelStack}>
-                  <Text style={styles.meta}>
-                    {selectedRequest.status === "PENDING_REVIEW"
-                      ? "Bạn có thể đánh giá lại độ phức tạp trước khi phân công."
-                      : selectedRequest.status === "CREATED"
-                        ? "Hãy đánh giá độ phức tạp trước khi phân công thợ."
-                        : "Yêu cầu khẩn hiện chưa có bước đánh giá riêng trên màn này."}
-                  </Text>
-                  <View style={styles.levelRow}>
-                    {complexityLevels.map((level) => {
-                      const active = level === complexityLevel;
-                      return (
-                        <Pressable
-                          key={level}
-                          style={[styles.levelChip, active && styles.levelChipActive]}
-                          onPress={() => setComplexityLevel(level)}
-                        >
-                          <Text style={[styles.levelText, active && styles.levelTextActive]}>
-                            Mức {level}
+                {activeTab === "service" ? (
+                  <View style={styles.panelStack}>
+                    {!canAssignProvider(selectedRequest) ? (
+                      <>
+                        <Text style={styles.warningText}>Staff cần đánh giá độ phức tạp trước khi chọn service.</Text>
+                        <ActionButton label="Quay lại đánh giá độ khó" onPress={() => setActiveTab("complexity")} variant="secondary" />
+                      </>
+                    ) : services.length > 0 ? (
+                      <>
+                        {selectedService ? (
+                          <View style={styles.selectedCard}>
+                            <Text style={styles.selectedTitle}>Đang áp dụng: {selectedService.name}</Text>
+                            <View style={styles.badgeRow}>
+                              <View style={[styles.statusPill, { backgroundColor: "#eff6ff" }]}>
+                                <Text style={[styles.statusText, { color: "#2563eb" }]}>
+                                  {formatCurrency(selectedService.basePrice)}
+                                </Text>
+                              </View>
+                              <View style={[styles.statusPill, { backgroundColor: "#f0f4ff" }]}>
+                                <Text style={[styles.statusText, { color: "#64748b" }]}>
+                                  {selectedService.estimatedDuration} phút
+                                </Text>
+                              </View>
+                              {!selectedService.isActive ? (
+                                <View style={[styles.statusPill, { backgroundColor: "#fef2f2" }]}>
+                                  <Text style={[styles.statusText, { color: "#dc2626" }]}>Tạm ngưng</Text>
+                                </View>
+                              ) : null}
+                            </View>
+                          </View>
+                        ) : null}
+                        <View style={styles.optionStack}>
+                          {services.map((service) => (
+                            <Pressable
+                              key={service.id}
+                              style={[styles.optionCard, selectedServiceId === service.id && styles.optionCardActive]}
+                              onPress={() => handleSelectService(service)}
+                            >
+                              <Text style={styles.selectedTitle}>{service.name}</Text>
+                              <Text style={styles.metaText}>{service.description || "Chưa có mô tả"}</Text>
+                              <Text style={styles.metaText}>Giá cơ sở: {formatCurrency(service.basePrice)}</Text>
+                              <Text style={styles.metaText}>Thời gian chuẩn: {service.estimatedDuration} phút</Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                        <ActionButton label="Tiếp tục qua chọn thợ" onPress={() => setActiveTab("agent")} variant="secondary" />
+                      </>
+                    ) : (
+                      <Text style={styles.metaText}>Danh mục này chưa có service đang hoạt động để staff chọn.</Text>
+                    )}
+                  </View>
+                ) : null}
+
+                {activeTab === "agent" ? (
+                  <View style={styles.panelStack}>
+                    {!canAssignProvider(selectedRequest) ? (
+                      <>
+                        <Text style={styles.warningText}>Staff cần đánh giá độ phức tạp trước khi chọn thợ.</Text>
+                        <ActionButton label="Quay lại đánh giá độ khó" onPress={() => setActiveTab("complexity")} variant="secondary" />
+                      </>
+                    ) : !selectedServiceId ? (
+                      <>
+                        <Text style={styles.warningText}>Hãy chọn service áp dụng cho đơn trước khi xem gợi ý thợ phù hợp.</Text>
+                        <ActionButton label="Quay lại chọn service" onPress={() => setActiveTab("service")} variant="secondary" />
+                      </>
+                    ) : agentMatches.length > 0 ? (
+                      <>
+                        {readyAgentMatches.length > 0 ? (
+                          <View style={styles.optionStack}>
+                            <Text style={styles.subTitle}>Có thể gán ngay</Text>
+                            {readyAgentMatches.map((match) => (
+                              <View key={match.agent.id} style={styles.agentGroup}>
+                                <Pressable
+                                  style={[styles.optionCard, selectedAgentId === match.agent.id && styles.optionCardActive]}
+                                  onPress={() => handleSelectAgent(match)}
+                                >
+                                  <Text style={styles.selectedTitle}>{match.agent.fullName}</Text>
+                                  <Text style={styles.metaText}>Mã thợ: {formatShortId(match.agent.id)}</Text>
+                                  <Text style={styles.metaText}>Mức tối đa: {match.capability?.maxComplexity?.level ?? "?"}</Text>
+                                  <Text style={styles.metaText}>Điểm gợi ý: {match.score}</Text>
+                                  <Text style={styles.metaText}>{match.notes.join(" · ")}</Text>
+                                </Pressable>
+                                {selectedAgentId === match.agent.id ? renderActionPanel() : null}
+                              </View>
+                            ))}
+                          </View>
+                        ) : null}
+
+                        {reviewAgentMatches.length > 0 ? (
+                          <View style={styles.optionStack}>
+                            <Text style={styles.subTitle}>Cần rà soát thêm</Text>
+                            <Text style={styles.metaText}>
+                              Các thợ dưới đây cùng danh mục nhưng chưa đủ mức độ phức tạp hoặc chưa gắn đúng dịch vụ.
+                            </Text>
+                            {reviewAgentMatches.map((match) => (
+                              <View key={match.agent.id} style={styles.agentGroup}>
+                                <Pressable
+                                  style={[
+                                    styles.optionCard,
+                                    styles.optionCardMuted,
+                                    selectedAgentId === match.agent.id && styles.optionCardActive
+                                  ]}
+                                  onPress={() => handleSelectAgent(match)}
+                                >
+                                  <Text style={styles.selectedTitle}>{match.agent.fullName}</Text>
+                                  <Text style={styles.metaText}>Mã thợ: {formatShortId(match.agent.id)}</Text>
+                                  <Text style={styles.metaText}>Mức tối đa: {match.capability?.maxComplexity?.level ?? "?"}</Text>
+                                  <Text style={styles.metaText}>Điểm tham khảo: {match.score}</Text>
+                                  <Text style={styles.metaText}>{match.notes.join(" · ")}</Text>
+                                </Pressable>
+                                {selectedAgentId === match.agent.id ? renderActionPanel() : null}
+                              </View>
+                            ))}
+                          </View>
+                        ) : null}
+                      </>
+                    ) : (
+                      <>
+                        <Text style={styles.metaText}>
+                          {activeAgents.length === 0
+                            ? "Hiện chưa có thợ nào đang hoạt động để staff phân công."
+                            : activeAgentsWithCapabilities.length === 0
+                              ? "Danh sách thợ đã tải nhưng hệ thống chưa trả về dữ liệu năng lực của thợ."
+                              : "Chưa có thợ nào cùng danh mục cho đơn này. Hãy kiểm tra lại hồ sơ năng lực của thợ."}
+                        </Text>
+                        {activeAgents.length > 0 && activeAgentsWithCapabilities.length === 0 ? (
+                          <Text style={styles.warningText}>
+                            Đây thường là dấu hiệu backend chưa trả kèm capabilities cho query thợ. Hãy chạy backend mới nhất rồi tải lại màn hình.
                           </Text>
-                        </Pressable>
-                      );
-                    })}
+                        ) : null}
+                      </>
+                    )}
                   </View>
-                  <ActionButton
-                    label={
-                      loading
-                        ? "Đang đánh giá..."
-                        : selectedRequest.status === "PENDING_REVIEW"
-                          ? "Đánh giá lại độ phức tạp"
-                          : selectedRequest.status === "CREATED"
-                            ? "Đánh giá độ phức tạp"
-                            : "Không áp dụng cho trạng thái này"
-                    }
-                    onPress={() => void handleEvaluateComplexity()}
-                    disabled={loading || !canEvaluateComplexity(selectedRequest)}
-                    variant="secondary"
-                  />
-                  {canAssignProvider(selectedRequest) ? (
-                    <ActionButton
-                      label="Tiếp tục qua service"
-                      onPress={() => setActiveTab("service")}
-                      variant="secondary"
-                    />
-                  ) : null}
+                ) : null}
+              </View>
+            </>
+          ) : (
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Đang mở điều phối</Text>
+              <Text style={styles.metaText}>
+                {loading ? "Đang tải thông tin yêu cầu..." : "Không tìm thấy yêu cầu này trong luồng điều phối hiện tại."}
+              </Text>
+              <ActionButton label="Quay lại hàng chờ" onPress={closeWorkspace} variant="secondary" />
+            </View>
+          )
+        ) : (
+          <>
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Tổng quan điều phối</Text>
+              <View style={styles.countRow}>
+                <View style={styles.countBadge}>
+                  <Text style={styles.countNumber}>{dispatchRequests.length}</Text>
+                  <Text style={styles.countLabel}>Đơn chờ</Text>
+                </View>
+                <View style={styles.countBadge}>
+                  <Text style={styles.countNumber}>{activeAgents.length}</Text>
+                  <Text style={styles.countLabel}>Thợ online</Text>
+                </View>
+                <View style={styles.countBadge}>
+                  <Text style={styles.countNumber}>{services.length}</Text>
+                  <Text style={styles.countLabel}>Service</Text>
+                </View>
+              </View>
+              {loading ? (
+                <View style={styles.loadingRow}>
+                  <ActivityIndicator color={colors.primary} size="small" />
+                  <Text style={styles.loadingText}>Đang đồng bộ...</Text>
                 </View>
               ) : null}
+              <ActionButton
+                label={loading ? "Đang làm mới..." : "Làm mới dữ liệu"}
+                onPress={() => void loadInitialData()}
+                disabled={loading}
+                variant="secondary"
+              />
+            </View>
 
-              {activeTab === "service" ? (
-                <View style={styles.panelStack}>
-                  {!canAssignProvider(selectedRequest) ? (
-                    <>
-                      <Text style={styles.warningText}>
-                        Staff cần đánh giá độ phức tạp trước khi chọn service.
-                      </Text>
-                      <ActionButton
-                        label="Quay lại đánh giá độ khó"
-                        onPress={() => setActiveTab("complexity")}
-                        variant="secondary"
-                      />
-                    </>
-                  ) : services.length > 0 ? (
-                    <>
-                      {selectedService ? (
-                        <View style={styles.selectedSummaryCard}>
-                          <Text style={styles.selectionTitle}>Đang áp dụng: {selectedService.name}</Text>
-                          <View style={styles.badgeRow}>
-                            <StatusBadge label={formatCurrency(selectedService.basePrice)} tone="primary" />
-                            <StatusBadge label={`${selectedService.estimatedDuration} phút`} tone="neutral" />
-                            {!selectedService.isActive ? (
-                              <StatusBadge label="Tạm ngưng" tone="danger" />
-                            ) : null}
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Hàng chờ điều phối ({dispatchRequests.length})</Text>
+              <Text style={styles.hintText}>Chạm vào một yêu cầu để mở màn điều phối riêng</Text>
+              <View style={styles.queueList}>
+                {dispatchRequests.length > 0 ? (
+                  dispatchRequests.map((request) => {
+                    const statusStyle = getStatusStyle(request.status);
+                    return (
+                      <Pressable
+                        key={request.id}
+                        style={[styles.queueCard, selectedRequestId === request.id && styles.queueCardActive]}
+                        onPress={() => handleSelectRequest(request)}
+                      >
+                        <View style={styles.queueHeader}>
+                          <Text style={styles.queueTitle}>{request.description}</Text>
+                          <View style={[styles.statusPill, { backgroundColor: statusStyle.bg }]}>
+                            <Text style={[styles.statusText, { color: statusStyle.text }]}>
+                              {formatRequestStatus(request.status)}
+                            </Text>
                           </View>
                         </View>
-                      ) : null}
-                      <View style={styles.optionStack}>
-                        {services.map((service) => (
-                          <Pressable
-                            key={service.id}
-                            style={[
-                              styles.optionCard,
-                              selectedServiceId === service.id && styles.optionCardActive
-                            ]}
-                            onPress={() => handleSelectService(service)}
-                          >
-                            <Text style={styles.selectionTitle}>{service.name}</Text>
-                            <Text style={styles.meta}>{service.description || "Chưa có mô tả"}</Text>
-                            <Text style={styles.meta}>Giá cơ sở: {formatCurrency(service.basePrice)}</Text>
-                            <Text style={styles.meta}>Thời gian chuẩn: {service.estimatedDuration} phút</Text>
-                          </Pressable>
-                        ))}
-                      </View>
-                      <ActionButton
-                        label="Tiếp tục qua chọn thợ"
-                        onPress={() => setActiveTab("agent")}
-                        variant="secondary"
-                      />
-                    </>
-                  ) : (
-                    <Text style={styles.meta}>Danh mục này chưa có service đang hoạt động để staff chọn.</Text>
-                  )}
-                </View>
-              ) : null}
-
-              {activeTab === "agent" ? (
-                <View style={styles.panelStack}>
-                  {!canAssignProvider(selectedRequest) ? (
-                    <>
-                      <Text style={styles.warningText}>
-                        Staff cần đánh giá độ phức tạp trước khi chọn thợ.
-                      </Text>
-                      <ActionButton
-                        label="Quay lại đánh giá độ khó"
-                        onPress={() => setActiveTab("complexity")}
-                        variant="secondary"
-                      />
-                    </>
-                  ) : !selectedServiceId ? (
-                    <>
-                      <Text style={styles.warningText}>
-                        Hãy chọn service áp dụng cho đơn trước khi xem gợi ý thợ phù hợp.
-                      </Text>
-                      <ActionButton
-                        label="Quay lại chọn service"
-                        onPress={() => setActiveTab("service")}
-                        variant="secondary"
-                      />
-                    </>
-                  ) : agentMatches.length > 0 ? (
-                    <>
-                      {readyAgentMatches.length > 0 ? (
-                        <View style={styles.optionStack}>
-                          <Text style={styles.subTitle}>Có thể gán ngay</Text>
-                          {readyAgentMatches.map((match) => (
-                            <View key={match.agent.id} style={styles.agentGroup}>
-                              <Pressable
-                                style={[
-                                  styles.optionCard,
-                                  selectedAgentId === match.agent.id && styles.optionCardActive
-                                ]}
-                                onPress={() => handleSelectAgent(match)}
-                              >
-                                <Text style={styles.selectionTitle}>{match.agent.fullName}</Text>
-                                <Text style={styles.meta}>Mã thợ: {formatShortId(match.agent.id)}</Text>
-                                <Text style={styles.meta}>
-                                  Mức tối đa: {match.capability?.maxComplexity?.level ?? "?"}
-                                </Text>
-                                <Text style={styles.meta}>Điểm gợi ý: {match.score}</Text>
-                                <Text style={styles.meta}>{match.notes.join(" · ")}</Text>
-                              </Pressable>
-                              {selectedAgentId === match.agent.id ? renderActionPanel() : null}
-                            </View>
-                          ))}
+                        <Text style={styles.metaText}>Khách hàng: {getCustomerName(request.customerId)}</Text>
+                        <Text style={styles.metaText}>Độ phức tạp: Mức {request.complexity?.level ?? 3}</Text>
+                        <Text style={styles.metaText}>Chi phí ước tính: {getEstimatedCostLabel(request)}</Text>
+                        <Text style={styles.metaText}>Thợ đã gán: {getAgentName(request.assignedProviderId)}</Text>
+                        <Text style={styles.metaText}>Địa chỉ: {request.addressText || "Khách hàng chưa nhập địa chỉ cho yêu cầu này."}</Text>
+                        <Text style={styles.hintText}>Chạm vào card để mở màn điều phối riêng.</Text>
+                        <View style={styles.badgeRow}>
+                          <View style={[styles.statusPill, { backgroundColor: "#eff6ff" }]}>
+                            <Text style={[styles.statusText, { color: "#2563eb" }]}>{formatDateTime(request.createdAt)}</Text>
+                          </View>
                         </View>
-                      ) : null}
-
-                      {reviewAgentMatches.length > 0 ? (
-                        <View style={styles.optionStack}>
-                          <Text style={styles.subTitle}>Cần rà soát thêm</Text>
-                          <Text style={styles.meta}>
-                            Các thợ dưới đây cùng danh mục nhưng chưa đủ mức độ phức tạp hoặc chưa gắn đúng dịch vụ.
-                          </Text>
-                          {reviewAgentMatches.map((match) => (
-                            <View key={match.agent.id} style={styles.agentGroup}>
-                              <Pressable
-                                style={[
-                                  styles.optionCard,
-                                  styles.optionCardMuted,
-                                  selectedAgentId === match.agent.id && styles.optionCardActive
-                                ]}
-                                onPress={() => handleSelectAgent(match)}
-                              >
-                                <Text style={styles.selectionTitle}>{match.agent.fullName}</Text>
-                                <Text style={styles.meta}>Mã thợ: {formatShortId(match.agent.id)}</Text>
-                                <Text style={styles.meta}>
-                                  Mức tối đa: {match.capability?.maxComplexity?.level ?? "?"}
-                                </Text>
-                                <Text style={styles.meta}>Điểm tham khảo: {match.score}</Text>
-                                <Text style={styles.meta}>{match.notes.join(" · ")}</Text>
-                              </Pressable>
-                              {selectedAgentId === match.agent.id ? renderActionPanel() : null}
-                            </View>
-                          ))}
-                        </View>
-                      ) : null}
-                    </>
-                  ) : (
-                    <>
-                      <Text style={styles.meta}>
-                        {activeAgents.length === 0
-                          ? "Hiện chưa có thợ nào đang hoạt động để staff phân công."
-                          : activeAgentsWithCapabilities.length === 0
-                            ? "Danh sách thợ đã tải nhưng hệ thống chưa trả về dữ liệu năng lực của thợ."
-                            : "Chưa có thợ nào cùng danh mục cho đơn này. Hãy kiểm tra lại hồ sơ năng lực của thợ."}
-                      </Text>
-                      {activeAgents.length > 0 && activeAgentsWithCapabilities.length === 0 ? (
-                        <Text style={styles.warningText}>
-                          Đây thường là dấu hiệu backend chưa trả kèm capabilities cho query thợ. Hãy chạy backend mới nhất rồi tải lại màn hình.
-                        </Text>
-                      ) : null}
-                    </>
-                  )}
-                </View>
-              ) : null}
-            </SectionCard>
+                      </Pressable>
+                    );
+                  })
+                ) : (
+                  <Text style={styles.metaText}>Hiện chưa có yêu cầu nào ở luồng staff cần xử lý.</Text>
+                )}
+              </View>
+            </View>
           </>
-        ) : (
-          <SectionCard tone="muted" title="Đang mở điều phối">
-            <Text style={styles.meta}>
-              {loading
-                ? "Đang tải thông tin yêu cầu..."
-                : "Không tìm thấy yêu cầu này trong luồng điều phối hiện tại."}
-            </Text>
-            <ActionButton
-              label="Quay lại hàng chờ"
-              onPress={closeWorkspace}
-              variant="secondary"
-            />
-          </SectionCard>
-        )
-      ) : (
-        <>
-          <SectionCard tone="primary" title="Tổng quan điều phối">
-            <View style={styles.metricGrid}>
-              <MetricTile label="Đơn chờ xử lý" value={dispatchRequests.length} helper="Trong luồng staff" tone="warning" />
-              <MetricTile label="Thợ hoạt động" value={activeAgents.length} helper="Có thể được gán" tone="primary" />
-              <MetricTile label="Service khả dụng" value={services.length} helper="Theo đơn đang chọn" tone="success" />
-            </View>
-            <ActionButton
-              label={loading ? "Đang làm mới..." : "Làm mới dữ liệu"}
-              onPress={() => void loadInitialData()}
-              disabled={loading}
-              variant="secondary"
-            />
-          </SectionCard>
+        )}
 
-          <SectionCard
-            title={`Hàng chờ điều phối (${dispatchRequests.length})`}
-            subtitle="Chạm vào một yêu cầu để mở màn điều phối riêng trong tab này"
-          >
-            <View style={styles.queueList}>
-              {dispatchRequests.length > 0 ? (
-                dispatchRequests.map((request) => (
-                  <Pressable
-                    key={request.id}
-                    style={[
-                      styles.queueCard,
-                      selectedRequestId === request.id && styles.queueCardActive
-                    ]}
-                    onPress={() => handleSelectRequest(request)}
-                  >
-                    <View style={styles.queueHeader}>
-                      <Text style={styles.queueTitle}>{request.description}</Text>
-                      <StatusBadge
-                        label={formatRequestStatus(request.status)}
-                        tone={getStatusTone(request.status)}
-                      />
-                    </View>
-                    <View style={styles.badgeRow}>
-                      <StatusBadge label={formatShortId(request.id)} tone="neutral" />
-                      <StatusBadge label={formatDateTime(request.createdAt)} tone="primary" />
-                    </View>
-                    <Text style={styles.meta}>Khách hàng: {getCustomerName(request.customerId)}</Text>
-                    <Text style={styles.meta}>Độ phức tạp: Mức {request.complexity?.level ?? 3}</Text>
-                    <Text style={styles.meta}>Chi phí ước tính: {getEstimatedCostLabel(request)}</Text>
-                    <Text style={styles.meta}>Thợ đã gán: {getAgentName(request.assignedProviderId)}</Text>
-                    <Text style={styles.meta}>
-                      Địa chỉ: {request.addressText || "Khách hàng chưa nhập địa chỉ cho yêu cầu này."}
-                    </Text>
-                    <Text style={styles.meta}>Chạm vào card để mở màn điều phối riêng.</Text>
-                  </Pressable>
-                ))
-              ) : (
-                <Text style={styles.meta}>Hiện chưa có yêu cầu nào ở luồng staff cần xử lý.</Text>
-              )}
-            </View>
-          </SectionCard>
-        </>
-      )}
-    </ScreenLayout>
+        <View style={{ height: 80 }} />
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  metricGrid: {
+  safeArea: { flex: 1, backgroundColor: "#f0f4ff" },
+  scroll: { flex: 1 },
+  content: { paddingTop: 16, paddingBottom: 20, gap: 14 },
+
+  header: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10
-  },
-  queueList: {
-    gap: 10
-  },
-  queueCard: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderRadius: 28,
+    backgroundColor: "rgba(255,255,255,0.92)",
     borderWidth: 1,
-    borderColor: "rgba(100, 116, 139, 0.16)",
+    borderColor: "rgba(255,255,255,0.55)",
+    gap: 14,
+    alignItems: "flex-start",
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
+    marginBottom: 8,
+    marginHorizontal: 20
+  },
+  headerLeft: { flexDirection: "row", gap: 12, flex: 1, alignItems: "flex-start" },
+  logoBox: { width: 50, height: 50, borderRadius: 14, overflow: "hidden", flexShrink: 0 },
+  headerTitle: { fontSize: 18, fontWeight: "700", color: "#0f172a" },
+  headerSub: { fontSize: 12, color: "#64748b", marginTop: 2 },
+
+  errorBox: {
+    marginHorizontal: 20,
+    backgroundColor: "#fef2f2",
+    borderWidth: 1,
+    borderColor: "#fecaca",
+    borderRadius: 12,
+    padding: 12
+  },
+  errorText: { fontSize: 13, color: colors.danger },
+  successBox: {
+    marginHorizontal: 20,
+    backgroundColor: "#eff6ff",
+    borderWidth: 1,
+    borderColor: "#bfdbfe",
+    borderRadius: 12,
+    padding: 12
+  },
+  successText: { fontSize: 13, color: "#1d4ed8", fontWeight: "600" },
+  loadingRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 8 },
+  loadingText: { fontSize: 13, color: "#64748b" },
+
+  card: {
+    marginHorizontal: 20,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
     borderRadius: 20,
-    padding: 13,
-    gap: 8,
-    backgroundColor: colors.surfaceRaised
+    padding: 16,
+    gap: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2
   },
-  queueCardActive: {
+  cardTitle: { fontSize: 15, fontWeight: "800", color: "#0f172a" },
+
+  countRow: { flexDirection: "row", gap: 10 },
+  countBadge: {
+    flex: 1,
+    backgroundColor: "#f0f4ff",
+    borderRadius: 14,
+    padding: 14,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#e2e8f0"
+  },
+  countNumber: { fontSize: 20, fontWeight: "800", color: colors.text },
+  countLabel: { fontSize: 11, color: "#64748b", marginTop: 2 },
+
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chip: {
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    backgroundColor: "#f0f4ff"
+  },
+  chipActive: {
     borderColor: colors.primary,
-    backgroundColor: colors.primarySoftAlt
+    backgroundColor: "#eff6ff"
   },
-  queueHeader: {
+  chipText: { color: "#64748b", fontSize: 12, fontWeight: "800" },
+  chipTextActive: { color: colors.primary },
+
+  badgeRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  statusPill: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  statusText: { fontSize: 10, fontWeight: "800" },
+  metaText: { fontSize: 12, color: "#64748b", lineHeight: 18 },
+  hintText: { fontSize: 12, color: "#94a3b8" },
+  warningText: { fontSize: 12, color: "#ca8a04", lineHeight: 18 },
+
+  workspaceTop: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 10
-  },
-  queueTitle: {
-    color: colors.text,
-    fontWeight: "800",
-    fontSize: 14,
-    lineHeight: 20,
-    flex: 1
-  },
-  badgeRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8
-  },
-  workspaceTopRow: {
+    alignItems: "center",
     gap: 12
   },
-  inlineChip: {
-    alignSelf: "flex-start",
+
+  backIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.primary,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: colors.surfaceRaised
+    backgroundColor: "#eff6ff",
+    alignItems: "center",
+    justifyContent: "center"
   },
-  inlineChipText: {
-    color: colors.primaryStrong,
-    fontSize: 12,
-    fontWeight: "800"
-  },
-  requestDetailStack: {
-    gap: 10
-  },
-  requestDetailCard: {
+
+  requestDesc: { fontSize: 14, fontWeight: "700", color: "#0f172a", lineHeight: 20 },
+
+  detailCard: {
+    backgroundColor: "#f0f4ff",
     borderWidth: 1,
-    borderColor: "rgba(100, 116, 139, 0.16)",
-    borderRadius: 20,
-    padding: 13,
-    gap: 6,
-    backgroundColor: colors.surfaceRaised
+    borderColor: "#e2e8f0",
+    borderRadius: 14,
+    padding: 12,
+    gap: 6
   },
-  tabRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8
-  },
-  tabChip: {
-    borderWidth: 1,
-    borderColor: "rgba(100, 116, 139, 0.18)",
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    backgroundColor: colors.surfaceRaised
-  },
-  tabChipActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySoft
-  },
-  tabText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: "800"
-  },
-  tabTextActive: {
-    color: colors.primaryStrong
-  },
-  panelStack: {
-    gap: 12
-  },
-  optionStack: {
-    gap: 10
-  },
+  subTitle: { color: "#0f172a", fontWeight: "800", fontSize: 14 },
+
+  actionGroup: { gap: 8 },
+  panelStack: { gap: 12 },
+  optionStack: { gap: 10 },
+
   optionCard: {
+    backgroundColor: "#f0f4ff",
     borderWidth: 1,
-    borderColor: "rgba(100, 116, 139, 0.16)",
-    borderRadius: 20,
-    padding: 13,
-    gap: 6,
-    backgroundColor: colors.surfaceRaised
+    borderColor: "#e2e8f0",
+    borderRadius: 14,
+    padding: 12,
+    gap: 6
   },
-  optionCardMuted: {
-    backgroundColor: colors.surfaceMuted
-  },
-  optionCardActive: {
+  optionCardMuted: { backgroundColor: "#f8fafc" },
+  optionCardActive: { borderColor: colors.primary, backgroundColor: "#eff6ff" },
+
+  selectedCard: {
+    borderWidth: 1,
     borderColor: colors.primary,
-    backgroundColor: colors.primarySoftAlt
-  },
-  selectedSummaryCard: {
-    borderWidth: 1,
-    borderColor: colors.primarySoft,
-    borderRadius: 20,
-    padding: 13,
+    borderRadius: 14,
+    padding: 12,
     gap: 8,
-    backgroundColor: colors.primarySoftAlt
+    backgroundColor: "#eff6ff"
   },
-  agentGroup: {
-    gap: 8
-  },
+  selectedTitle: { color: "#0f172a", fontWeight: "800", fontSize: 14, lineHeight: 20 },
+
+  agentGroup: { gap: 8 },
   actionPanel: {
     borderWidth: 1,
-    borderColor: colors.primarySoft,
-    borderRadius: 20,
+    borderColor: colors.primary,
+    borderRadius: 14,
     padding: 14,
     gap: 10,
-    backgroundColor: colors.surfaceMuted
+    backgroundColor: "#f0f4ff"
   },
-  actionTitle: {
-    color: colors.text,
-    fontWeight: "800",
-    fontSize: 14
-  },
-  selectionTitle: {
-    color: colors.text,
-    fontWeight: "800",
-    fontSize: 14,
-    lineHeight: 20
-  },
-  subTitle: {
-    color: colors.text,
-    fontWeight: "800",
-    fontSize: 14
-  },
-  levelRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
+  actionTitle: { color: "#0f172a", fontWeight: "800", fontSize: 14 },
+
+  queueList: { gap: 10 },
+  queueCard: {
+    backgroundColor: "#f0f4ff",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 14,
+    padding: 12,
     gap: 8
   },
-  levelChip: {
-    borderWidth: 1,
-    borderColor: "rgba(100, 116, 139, 0.18)",
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    backgroundColor: colors.surfaceRaised
-  },
-  levelChipActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySoft
-  },
-  levelText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: "800"
-  },
-  levelTextActive: {
-    color: colors.primaryStrong
-  },
-  actions: {
-    gap: 10
-  },
-  meta: {
-    color: colors.textMuted,
-    fontSize: 12,
-    lineHeight: 18
-  },
-  warningText: {
-    color: colors.warning,
-    fontSize: 12,
-    lineHeight: 18
-  },
-  error: {
-    color: colors.danger,
-    fontSize: 13,
-    lineHeight: 18
-  },
-  success: {
-    color: colors.success,
-    fontSize: 13,
-    lineHeight: 18
-  }
+  queueCardActive: { borderColor: colors.primary, backgroundColor: "#eff6ff" },
+  queueHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 10 },
+  queueTitle: { color: "#0f172a", fontWeight: "800", fontSize: 14, lineHeight: 20, flex: 1 }
 });

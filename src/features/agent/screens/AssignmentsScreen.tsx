@@ -7,6 +7,7 @@ import {
   Text,
   View
 } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "../../../app/theme/colors";
 import BrandLogo from "../../../shared/ui/BrandLogo";
@@ -309,17 +310,17 @@ export default function AssignmentsScreen() {
         {/* Alerts */}
         {!!error && (
           <View style={styles.errorBox}>
-            <Text style={styles.errorText}>⚠️ {error}</Text>
+            <Text style={styles.errorText}><MaterialIcons name="warning-amber" size={14} color={colors.danger} /> {error}</Text>
           </View>
         )}
         {!!success && (
           <View style={styles.successBox}>
-            <Text style={styles.successText}>✅ {success}</Text>
+            <Text style={styles.successText}><MaterialIcons name="check-circle" size={14} color="#1d4ed8" /> {success}</Text>
           </View>
         )}
         {!!bindingMessage && (
           <View style={styles.infoBox}>
-            <Text style={styles.infoText}>ℹ️ {bindingMessage}</Text>
+            <Text style={styles.infoText}><MaterialIcons name="info-outline" size={14} color="#1d4ed8" /> {bindingMessage}</Text>
           </View>
         )}
 
@@ -333,7 +334,7 @@ export default function AssignmentsScreen() {
               <Text style={styles.agentName}>{linkedServiceAgent?.fullName ?? "Chưa gắn hồ sơ"}</Text>
               <View style={[styles.availPill, isActive ? styles.availPillOn : styles.availPillOff]}>
                 <Text style={[styles.availPillText, isActive ? styles.availPillTextOn : styles.availPillTextOff]}>
-                  {!linkedServiceAgent ? "Chưa có hồ sơ thợ" : isActive ? "🟢 Đang nhận việc" : "⏸ Tạm ngưng"}
+                  {!linkedServiceAgent ? "Chưa có hồ sơ thợ" : isActive ? <><MaterialIcons name="fiber-manual-record" size={8} color="#16a34a" /> Đang nhận việc</> : <><MaterialIcons name="pause-circle-outline" size={14} color="#94a3b8" /> Tạm ngưng</>}
                 </Text>
               </View>
             </View>
@@ -366,7 +367,7 @@ export default function AssignmentsScreen() {
 
           {items.length === 0 && !loading ? (
             <View style={styles.emptyWrap}>
-              <Text style={styles.emptyEmoji}>📋</Text>
+              <MaterialIcons name="assignment" size={36} color="#94a3b8" />
               <Text style={styles.emptyText}>Chưa có công việc nào được phân công</Text>
             </View>
           ) : (
@@ -386,10 +387,10 @@ export default function AssignmentsScreen() {
                           {requestServiceNames[item.serviceRequestId] ?? "Dịch vụ"}
                         </Text>
                         <Text style={styles.assignmentMeta}>
-                          📅 {formatDateTime(item.assignedAt)}
+                          <MaterialIcons name="event" size={13} color="#64748b" /> {formatDateTime(item.assignedAt)}
                         </Text>
                         <Text style={styles.assignmentMeta}>
-                          💰 {formatCurrency(item.estimatedCost.amount, item.estimatedCost.currency)}
+                          <MaterialIcons name="attach-money" size={13} color="#64748b" /> {formatCurrency(item.estimatedCost.amount, item.estimatedCost.currency)}
                         </Text>
                       </View>
                     </View>
@@ -417,21 +418,21 @@ export default function AssignmentsScreen() {
               </View>
 
               {[
-                { icon: "👤", label: customerProfile?.fullName ?? formatShortId(detail.customerId) },
-                { icon: "📞", label: customerProfile?.phoneNumber || "-" },
+                { icon: "person-outline" as const, label: customerProfile?.fullName ?? formatShortId(detail.customerId) },
+                { icon: "phone" as const, label: customerProfile?.phoneNumber || "-" },
                 {
-                  icon: "🛠",
+                  icon: "build" as const,
                   label: detail.serviceDefinitionId
                     ? (serviceNamesById[detail.serviceDefinitionId] ?? formatShortId(detail.serviceDefinitionId))
                     : "-"
                 },
-                { icon: "📝", label: detail.description },
-                { icon: "⚡", label: `Độ phức tạp: ${detail.complexity?.level ?? "Chưa đánh giá"}` },
-                { icon: "💰", label: detail.estimatedCost ? formatCurrency(detail.estimatedCost.amount, detail.estimatedCost.currency) : "-" },
-                { icon: "📍", label: detail.addressText || "Khách hàng chưa nhập địa chỉ" }
+                { icon: "description" as const, label: detail.description },
+                { icon: "flash-on" as const, label: `Độ phức tạp: ${detail.complexity?.level ?? "Chưa đánh giá"}` },
+                { icon: "attach-money" as const, label: detail.estimatedCost ? formatCurrency(detail.estimatedCost.amount, detail.estimatedCost.currency) : "-" },
+                { icon: "place" as const, label: detail.addressText || "Khách hàng chưa nhập địa chỉ" }
               ].map(({ icon, label }, i) => (
                 <View key={i} style={styles.detailRow}>
-                  <Text style={styles.detailIcon}>{icon}</Text>
+                  <MaterialIcons name={icon} size={16} color="#64748b" />
                   <Text style={styles.detailText}>{label}</Text>
                 </View>
               ))}
@@ -444,7 +445,7 @@ export default function AssignmentsScreen() {
                     onPress={() => void handleStatusChange("IN_PROGRESS")}
                     disabled={loading}
                   >
-                    {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.actionBtnText}>▶ Bắt đầu làm việc</Text>}
+                    {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.actionBtnText}><MaterialIcons name="play-arrow" size={16} color="#fff" /> Bắt đầu làm việc</Text>}
                   </Pressable>
                 ) : null}
                 {detail.status === "IN_PROGRESS" ? (
@@ -453,12 +454,12 @@ export default function AssignmentsScreen() {
                     onPress={() => void handleStatusChange("COMPLETED")}
                     disabled={loading}
                   >
-                    {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.actionBtnText}>✅ Hoàn thành công việc</Text>}
+                    {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.actionBtnText}><MaterialIcons name="check-circle" size={16} color="#fff" /> Hoàn thành công việc</Text>}
                   </Pressable>
                 ) : null}
                 {detail.status === "COMPLETED" ? (
                   <View style={styles.completedBadge}>
-                    <Text style={styles.completedText}>✅ Công việc đã hoàn thành</Text>
+                    <Text style={styles.completedText}><MaterialIcons name="check-circle" size={14} color="#16a34a" /> Công việc đã hoàn thành</Text>
                   </View>
                 ) : null}
               </View>

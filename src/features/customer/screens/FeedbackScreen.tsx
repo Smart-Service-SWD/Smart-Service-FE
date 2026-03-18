@@ -11,6 +11,7 @@ import {
   TextInput,
   View
 } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "../../../app/theme/colors";
 import BrandLogo from "../../../shared/ui/BrandLogo";
@@ -220,7 +221,7 @@ export default function FeedbackScreen() {
 
         {/* Note */}
         <View style={styles.noteCard}>
-          <Text style={styles.noteText}>💡 Chỉ đánh giá yêu cầu đã hoàn thành · 5 sao = Rất hài lòng</Text>
+          <Text style={styles.noteText}><MaterialIcons name="lightbulb-outline" size={14} color="#1e40af" /> Chỉ đánh giá yêu cầu đã hoàn thành · 5 sao = Rất hài lòng</Text>
         </View>
 
         {/* Create feedback card */}
@@ -263,7 +264,7 @@ export default function FeedbackScreen() {
               <Text style={styles.emptyText}>
                 {completedRequests.length === 0
                   ? "Chưa có yêu cầu hoàn thành nào"
-                  : "Tất cả yêu cầu đã được đánh giá 🎉"}
+                  : <>Tất cả yêu cầu đã được đánh giá <MaterialIcons name="check-circle" size={14} color="#1d4ed8" /></>}
               </Text>
             </View>
           )}
@@ -271,7 +272,7 @@ export default function FeedbackScreen() {
           {selectedRequest && (
             <View style={styles.selectedBadge}>
               <Text style={styles.selectedBadgeText}>
-                ✅ Đang đánh giá: {selectedRequest.description}
+                <MaterialIcons name="check-circle" size={14} color="#1d4ed8" /> Đang đánh giá: {selectedRequest.description}
               </Text>
             </View>
           )}
@@ -287,7 +288,7 @@ export default function FeedbackScreen() {
                   style={styles.starBtn}
                 >
                   <Text style={[styles.starIcon, star <= ratingNum && styles.starActive]}>
-                    ★
+                    <MaterialIcons name={star <= ratingNum ? "star" : "star-border"} size={28} color={star <= ratingNum ? "#f59e0b" : "#e2e8f0"} />
                   </Text>
                 </Pressable>
               ))}
@@ -310,12 +311,12 @@ export default function FeedbackScreen() {
 
           {!!error && (
             <View style={styles.errorBox}>
-              <Text style={styles.errorText}>⚠️ {error}</Text>
+              <Text style={styles.errorText}><MaterialIcons name="warning-amber" size={14} color={colors.danger} /> {error}</Text>
             </View>
           )}
           {!!success && (
             <View style={styles.successBox}>
-              <Text style={styles.successText}>✅ {success}</Text>
+              <Text style={styles.successText}><MaterialIcons name="check-circle" size={14} color="#1d4ed8" /> {success}</Text>
             </View>
           )}
 
@@ -330,7 +331,7 @@ export default function FeedbackScreen() {
             {busy ? (
               <ActivityIndicator color="#fff" size="small" />
             ) : (
-              <Text style={styles.submitText}>Gửi đánh giá 📤</Text>
+              <Text style={styles.submitText}>Gửi đánh giá <MaterialIcons name="send" size={14} color="#fff" /></Text>
             )}
           </Pressable>
         </View>
@@ -354,7 +355,7 @@ export default function FeedbackScreen() {
                       {requestLabelsById[item.serviceRequestId] ?? formatShortId(item.serviceRequestId)}
                     </Text>
                     <View style={styles.ratingPill}>
-                      <Text style={styles.ratingPillText}>⭐ {item.rating}/5</Text>
+                      <Text style={styles.ratingPillText}><MaterialIcons name="star" size={11} color="#92400e" /> {item.rating}/5</Text>
                     </View>
                   </View>
                   <Text style={styles.feedbackMeta}>

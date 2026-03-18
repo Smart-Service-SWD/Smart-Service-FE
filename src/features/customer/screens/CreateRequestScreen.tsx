@@ -3,6 +3,7 @@ import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useNavigation } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "../../../app/theme/colors";
 import BrandLogo from "../../../shared/ui/BrandLogo";
@@ -293,7 +294,7 @@ export default function CreateRequestScreen() {
           onPress={() => setIsServiceExpanded((v) => !v)}
         >
           <Text style={styles.label}>Bước 2 · Chọn dịch vụ</Text>
-          <Text style={styles.chevronText}>{isServiceExpanded ? "▲" : "▼"}</Text>
+          <MaterialIcons name={isServiceExpanded ? "keyboard-arrow-up" : "keyboard-arrow-down"} size={18} color="#94a3b8" />
         </Pressable>
         {!isServiceExpanded && selectedService ? (
           <View style={styles.collapsedPreview}>
@@ -372,7 +373,7 @@ export default function CreateRequestScreen() {
           onPress={() => setIsImageExpanded((v) => !v)}
         >
           <Text style={styles.sectionTitle}>Bước 4 · Ảnh minh họa (tùy chọn)</Text>
-          <Text style={styles.chevronText}>{isImageExpanded ? "▲" : "▼"}</Text>
+          <MaterialIcons name={isImageExpanded ? "keyboard-arrow-up" : "keyboard-arrow-down"} size={18} color="#94a3b8" />
         </Pressable>
         {!isImageExpanded && selectedImage ? (
           <View style={styles.collapsedPreview}>
@@ -595,14 +596,6 @@ const styles = StyleSheet.create({
     marginTop: 2
   },
 
-  heroCard: {
-    backgroundColor: "#eff6ff",
-    borderWidth: 1,
-    borderColor: "#bfdbfe",
-    borderRadius: 20,
-    padding: 18,
-    gap: 8
-  },
   card: {
     backgroundColor: "#fff",
     borderWidth: 1,

@@ -10,9 +10,11 @@ import {
   TextInput,
   View
 } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { colors } from "../../../app/theme/colors";
+import BrandLogo from "../../../shared/ui/BrandLogo";
 import { useAuth } from "../AuthContext";
 import { asErrorMessage } from "../../../shared/utils/format";
 import type { AuthStackParamList } from "../../../app/navigation/types";
@@ -68,7 +70,7 @@ export default function LoginScreen({ navigation, route }: LoginScreenProps) {
           {/* Hero */}
           <View style={styles.hero}>
             <View style={styles.logoBubble}>
-              <Text style={styles.logoEmoji}>⚙️</Text>
+              <BrandLogo size={48} />
             </View>
             <Text style={styles.heroTitle}>Smart Service</Text>
             <Text style={styles.heroSub}>Chào mừng bạn quay lại</Text>
@@ -77,7 +79,7 @@ export default function LoginScreen({ navigation, route }: LoginScreenProps) {
           {/* Notice */}
           {!!notice && (
             <View style={styles.noticeBox}>
-              <Text style={styles.noticeText}>✅ {notice}</Text>
+              <Text style={styles.noticeText}><MaterialIcons name="check-circle" size={14} color="#1d4ed8" /> {notice}</Text>
             </View>
           )}
 
@@ -87,7 +89,7 @@ export default function LoginScreen({ navigation, route }: LoginScreenProps) {
 
             {/* Email */}
             <View style={styles.inputWrap}>
-              <Text style={styles.inputIcon}>✉️</Text>
+              <MaterialIcons name="mail-outline" size={18} color="#64748b" />
               <TextInput
                 style={styles.input}
                 placeholder="Email của bạn"
@@ -101,7 +103,7 @@ export default function LoginScreen({ navigation, route }: LoginScreenProps) {
 
             {/* Password */}
             <View style={styles.inputWrap}>
-              <Text style={styles.inputIcon}>🔒</Text>
+              <MaterialIcons name="lock-outline" size={18} color="#64748b" />
               <TextInput
                 style={[styles.input, { flex: 1 }]}
                 placeholder="Mật khẩu"
@@ -112,7 +114,7 @@ export default function LoginScreen({ navigation, route }: LoginScreenProps) {
                 onSubmitEditing={() => void onSubmit()}
               />
               <Pressable onPress={() => setShowPassword((p) => !p)} style={styles.eyeBtn}>
-                <Text style={styles.eyeIcon}>{showPassword ? "🙈" : "👁️"}</Text>
+                <MaterialIcons name={showPassword ? "visibility-off" : "visibility"} size={20} color="#64748b" />
               </Pressable>
             </View>
 
@@ -127,7 +129,7 @@ export default function LoginScreen({ navigation, route }: LoginScreenProps) {
             {/* Error */}
             {!!error && (
               <View style={styles.errorBox}>
-                <Text style={styles.errorText}>⚠️ {error}</Text>
+                <Text style={styles.errorText}><MaterialIcons name="warning-amber" size={14} color={colors.danger} /> {error}</Text>
               </View>
             )}
 
@@ -174,16 +176,10 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 22,
-    backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 6
+    overflow: "hidden"
   },
-  logoEmoji: { fontSize: 32 },
   heroTitle: {
     fontSize: 26,
     fontWeight: "800",

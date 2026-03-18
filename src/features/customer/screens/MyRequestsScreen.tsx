@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useNavigation } from "@react-navigation/native";
@@ -283,8 +284,8 @@ export default function MyRequestsScreen() {
           style={({ pressed }) => [styles.dropdownButton, pressed && styles.dropdownButtonPressed]}
           onPress={() => setDropdownOpen((v) => !v)}
         >
-          <Text style={styles.dropdownButtonText}>🔽 {dropdownLabel}</Text>
-          <Text style={styles.dropdownChevron}>{dropdownOpen ? "▲" : "▼"}</Text>
+          <Text style={styles.dropdownButtonText}><MaterialIcons name="filter-list" size={14} color="#0f172a" /> {dropdownLabel}</Text>
+          <MaterialIcons name={dropdownOpen ? "keyboard-arrow-up" : "keyboard-arrow-down"} size={18} color="#94a3b8" />
         </Pressable>
 
         {dropdownOpen && (
@@ -294,7 +295,7 @@ export default function MyRequestsScreen() {
                 style={styles.dropdownClearRow}
                 onPress={() => setSelectedStatuses([])}
               >
-                <Text style={styles.dropdownClearText}>✕ Bỏ chọn tất cả</Text>
+                <Text style={styles.dropdownClearText}><MaterialIcons name="close" size={12} color={colors.danger} /> Bỏ chọn tất cả</Text>
               </Pressable>
             )}
             {statusOptions.map((opt) => {
@@ -306,7 +307,7 @@ export default function MyRequestsScreen() {
                   onPress={() => toggleStatus(opt.value)}
                 >
                   <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
-                    {checked && <Text style={styles.checkMark}>✓</Text>}
+                    {checked && <MaterialIcons name="check" size={13} color="#fff" />}
                   </View>
                   <Text style={[styles.dropdownItemText, checked && styles.dropdownItemTextChecked]}>
                     {opt.label}
@@ -362,7 +363,7 @@ export default function MyRequestsScreen() {
                       navigation.navigate("Feedback", { requestId: item.id });
                     }}
                   >
-                    ★ Gửi đánh giá →
+                    <MaterialIcons name="star" size={14} color="#2563eb" /> Gửi đánh giá <MaterialIcons name="arrow-forward" size={14} color="#2563eb" />
                   </Text>
                 )
               ) : (

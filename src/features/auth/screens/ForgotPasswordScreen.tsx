@@ -10,9 +10,11 @@ import {
   TextInput,
   View
 } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { colors } from "../../../app/theme/colors";
+import BrandLogo from "../../../shared/ui/BrandLogo";
 import { asErrorMessage } from "../../../shared/utils/format";
 import type { AuthStackParamList } from "../../../app/navigation/types";
 import { forgotPasswordApi } from "../api/authApi";
@@ -76,13 +78,13 @@ export default function ForgotPasswordScreen({
         >
           {/* Back */}
           <Pressable style={styles.backBtn} onPress={() => navigation.navigate("Login")}>
-            <Text style={styles.backText}>← Quay lại đăng nhập</Text>
+            <Text style={styles.backText}><MaterialIcons name="arrow-back" size={14} color={colors.primary} /> Quay lại đăng nhập</Text>
           </Pressable>
 
           {/* Hero */}
           <View style={styles.hero}>
             <View style={styles.iconBubble}>
-              <Text style={styles.iconEmoji}>📧</Text>
+              <BrandLogo size={48} />
             </View>
             <Text style={styles.heroTitle}>Quên mật khẩu?</Text>
             <Text style={styles.heroSub}>
@@ -107,7 +109,7 @@ export default function ForgotPasswordScreen({
           {/* Form card */}
           <View style={styles.card}>
             <View style={styles.inputWrap}>
-              <Text style={styles.inputIcon}>✉️</Text>
+              <MaterialIcons name="mail-outline" size={18} color="#64748b" />
               <TextInput
                 style={styles.input}
                 placeholder="Email của bạn"
@@ -121,12 +123,12 @@ export default function ForgotPasswordScreen({
 
             {!!error && (
               <View style={styles.errorBox}>
-                <Text style={styles.errorText}>⚠️ {error}</Text>
+                <Text style={styles.errorText}><MaterialIcons name="warning-amber" size={14} color={colors.danger} /> {error}</Text>
               </View>
             )}
             {!!success && (
               <View style={styles.successBox}>
-                <Text style={styles.successText}>✅ {success}</Text>
+                <Text style={styles.successText}><MaterialIcons name="check-circle" size={14} color="#1d4ed8" /> {success}</Text>
               </View>
             )}
 
@@ -148,7 +150,7 @@ export default function ForgotPasswordScreen({
                 navigation.navigate("ResetPassword", { email: email.trim() || undefined })
               }
             >
-              <Text style={styles.secondaryText}>Tôi đã có OTP →</Text>
+              <Text style={styles.secondaryText}>Tôi đã có OTP <MaterialIcons name="arrow-forward" size={14} color={colors.primary} /></Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -175,13 +177,10 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 22,
-    backgroundColor: "#eff6ff",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#bfdbfe"
+    overflow: "hidden"
   },
-  iconEmoji: { fontSize: 32 },
   heroTitle: { fontSize: 24, fontWeight: "800", color: "#0f172a" },
   heroSub: {
     fontSize: 14,
