@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -86,6 +86,16 @@ export default function CreateRequestScreen() {
 
     void loadCategories();
   }, []);
+
+  // Clear previous create result / AI analysis when screen becomes focused
+  useFocusEffect(
+    useCallback(() => {
+      setCreateResult(null);
+      setCreatedRequestId("");
+      setSuccess("");
+      setError("");
+    }, [])
+  );
 
   useEffect(() => {
     if (!selectedCategoryId) {

@@ -32,7 +32,8 @@ import {
   formatCurrency,
   formatDateTime,
   formatRequestStatus,
-  formatShortId
+  formatShortId,
+  normalizeServiceRequests
 } from "../../../shared/utils/format";
 import type {
   AgentCapabilityItem,
@@ -88,7 +89,6 @@ const workspaceTabLabels: Record<WorkspaceTab, string> = {
 };
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  URGENT_DISPATCH: { bg: "#fef2f2", text: "#dc2626" },
   PENDING_REVIEW: { bg: "#fefce8", text: "#ca8a04" },
   COMPLETED: { bg: "#f0fdf4", text: "#16a34a" },
   ASSIGNED: { bg: "#eff6ff", text: "#2563eb" }
@@ -98,9 +98,7 @@ const getStatusStyle = (status?: string | null) =>
   STATUS_COLORS[status ?? ""] ?? { bg: "#f0f4ff", text: "#64748b" };
 
 const isDispatchFlow = (request: ServiceRequestItem) =>
-  request.status === "CREATED" ||
-  request.status === "URGENT_DISPATCH" ||
-  request.status === "PENDING_REVIEW";
+  request.status === "CREATED" || request.status === "PENDING_REVIEW";
 
 const canAssignProvider = (request: ServiceRequestItem | null) =>
   request?.status === "PENDING_REVIEW";
@@ -198,9 +196,9 @@ export default function DispatchCenterScreen() {
         .filter(isDispatchFlow)
         .sort((left, right) => {
           const leftPriority =
-            left.status === "URGENT_DISPATCH" ? 0 : left.status === "CREATED" ? 1 : 2;
+            left.status === "CREATED" ? 0 : 1;
           const rightPriority =
-            right.status === "URGENT_DISPATCH" ? 0 : right.status === "CREATED" ? 1 : 2;
+            right.status === "CREATED" ? 0 : 1;
 
           if (leftPriority !== rightPriority) return leftPriority - rightPriority;
           return new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
@@ -295,7 +293,7 @@ export default function DispatchCenterScreen() {
       ]);
       setCustomerNamesById(Object.fromEntries(userData.getUsers.map((user) => [user.id, user.fullName])));
       setAgents(agentData.getServiceAgents);
-      setRequests(requestData.getServiceRequests);
+      setRequests(normalizeServiceRequests(requestData.getServiceRequests));
     } catch (loadError) {
       setError(asErrorMessage(loadError));
     } finally {
@@ -378,11 +376,7 @@ export default function DispatchCenterScreen() {
       return;
     }
     if (!canEvaluateComplexity(selectedRequest)) {
-      setError(
-        selectedRequest.status === "URGENT_DISPATCH"
-          ? "Yêu cầu khẩn hiện chưa hỗ trợ đánh giá độ phức tạp trực tiếp trên màn này."
-          : "Chỉ yêu cầu ở trạng thái Mới tạo hoặc Chờ duyệt mới có thể đánh giá độ phức tạp."
-      );
+      setError("Chỉ yêu cầu ở trạng thái Mới tạo hoặc Chờ duyệt mới có thể đánh giá độ phức tạp.");
       return;
     }
     setLoading(true);

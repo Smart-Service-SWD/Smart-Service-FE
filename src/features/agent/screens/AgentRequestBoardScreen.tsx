@@ -24,7 +24,8 @@ import {
   asErrorMessage,
   formatDateTime,
   formatRequestStatus,
-  formatShortId
+  formatShortId,
+  normalizeServiceRequests
 } from "../../../shared/utils/format";
 import type {
   AssignmentItem,
@@ -58,7 +59,6 @@ interface UserByIdResponse {
 const statusOptions = [
   { label: "Chờ AI", value: "AWAITING_ANALYSIS" },
   { label: "Mới tạo", value: "CREATED" },
-  { label: "Khẩn cấp", value: "URGENT_DISPATCH" },
   { label: "Chờ duyệt", value: "PENDING_REVIEW" },
   { label: "Đã duyệt", value: "APPROVED" },
   { label: "Đã phân công", value: "ASSIGNED" },
@@ -66,7 +66,6 @@ const statusOptions = [
 ] as const;
 
 const STATUS_COLORS: Partial<Record<string, { bg: string; text: string }>> = {
-  URGENT_DISPATCH: { bg: "#fef2f2", text: "#dc2626" },
   COMPLETED: { bg: "#eff6ff", text: "#2563eb" },
   CANCELLED: { bg: "#f0f4ff", text: "#94a3b8" },
   ASSIGNED: { bg: "#eff6ff", text: "#2563eb" },
@@ -111,7 +110,7 @@ export default function AgentRequestBoardScreen() {
         ),
         graphqlRequest<ServiceDefinitionsResponse>(SERVICE_DEFINITIONS_QUERY)
       ]);
-      setItems(requestData.getServiceRequests);
+      setItems(normalizeServiceRequests(requestData.getServiceRequests));
       setServiceNamesById(
         Object.fromEntries(serviceData.getServiceDefinitions.map((service) => [service.id, service.name]))
       );
@@ -539,3 +538,4 @@ const styles = StyleSheet.create({
 
   emptyText: { color: "#94a3b8", fontSize: 13, textAlign: "center", paddingVertical: 8 }
 });
+

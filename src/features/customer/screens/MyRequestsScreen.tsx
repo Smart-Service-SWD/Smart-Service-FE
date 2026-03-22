@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { colors } from "../../../app/theme/colors";
 import BrandLogo from "../../../shared/ui/BrandLogo";
 import type { CustomerTabParamList } from "../../../app/navigation/types";
@@ -12,7 +12,6 @@ import { cancelServiceRequest } from "../api/customerApi";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
 import { ApiError } from "../../../shared/api/httpClient";
 import {
-  FEEDBACK_BY_REQUEST_QUERY,
   MY_FEEDBACKS_QUERY,
   MY_REQUESTS_QUERY,
   REQUEST_BY_ID_QUERY,
@@ -24,7 +23,10 @@ import {
   formatCurrency,
   formatDateTime,
   formatRequestStatus,
-  formatShortId
+  formatShortId,
+  normalizeRequestStatus,
+  normalizeServiceRequest,
+  normalizeServiceRequests
 } from "../../../shared/utils/format";
 import type {
   ServiceAgentItem,
@@ -42,11 +44,6 @@ interface RequestByIdResponse {
   getServiceRequestById: ServiceRequestItem | null;
 }
 
-interface FeedbackByRequestResponse {
-  getFeedbackByServiceRequestId: ServiceFeedbackItem[];
-  getAverageRatingByServiceRequestId: number;
-}
-
 interface MyFeedbacksResponse {
   getMyServiceFeedbacks: ServiceFeedbackItem[];
 }
@@ -62,7 +59,6 @@ interface ServiceAgentsResponse {
 const statusOptions = [
   { label: "Chờ AI", value: "AWAITING_ANALYSIS" },
   { label: "Mới tạo", value: "CREATED" },
-  { label: "Khẩn cấp", value: "URGENT_DISPATCH" },
   { label: "Chờ duyệt", value: "PENDING_REVIEW" },
   { label: "Đã duyệt", value: "APPROVED" },
   { label: "Đã phân công", value: "ASSIGNED" },
@@ -71,7 +67,8 @@ const statusOptions = [
 ] as const;
 
 const canCancelBeforeStaffConfirmation = (status?: string | null) =>
-  status === "AWAITING_ANALYSIS" || status === "CREATED" || status === "URGENT_DISPATCH";
+  normalizeRequestStatus(status) === "AWAITING_ANALYSIS" ||
+  normalizeRequestStatus(status) === "CREATED";
 
 export default function MyRequestsScreen() {
   const { session } = useAuth();
@@ -81,11 +78,9 @@ export default function MyRequestsScreen() {
   const [items, setItems] = useState<ServiceRequestItem[]>([]);
   const [detailRequestId, setDetailRequestId] = useState("");
   const [detail, setDetail] = useState<ServiceRequestItem | null>(null);
-  const [detailFeedbacks, setDetailFeedbacks] = useState<ServiceFeedbackItem[]>([]);
   const [serviceNamesById, setServiceNamesById] = useState<Record<string, string>>({});
   const [agentNamesById, setAgentNamesById] = useState<Record<string, string>>({});
   const [reviewedRequestIds, setReviewedRequestIds] = useState<string[]>([]);
-  const [averageRating, setAverageRating] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [cancelingRequestId, setCancelingRequestId] = useState("");
   const [error, setError] = useState("");
@@ -93,7 +88,7 @@ export default function MyRequestsScreen() {
   const getAgentName = (agentId?: string | null) =>
     agentId ? agentNamesById[agentId] ?? formatShortId(agentId) : "Chưa phân công";
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!session) {
       return;
     }
@@ -119,7 +114,7 @@ export default function MyRequestsScreen() {
         )
       ]);
 
-      setItems(requestData.getMyServiceRequests);
+      setItems(normalizeServiceRequests(requestData.getMyServiceRequests));
       setServiceNamesById(
         Object.fromEntries(serviceData.getServiceDefinitions.map((service) => [service.id, service.name]))
       );
@@ -136,7 +131,7 @@ export default function MyRequestsScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [session]);
 
   const filteredItems =
     selectedStatuses.length === 0
@@ -157,23 +152,18 @@ export default function MyRequestsScreen() {
     setLoading(true);
     setError("");
     try {
-      const [requestData, feedbackData] = await Promise.all([
-        graphqlRequest<RequestByIdResponse, { id: string }>(
-          REQUEST_BY_ID_QUERY,
-          { id: requestId.trim() },
-          session.accessToken
-        ),
-        graphqlRequest<FeedbackByRequestResponse, { serviceRequestId: string }>(
-          FEEDBACK_BY_REQUEST_QUERY,
-          { serviceRequestId: requestId.trim() },
-          session.accessToken
-        )
-      ]);
+      const requestData = await graphqlRequest<RequestByIdResponse, { id: string }>(
+        REQUEST_BY_ID_QUERY,
+        { id: requestId.trim() },
+        session.accessToken
+      );
 
       setDetailRequestId(requestId.trim());
-      setDetail(requestData.getServiceRequestById);
-      setDetailFeedbacks(feedbackData.getFeedbackByServiceRequestId);
-      setAverageRating(feedbackData.getAverageRatingByServiceRequestId);
+      setDetail(
+        requestData.getServiceRequestById
+          ? normalizeServiceRequest(requestData.getServiceRequestById)
+          : null
+      );
     } catch (loadError) {
       setError(asErrorMessage(loadError));
     } finally {
@@ -232,17 +222,21 @@ export default function MyRequestsScreen() {
     );
   };
 
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load])
+  );
+
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.accessToken]);
+  }, [load]);
 
   useEffect(() => {
     if (filteredItems.length === 0) {
       setDetailRequestId("");
       setDetail(null);
-      setDetailFeedbacks([]);
-      setAverageRating(null);
       return;
     }
 
@@ -332,11 +326,19 @@ export default function MyRequestsScreen() {
               : "Dịch vụ";
 
           return (
-            <Pressable
-              key={item.id}
-              style={[styles.card, isSelected && styles.cardSelected]}
-              onPress={() => void loadRequestDetail(item.id)}
-            >
+              <Pressable
+                key={item.id}
+                style={[styles.card, isSelected && styles.cardSelected]}
+                onPress={() => {
+                    if (isSelected) {
+                      setDetailRequestId("");
+                      setDetail(null);
+                    } else {
+                      setDetailRequestId(item.id);
+                      void loadRequestDetail(item.id);
+                    }
+                  }}
+              >
               <Text style={styles.cardTitle}>{serviceName}</Text>
               <Text style={styles.meta}>Tạo lúc: {formatDateTime(item.createdAt)}</Text>
               {canCancel && isSelected ? (
@@ -369,6 +371,30 @@ export default function MyRequestsScreen() {
               ) : (
                 <Text style={styles.tapHint}>Nhấn để xem chi tiết</Text>
               )}
+
+              {isSelected && detail && detail.id === item.id ? (
+                <View style={styles.detailBox}>
+                  {detail.serviceDefinitionId ? (
+                    <Text style={styles.meta}>
+                      Loại dịch vụ: {serviceNamesById[detail.serviceDefinitionId] ?? formatShortId(detail.serviceDefinitionId)}
+                    </Text>
+                  ) : null}
+                  <Text style={styles.meta}>Trạng thái: {formatRequestStatus(detail.status)}</Text>
+                  <Text style={styles.meta}>Mô tả: {detail.description}</Text>
+                  <Text style={styles.meta}>Độ phức tạp: {detail.complexity?.level ?? "Chưa đánh giá"}</Text>
+                  <Text style={styles.meta}>
+                    Chi phí ước tính: {detail.estimatedCost ? formatCurrency(detail.estimatedCost.amount, detail.estimatedCost.currency) : "Chưa có"}
+                  </Text>
+                  <Text style={styles.meta}>Thợ sửa chữa: {getAgentName(detail.assignedProviderId)}</Text>
+                  {detail.addressText ? <Text style={styles.meta}>Địa chỉ: {detail.addressText}</Text> : null}
+                  <Text style={styles.meta}>Thời gian tạo: {formatDateTime(detail.createdAt)}</Text>
+                  {canCancelBeforeStaffConfirmation(detail.status) ? (
+                    <View style={styles.cancelBox}>
+                      <Text style={styles.meta}>Bạn có thể hủy ở bước này vì staff chưa xác nhận độ phức tạp.</Text>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
             </Pressable>
           );
         })()
@@ -378,70 +404,7 @@ export default function MyRequestsScreen() {
         <Text style={styles.empty}>Chưa có yêu cầu nào theo bộ lọc này</Text>
       ) : null}
 
-      {/* Detail & feedback card */}
-      <View style={styles.card}>
-        <View style={styles.detailHeader}>
-          <Text style={styles.cardTitle}>Chi tiết yêu cầu & đánh giá</Text>
-          <Pressable
-            style={({ pressed }) => [styles.reloadBtn, pressed && styles.reloadBtnPressed]}
-            onPress={() => void loadRequestDetail(detailRequestId)}
-            disabled={loading || !detailRequestId}
-          >
-            <Text style={[styles.reloadBtnText, (!detailRequestId || loading) && styles.reloadBtnDisabled]}>
-              {loading ? "Đang tải..." : "Tải lại"}
-            </Text>
-          </Pressable>
-        </View>
-        {!detailRequestId ? (
-          <Text style={styles.meta}>Nhấn vào một yêu cầu phía trên để xem chi tiết.</Text>
-        ) : null}
-        {detail ? (
-          <View style={styles.detailBox}>
-            {detail.serviceDefinitionId ? (
-              <Text style={styles.meta}>
-                Loại dịch vụ:{" "}
-                {serviceNamesById[detail.serviceDefinitionId] ??
-                  formatShortId(detail.serviceDefinitionId)}
-              </Text>
-            ) : null}
-            <Text style={styles.meta}>Trạng thái: {formatRequestStatus(detail.status)}</Text>
-            <Text style={styles.meta}>Mô tả: {detail.description}</Text>
-            <Text style={styles.meta}>
-              Độ phức tạp: {detail.complexity?.level ?? "Chưa đánh giá"}
-            </Text>
-            <Text style={styles.meta}>
-              Chi phí ước tính:{" "}
-              {detail.estimatedCost
-                ? formatCurrency(detail.estimatedCost.amount, detail.estimatedCost.currency)
-                : "Chưa có"}
-            </Text>
-            <Text style={styles.meta}>
-              Thợ sửa chữa: {getAgentName(detail.assignedProviderId)}
-            </Text>
-            <Text style={styles.meta}>Điểm trung bình: {averageRating ?? 0}</Text>
-            <Text style={styles.meta}>Số lượt đánh giá: {detailFeedbacks.length}</Text>
-            {detail.addressText ? (
-              <Text style={styles.meta}>Địa chỉ: {detail.addressText}</Text>
-            ) : null}
-            <Text style={styles.meta}>Thời gian tạo: {formatDateTime(detail.createdAt)}</Text>
-            {canCancelBeforeStaffConfirmation(detail.status) ? (
-              <View style={styles.cancelBox}>
-                <Text style={styles.meta}>
-                  Bạn có thể hủy ở bước này vì staff chưa xác nhận độ phức tạp.
-                </Text>
-                <ActionButton
-                  label={
-                    cancelingRequestId === detail.id ? "Đang hủy..." : "Hủy yêu cầu"
-                  }
-                  onPress={() => confirmCancelRequest(detail.id)}
-                  disabled={loading || cancelingRequestId.length > 0}
-                  variant="danger"
-                />
-              </View>
-            ) : null}
-          </View>
-        ) : null}
-      </View>
+      
       </ScrollView>
     </SafeAreaView>
   );
@@ -668,6 +631,7 @@ const styles = StyleSheet.create({
     gap: 6,
     marginTop: 8
   },
+  
   cancelBox: {
     gap: 8,
     marginTop: 10,
@@ -704,3 +668,4 @@ const styles = StyleSheet.create({
     fontSize: 13
   }
 });
+

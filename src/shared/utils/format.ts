@@ -74,10 +74,34 @@ export const asErrorMessage = (error: unknown): string => {
   return "Đã xảy ra lỗi không mong muốn";
 };
 
+export const normalizeRequestStatus = (status?: string | null): string | null => {
+  if (!status) {
+    return status ?? null;
+  }
+
+  return status === "URGENT_DISPATCH" ? "CREATED" : status;
+};
+
+export const normalizeServiceRequest = <T extends { status: string }>(item: T): T => {
+  const normalizedStatus = normalizeRequestStatus(item.status);
+
+  if (!normalizedStatus || normalizedStatus === item.status) {
+    return item;
+  }
+
+  return {
+    ...item,
+    status: normalizedStatus
+  };
+};
+
+export const normalizeServiceRequests = <T extends { status: string }>(items: T[]): T[] =>
+  items.map(normalizeServiceRequest);
+
 const requestStatusLabels: Record<string, string> = {
   AWAITING_ANALYSIS: "Chờ AI phân tích",
   CREATED: "Mới tạo",
-  URGENT_DISPATCH: "Điều phối khẩn",
+
   PENDING_REVIEW: "Chờ duyệt",
   APPROVED: "Đã duyệt",
   ASSIGNED: "Đã phân công",
@@ -94,11 +118,13 @@ const roleLabels: Record<string, string> = {
 };
 
 export const formatRequestStatus = (status?: string | null): string => {
-  if (!status) {
+  const normalizedStatus = normalizeRequestStatus(status);
+
+  if (!normalizedStatus) {
     return "-";
   }
 
-  return requestStatusLabels[status] ?? status;
+  return requestStatusLabels[normalizedStatus] ?? normalizedStatus;
 };
 
 export const formatRoleLabel = (role?: string | null): string => {
@@ -126,3 +152,6 @@ export const formatShortId = (value?: string | null): string => {
 
   return `${value.slice(0, 8)}…${value.slice(-4)}`;
 };
+
+
+

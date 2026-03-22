@@ -10,7 +10,14 @@ import type { StaffTabParamList } from "../../../app/navigation/types";
 import { useAuth } from "../../auth/AuthContext";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
 import { ALL_REQUESTS_QUERY, SERVICE_AGENTS_QUERY, SERVICE_DEFINITIONS_QUERY, USERS_QUERY } from "../../../shared/api/graphqlDocuments";
-import { asErrorMessage, formatCurrency, formatDateTime, formatRequestStatus, formatShortId } from "../../../shared/utils/format";
+import {
+  asErrorMessage,
+  formatCurrency,
+  formatDateTime,
+  formatRequestStatus,
+  formatShortId,
+  normalizeServiceRequests
+} from "../../../shared/utils/format";
 import type { ServiceAgentItem, ServiceDefinition, ServiceRequestItem, UserProfile } from "../../../shared/types/domain";
 import ActionButton from "../../../shared/ui/ActionButton";
 
@@ -32,7 +39,6 @@ interface UsersResponse {
 
 const statusOptions = [
   "CREATED",
-  "URGENT_DISPATCH",
   "PENDING_REVIEW",
   "ASSIGNED",
   "COMPLETED"
@@ -40,21 +46,19 @@ const statusOptions = [
 
 const statusLabels: Record<(typeof statusOptions)[number], string> = {
   CREATED: "Mới tạo",
-  URGENT_DISPATCH: "Khẩn cấp",
   PENDING_REVIEW: "Sẵn sàng điều phối",
   ASSIGNED: "Đã phân công",
   COMPLETED: "Hoàn thành"
 };
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  URGENT_DISPATCH: { bg: "#fef2f2", text: "#dc2626" },
   PENDING_REVIEW: { bg: "#fefce8", text: "#ca8a04" },
   COMPLETED: { bg: "#f0fdf4", text: "#16a34a" },
   ASSIGNED: { bg: "#eff6ff", text: "#2563eb" }
 };
 
 const canOpenDispatch = (request: ServiceRequestItem | null) =>
-  request?.status === "CREATED" || request?.status === "URGENT_DISPATCH" || request?.status === "PENDING_REVIEW";
+  request?.status === "CREATED" || request?.status === "PENDING_REVIEW";
 
 const getStatusStyle = (status?: string | null) =>
   STATUS_COLORS[status ?? ""] ?? { bg: "#f0f4ff", text: "#64748b" };
@@ -90,7 +94,6 @@ export default function ReviewQueueScreen() {
       items.filter(
         (item) =>
           item.status === "CREATED" ||
-          item.status === "URGENT_DISPATCH" ||
           item.status === "PENDING_REVIEW"
       ).length,
     [items]
@@ -123,7 +126,7 @@ export default function ReviewQueueScreen() {
         graphqlRequest<ServiceAgentsResponse>(SERVICE_AGENTS_QUERY, undefined, session.accessToken)
       ]);
 
-      setItems(requestData.getServiceRequests);
+      setItems(normalizeServiceRequests(requestData.getServiceRequests));
 
       setServiceNamesById(
         Object.fromEntries(serviceData.getServiceDefinitions.map((service) => [service.id, service.name]))
@@ -482,3 +485,9 @@ const styles = StyleSheet.create({
   requestActions: { gap: 8 },
   emptyText: { color: "#94a3b8", fontSize: 13, textAlign: "center", paddingVertical: 8 }
 });
+
+
+
+
+
+

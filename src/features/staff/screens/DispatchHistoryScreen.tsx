@@ -15,7 +15,14 @@ import {
   SERVICE_DEFINITIONS_QUERY,
   USERS_QUERY
 } from "../../../shared/api/graphqlDocuments";
-import { asErrorMessage, formatCurrency, formatDateTime, formatRequestStatus, formatShortId } from "../../../shared/utils/format";
+import {
+  asErrorMessage,
+  formatCurrency,
+  formatDateTime,
+  formatRequestStatus,
+  formatShortId,
+  normalizeServiceRequests
+} from "../../../shared/utils/format";
 import type { ServiceAgentItem, ServiceDefinition, ServiceRequestItem, UserProfile } from "../../../shared/types/domain";
 import ActionButton from "../../../shared/ui/ActionButton";
 
@@ -36,7 +43,6 @@ interface ServiceDefinitionsResponse {
 }
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  URGENT_DISPATCH: { bg: "#fef2f2", text: "#dc2626" },
   PENDING_REVIEW: { bg: "#fefce8", text: "#ca8a04" },
   COMPLETED: { bg: "#f0fdf4", text: "#16a34a" },
   ASSIGNED: { bg: "#eff6ff", text: "#2563eb" }
@@ -103,7 +109,7 @@ export default function DispatchHistoryScreen() {
         graphqlRequest<ServiceDefinitionsResponse>(SERVICE_DEFINITIONS_QUERY)
       ]);
 
-      const assignedRequests = requestData.getServiceRequests.filter((request) => !!request.assignedProviderId);
+      const assignedRequests = normalizeServiceRequests(requestData.getServiceRequests).filter((request) => !!request.assignedProviderId);
 
       setRequests(assignedRequests);
       setAgents(agentData.getServiceAgents);
