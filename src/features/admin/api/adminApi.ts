@@ -49,6 +49,10 @@ export interface CreateAgentUserPayload extends CreateUserPayload {
   capabilities: CreateAgentCapabilityPayload[];
 }
 
+export interface UpdateAgentCapabilitiesPayload {
+  capabilities: CreateAgentCapabilityPayload[];
+}
+
 export const createCategory = (
   token: string,
   payload: CreateCategoryPayload
@@ -142,6 +146,19 @@ export const createAgentUser = (
     token,
     body: payload
   });
+
+export const updateAgentCapabilities = async (
+  token: string,
+  agentId: string,
+  payload: UpdateAgentCapabilitiesPayload
+): Promise<void> => {
+  await httpRequest<unknown>({
+    path: `/api/service-agents/${agentId}/capabilities`,
+    method: "PUT",
+    token,
+    body: payload
+  });
+};
 
 export const createStaffUser = (
   token: string,

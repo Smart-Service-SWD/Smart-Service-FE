@@ -7,9 +7,14 @@ import { colors } from "../../../app/theme/colors";
 import BrandLogo from "../../../shared/ui/BrandLogo";
 import { useAuth } from "../../auth/AuthContext";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
-import { SERVICE_CATEGORIES_QUERY, SERVICE_DEFINITIONS_BY_CATEGORY_QUERY, USERS_QUERY } from "../../../shared/api/graphqlDocuments";
+import {
+  SERVICE_AGENTS_QUERY,
+  SERVICE_CATEGORIES_QUERY,
+  SERVICE_DEFINITIONS_BY_CATEGORY_QUERY,
+  USERS_QUERY
+} from "../../../shared/api/graphqlDocuments";
 import { asErrorMessage, formatRoleLabel, formatShortId } from "../../../shared/utils/format";
-import type { ServiceCategory, ServiceDefinition, UserProfile } from "../../../shared/types/domain";
+import type { AgentCapabilityItem, ServiceAgentItem, ServiceCategory, ServiceDefinition, UserProfile } from "../../../shared/types/domain";
 import LabeledInput from "../../../shared/ui/LabeledInput";
 import ActionButton from "../../../shared/ui/ActionButton";
 import {
@@ -18,6 +23,7 @@ import {
   createCustomerUser,
   createStaffUser,
   setUserLockState,
+  updateAgentCapabilities,
   updateUserRole
 } from "../api/adminApi";
 
@@ -31,6 +37,10 @@ interface CategoriesResponse {
 
 interface ServicesByCategoryResponse {
   getServiceDefinitionsByCategory: ServiceDefinition[];
+}
+
+interface ServiceAgentsResponse {
+  getServiceAgents: ServiceAgentItem[];
 }
 
 const roleOptions = ["CUSTOMER", "STAFF", "AGENT", "ADMIN"] as const;
@@ -64,9 +74,20 @@ const getUserInitials = (fullName?: string | null) => {
     .join("");
 };
 
+const toCapabilityDrafts = (capabilities?: AgentCapabilityItem[] | null): CapabilityDraft[] =>
+  capabilities?.length
+    ? capabilities.map((capability) => ({
+        key: capability.id,
+        categoryId: capability.categoryId,
+        maxComplexityLevel: capability.maxComplexity?.level ?? 3,
+        serviceIds: capability.serviceIds ?? []
+      }))
+    : [createCapabilityDraft()];
+
 export default function UserAdminScreen() {
   const { session } = useAuth();
   const [users, setUsers] = useState<UserProfile[]>([]);
+  const [serviceAgents, setServiceAgents] = useState<ServiceAgentItem[]>([]);
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [servicesByCategory, setServicesByCategory] = useState<Record<string, ServiceDefinition[]>>({});
   const [selectedUserId, setSelectedUserId] = useState("");
@@ -94,6 +115,13 @@ export default function UserAdminScreen() {
     [users, selectedUserId]
   );
 
+  const selectedServiceAgent = useMemo(
+    () => (selectedUser ? serviceAgents.find((agent) => agent.userId === selectedUser.id) ?? null : null),
+    [selectedUser, serviceAgents]
+  );
+
+  const selectedUserRole = String(selectedUser?.role ?? "").toUpperCase();
+
   const roleSummary = useMemo(
     () => ({
       locked: users.filter((user) => user.isLocked).length,
@@ -107,6 +135,9 @@ export default function UserAdminScreen() {
   const togglePanel = (panel: ActivePanel) => {
     setError("");
     setSuccess("");
+    if (panel === "create") {
+      setAgentCapabilities([createCapabilityDraft()]);
+    }
     setActivePanel((prev) => (prev === panel ? null : panel));
   };
 
@@ -127,6 +158,11 @@ export default function UserAdminScreen() {
   const loadUsers = async (token: string) => {
     const data = await graphqlRequest<UsersResponse>(USERS_QUERY, undefined, token);
     setUsers(data.getUsers);
+  };
+
+  const loadServiceAgents = async (token: string) => {
+    const data = await graphqlRequest<ServiceAgentsResponse>(SERVICE_AGENTS_QUERY, undefined, token);
+    setServiceAgents(data.getServiceAgents);
   };
 
   const loadCategories = async () => {
@@ -159,7 +195,7 @@ export default function UserAdminScreen() {
     setLoading(true);
     setError("");
     try {
-      await Promise.all([loadUsers(session.accessToken), loadCategories()]);
+      await Promise.all([loadUsers(session.accessToken), loadServiceAgents(session.accessToken), loadCategories()]);
       setServicesByCategory({});
     } catch (loadError) {
       setError(asErrorMessage(loadError));
@@ -178,6 +214,19 @@ export default function UserAdminScreen() {
       setServicesByCategory({});
     }, [])
   );
+
+
+  useEffect(() => {
+    if (activePanel !== "update" || selectedUserRole !== "AGENT") return;
+
+    const drafts = toCapabilityDrafts(selectedServiceAgent?.capabilities);
+    setAgentCapabilities(drafts);
+    drafts.forEach((draft) => {
+      if (draft.categoryId) {
+        void ensureServicesForCategory(draft.categoryId);
+      }
+    });
+  }, [activePanel, selectedServiceAgent, selectedUserRole]);
 
   const setCapabilityCategory = (key: string, categoryId: string) => {
     setAgentCapabilities((current) =>
@@ -295,9 +344,35 @@ export default function UserAdminScreen() {
       setPhoneNumber("");
       setAgentCapabilities([createCapabilityDraft()]);
 
-      await loadUsers(session.accessToken);
+      await Promise.all([loadUsers(session.accessToken), loadServiceAgents(session.accessToken)]);
     } catch (createError) {
       setError(asErrorMessage(createError));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateAgentCapabilities = async () => {
+    if (!session) return;
+    if (!selectedServiceAgent) {
+      setError("Không tìm thấy hồ sơ ServiceAgent để cập nhật capability.");
+      return;
+    }
+
+    const payload = buildAgentCapabilities();
+    if (!payload) return;
+
+    setLoading(true);
+    setError("");
+    setSuccess("");
+    try {
+      await updateAgentCapabilities(session.accessToken, selectedServiceAgent.id, {
+        capabilities: payload
+      });
+      setSuccess("Đã cập nhật hồ sơ nghề của thợ.");
+      await Promise.all([loadUsers(session.accessToken), loadServiceAgents(session.accessToken)]);
+    } catch (updateError) {
+      setError(asErrorMessage(updateError));
     } finally {
       setLoading(false);
     }
@@ -317,7 +392,7 @@ export default function UserAdminScreen() {
         role: toBackendRole(targetRole)
       });
       setSuccess("Cập nhật quyền thành công");
-      await loadUsers(session.accessToken);
+      await Promise.all([loadUsers(session.accessToken), loadServiceAgents(session.accessToken)]);
     } catch (updateError) {
       setError(asErrorMessage(updateError));
     } finally {
@@ -339,7 +414,7 @@ export default function UserAdminScreen() {
         isLocked: lockFlag
       });
       setSuccess(lockFlag ? "Đã khóa tài khoản" : "Đã mở khóa tài khoản");
-      await loadUsers(session.accessToken);
+      await Promise.all([loadUsers(session.accessToken), loadServiceAgents(session.accessToken)]);
 
       // sau khi thao tác, đảo lockFlag để lần bấm sau là thao tác ngược lại
       setLockFlag((prev) => !prev);
@@ -601,6 +676,147 @@ export default function UserAdminScreen() {
             ) : (
               <Text style={styles.hintText}>Chưa chọn người dùng. Hãy nhấn vào một dòng trong danh sách người dùng.</Text>
             )}
+            {selectedUserRole === "AGENT" ? (
+              <View style={styles.subCard}>
+                <Text style={styles.subTitle}>Hồ sơ nghề của thợ</Text>
+                <Text style={styles.metaText}>
+                  Chỉnh danh mục, dịch vụ và mức độ phức tạp tối đa rồi lưu để cập nhật capability cho thợ.
+                </Text>
+
+                {selectedServiceAgent ? (
+                  <>
+                    <View style={styles.badgeRow}>
+                      <View
+                        style={[
+                          styles.statusPill,
+                          { backgroundColor: selectedServiceAgent.isActive ? "#f0fdf4" : "#fef2f2" }
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.statusText,
+                            { color: selectedServiceAgent.isActive ? "#16a34a" : "#dc2626" }
+                          ]}
+                        >
+                          {selectedServiceAgent.isActive ? "Đang nhận việc" : "Tạm ngưng nhận việc"}
+                        </Text>
+                      </View>
+                      <View style={[styles.statusPill, { backgroundColor: "#eff6ff" }]}> 
+                        <Text style={[styles.statusText, { color: "#2563eb" }]}>
+                          {agentCapabilities.length} capability
+                        </Text>
+                      </View>
+                    </View>
+
+                    {agentCapabilities.map((capability, index) => {
+                      const isLoadingServices = loadingServicesForCategory === capability.categoryId;
+                      const services = capability.categoryId ? servicesByCategory[capability.categoryId] ?? [] : [];
+                      const hasCategory = !!capability.categoryId;
+                      const hasServices = capability.serviceIds.length > 0;
+
+                      return (
+                        <View key={capability.key} style={styles.capabilityCard}>
+                          <View style={styles.capabilityHeader}>
+                            <Text style={styles.capabilityTitle}>Capability #{index + 1}</Text>
+                            <View style={[styles.statusPill, { backgroundColor: hasServices ? "#f0fdf4" : "#fefce8" }]}> 
+                              <Text style={[styles.statusText, { color: hasServices ? "#16a34a" : "#ca8a04" }]}>
+                                {hasServices ? `${capability.serviceIds.length} dịch vụ` : "Chưa chọn"}
+                              </Text>
+                            </View>
+                          </View>
+
+                          <Text style={styles.sectionLabel}>1. Chọn danh mục</Text>
+                          <View style={styles.chipRow}>
+                            {categories.map((category) => {
+                              const active = capability.categoryId === category.id;
+                              return (
+                                <Pressable
+                                  key={`${capability.key}-${category.id}`}
+                                  style={[styles.chip, active && styles.chipActive]}
+                                  onPress={() => setCapabilityCategory(capability.key, category.id)}
+                                >
+                                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{category.name}</Text>
+                                </Pressable>
+                              );
+                            })}
+                          </View>
+
+                          {hasCategory ? (
+                            <>
+                              <Text style={styles.sectionLabel}>
+                                2. Chọn dịch vụ {hasServices ? `(đã chọn ${capability.serviceIds.length})` : ""}
+                              </Text>
+
+                              {isLoadingServices ? (
+                                <Text style={styles.metaText}>Đang tải dịch vụ...</Text>
+                              ) : services.length === 0 ? (
+                                <Text style={styles.warningText}>
+                                  Danh mục này chưa có dịch vụ nào. Hãy thêm dịch vụ trong màn Quản lý dịch vụ trước.
+                                </Text>
+                              ) : (
+                                <View style={styles.chipRow}>
+                                  {services.map((service) => {
+                                    const active = capability.serviceIds.includes(service.id);
+                                    return (
+                                      <Pressable
+                                        key={`${capability.key}-${service.id}`}
+                                        style={[styles.chip, active && styles.chipActive]}
+                                        onPress={() => toggleCapabilityService(capability.key, service.id)}
+                                      >
+                                        <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                                          {service.name}
+                                          {service.complexityRange?.length === 2
+                                            ? ` • ${service.complexityRange[0]}-${service.complexityRange[1]}`
+                                            : ""}
+                                          {service.isDangerous ? " • Cảnh báo" : ""}
+                                        </Text>
+                                      </Pressable>
+                                    );
+                                  })}
+                                </View>
+                              )}
+
+                              <Text style={styles.sectionLabel}>3. Mức độ phức tạp tối đa</Text>
+                              <View style={styles.chipRow}>
+                                {[1, 2, 3, 4, 5].map((level) => {
+                                  const active = capability.maxComplexityLevel === level;
+                                  return (
+                                    <Pressable
+                                      key={`${capability.key}-level-${level}`}
+                                      style={[styles.chip, active && styles.chipActive]}
+                                      onPress={() => setCapabilityComplexity(capability.key, level)}
+                                    >
+                                      <Text style={[styles.chipText, active && styles.chipTextActive]}>Level {level}</Text>
+                                    </Pressable>
+                                  );
+                                })}
+                              </View>
+                            </>
+                          ) : (
+                            <Text style={styles.warningText}>Chọn danh mục để hệ thống nạp danh sách dịch vụ tương ứng.</Text>
+                          )}
+
+                          {agentCapabilities.length > 1 ? (
+                            <ActionButton label="Xóa capability này" onPress={() => removeCapability(capability.key)} variant="danger" />
+                          ) : null}
+                        </View>
+                      );
+                    })}
+
+                    <ActionButton label="Thêm Capability" onPress={addCapability} variant="secondary" />
+                    <ActionButton
+                      label={loading ? "Đang lưu hồ sơ..." : "Lưu hồ sơ nghề"}
+                      onPress={() => void handleUpdateAgentCapabilities()}
+                      disabled={loading || !selectedServiceAgent}
+                    />
+                  </>
+                ) : (
+                  <Text style={styles.warningText}>
+                    User đang mang role thợ nhưng FE chưa tìm thấy hồ sơ ServiceAgent được liên kết bằng userId.
+                  </Text>
+                )}
+              </View>
+            ) : null}
 
             <Text style={styles.sectionLabel}>Đổi quyền sang</Text>
             <View style={styles.chipRow}>
@@ -913,3 +1129,4 @@ const styles = StyleSheet.create({
   userAvatarText: { color: "#2563eb", fontSize: 15, fontWeight: "800" },
   userName: { color: "#0f172a", fontWeight: "800", fontSize: 14 }
 });
+
