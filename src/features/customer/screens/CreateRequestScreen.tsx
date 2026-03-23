@@ -38,6 +38,34 @@ interface PickedRequestImage extends RequestImageAsset {
   fileSize?: number;
 }
 
+const normalizeServiceText = (value: string): string =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .toLowerCase();
+
+const isPhotoBlockedService = (service: ServiceDefinition | null): boolean => {
+  if (!service) {
+    return false;
+  }
+
+  const haystack = normalizeServiceText(
+    [service.name, service.categoryName, service.description ?? ""].join(" ")
+  );
+
+  return [
+    "dien",
+    "nha dat",
+    "dat dai",
+    "bat dong san",
+    "real estate",
+    "dinh gia dat",
+    "phap ly nha dat",
+    "tranh chap dat"
+  ].some((keyword) => haystack.includes(keyword));
+};
 export default function CreateRequestScreen() {
   const navigation = useNavigation<BottomTabNavigationProp<CustomerTabParamList>>();
   const { session } = useAuth();
@@ -60,6 +88,10 @@ export default function CreateRequestScreen() {
   const selectedService = useMemo(
     () => services.find((service) => service.id === selectedServiceDefinitionId) ?? null,
     [services, selectedServiceDefinitionId]
+  );
+  const isPhotoAttachmentBlocked = useMemo(
+    () => isPhotoBlockedService(selectedService),
+    [selectedService]
   );
 
   const canSubmitRequest =
@@ -150,7 +182,21 @@ export default function CreateRequestScreen() {
     };
   }, [selectedCategoryId]);
 
+  useEffect(() => {
+    if (!isPhotoAttachmentBlocked || !selectedImage) {
+      return;
+    }
+
+    setSelectedImage(null);
+    setSuccess("");
+    setError("Dịch vụ điện và đất không hỗ trợ đính kèm hoặc chụp ảnh trên ứng dụng.");
+  }, [isPhotoAttachmentBlocked, selectedImage]);
+
   const setPickedImage = (asset: ImagePicker.ImagePickerAsset) => {
+    if (isPhotoAttachmentBlocked) {
+      setError("Dịch vụ điện và đất không hỗ trợ đính kèm hoặc chụp ảnh.");
+      return;
+    }
     if (asset.type && asset.type !== "image") {
       setError("Hiện tại bước này chỉ hỗ trợ ảnh.");
       return;
@@ -169,6 +215,10 @@ export default function CreateRequestScreen() {
   };
 
   const pickImageFromLibrary = async () => {
+    if (isPhotoAttachmentBlocked) {
+      setError("Dịch vụ điện và đất không hỗ trợ đính kèm hoặc chụp ảnh.");
+      return;
+    }
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
       setError("Cần quyền truy cập thư viện ảnh để chọn ảnh đính kèm.");
@@ -189,6 +239,10 @@ export default function CreateRequestScreen() {
   };
 
   const takePhoto = async () => {
+    if (isPhotoAttachmentBlocked) {
+      setError("Dịch vụ điện và đất không hỗ trợ đính kèm hoặc chụp ảnh.");
+      return;
+    }
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
       setError("Cần quyền camera để chụp ảnh đính kèm.");
@@ -242,7 +296,7 @@ export default function CreateRequestScreen() {
         serviceDefinitionId: selectedServiceDefinitionId,
         description,
         addressText: addressText.trim() || null,
-        image: selectedImage
+        image: isPhotoAttachmentBlocked ? null : selectedImage
       });
 
       setSuccess(`Đã tạo yêu cầu thành công. Mã yêu cầu: ${result.serviceRequestId}`);
@@ -393,48 +447,63 @@ export default function CreateRequestScreen() {
         ) : null}
         {isImageExpanded && (
           <>
-          <Text style={styles.value}>
-            Nếu có ảnh lỗi, ảnh thiết bị hoặc tài liệu liên quan, bạn có thể gửi kèm để hỗ trợ xử lý.
-          </Text>
-          <View style={styles.actions}>
-            <ActionButton
-              label="Chọn ảnh từ máy"
-              onPress={() => void pickImageFromLibrary()}
-              disabled={busy}
-              variant="secondary"
-            />
-            <ActionButton
-              label="Chụp ảnh mới"
-              onPress={() => void takePhoto()}
-              disabled={busy}
-              variant="secondary"
-            />
-            {selectedImage ? (
-              <ActionButton
-                label="Bỏ ảnh đã chọn"
-                onPress={() => setSelectedImage(null)}
-                disabled={busy}
-                variant="danger"
-              />
-            ) : null}
-          </View>
-
-          {selectedImage ? (
-            <View style={styles.previewCard}>
-              <Image source={{ uri: selectedImage.uri }} style={styles.previewImage} />
-              <Text style={styles.value}>Tên file: {selectedImage.fileName || "request-image.jpg"}</Text>
+          {isPhotoAttachmentBlocked ? (
+            <View style={styles.imageBlockedNotice}>
+              <Text style={styles.imageBlockedTitle}>Ảnh đã bị tắt cho dịch vụ này</Text>
               <Text style={styles.value}>
-                Kích thước: {selectedImage.width} x {selectedImage.height}
-              </Text>
-              <Text style={styles.value}>Mime type: {selectedImage.mimeType || "image/jpeg"}</Text>
-              <Text style={styles.value}>
-                Dung lượng:{" "}
-                {selectedImage.fileSize
-                  ? `${Math.round(selectedImage.fileSize / 1024)} KB`
-                  : "Không rõ"}
+                Với dịch vụ điện và đất, người dùng không thể chọn ảnh từ máy hoặc chụp ảnh mới.
               </Text>
             </View>
-          ) : null}
+          ) : (
+            <>
+              <Text style={styles.value}>
+                Nếu có ảnh lỗi, ảnh thiết bị hoặc tài liệu liên quan, bạn có thể gửi kèm để hỗ trợ xử lý.
+              </Text>
+              <View style={styles.actions}>
+                <ActionButton
+                  label="Chọn ảnh từ máy"
+                  onPress={() => void pickImageFromLibrary()}
+                  disabled={busy}
+                  variant="secondary"
+                />
+                <ActionButton
+                  label="Chụp ảnh mới"
+                  onPress={() => void takePhoto()}
+                  disabled={busy}
+                  variant="secondary"
+                />
+                {selectedImage ? (
+                  <ActionButton
+                    label="Bỏ ảnh đã chọn"
+                    onPress={() => setSelectedImage(null)}
+                    disabled={busy}
+                    variant="danger"
+                  />
+                ) : null}
+              </View>
+
+              {selectedImage ? (
+                <View style={styles.previewCard}>
+                  <Image source={{ uri: selectedImage.uri }} style={styles.previewImage} />
+                  <Text style={styles.value}>
+                    Tên file: {selectedImage.fileName || "request-image.jpg"}
+                  </Text>
+                  <Text style={styles.value}>
+                    Kích thước: {selectedImage.width} x {selectedImage.height}
+                  </Text>
+                  <Text style={styles.value}>
+                    Mime type: {selectedImage.mimeType || "image/jpeg"}
+                  </Text>
+                  <Text style={styles.value}>
+                    Dung lượng: {" "}
+                    {selectedImage.fileSize
+                      ? `${Math.round(selectedImage.fileSize / 1024)} KB`
+                      : "Không rõ"}
+                  </Text>
+                </View>
+              ) : null}
+            </>
+          )}
           </>
         )}
         </View>
@@ -675,6 +744,19 @@ const styles = StyleSheet.create({
     gap: 8,
     backgroundColor: "#fff"
   },
+  imageBlockedNotice: {
+    borderWidth: 1,
+    borderColor: "#fecaca",
+    borderRadius: 14,
+    padding: 12,
+    gap: 6,
+    backgroundColor: "#fff1f2"
+  },
+  imageBlockedTitle: {
+    color: "#b91c1c",
+    fontSize: 13,
+    fontWeight: "800"
+  },
   previewImage: {
     width: "100%",
     height: 200,
@@ -818,3 +900,4 @@ const styles = StyleSheet.create({
     backgroundColor: "#e2e8f0"
   }
 });
+
