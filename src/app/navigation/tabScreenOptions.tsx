@@ -34,7 +34,7 @@ const tabMeta: Record<TabName, TabMeta> = {
   Feedback: { label: "Đánh giá", icon: "star-outline" },
   Profile: { label: "Tài khoản", icon: "person-outline" },
   Assignments: { label: "Phân công", icon: "build" },
-  RequestBoard: { label: "Bảng việc", icon: "view-kanban" },
+  RequestBoard: { label: "Lịch sử", icon: "history" },
   ReviewQueue: { label: "Yêu cầu", icon: "inbox" },
   DispatchCenter: { label: "Điều phối", icon: "local-shipping" },
   DispatchHistory: { label: "Lịch sử", icon: "history" },
@@ -80,7 +80,7 @@ export const getTabScreenOptions = ({
       height: 60 + Math.max(0, bottomInset - 8),
       paddingTop: 8,
       paddingBottom: Math.max(8, bottomInset),
-      backgroundColor: colors.  tabBar,
+      backgroundColor: colors.tabBar,
       borderTopWidth: 0,
       borderRadius: 26,
 
