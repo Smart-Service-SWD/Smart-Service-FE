@@ -76,14 +76,29 @@ export const createPriceAdjustmentRequest = (
     newPrice: { amount: number; currency: string };
     reason: string;
     createdBy: string;
-  }
-): Promise<string> =>
-  httpRequest<string>({
+  },
+  evidenceImage: { uri: string; name: string; type: string }
+): Promise<string> => {
+  const formData = new FormData();
+  formData.append("serviceRequestId", payload.serviceRequestId);
+  formData.append("newPriceAmount", payload.newPrice.amount.toString());
+  formData.append("newPriceCurrency", payload.newPrice.currency);
+  formData.append("reason", payload.reason);
+  formData.append("createdBy", payload.createdBy);
+  
+  formData.append("evidenceImage", {
+    uri: evidenceImage.uri,
+    name: evidenceImage.name || "evidence.jpg",
+    type: evidenceImage.type || "image/jpeg"
+  } as any);
+
+  return httpRequest<string>({
     path: "/api/price-adjustments",
     method: "POST",
     token,
-    body: payload
+    body: formData
   });
+};
 
 export interface PayoutItem {
   id: string;
@@ -95,12 +110,33 @@ export interface PayoutItem {
   payoutDate: string;
 }
 
-export const getPayoutsByAgent = (
-  token: string,
-  agentId: string
-): Promise<PayoutItem[]> =>
+export const getPayoutsByAgent = (token: string, agentId: string): Promise<PayoutItem[]> =>
   httpRequest<PayoutItem[]>({
     path: `/api/payouts/agent/${agentId}`,
+    method: "GET",
+    token
+  });
+
+export interface PriceAdjustmentItem {
+  id: string;
+  serviceRequestId: string;
+  oldPriceAmount: number;
+  oldPriceCurrency: string;
+  newPriceAmount: number;
+  newPriceCurrency: string;
+  reason: string;
+  evidenceImageUrl: string;
+  status: string;
+  createdAt: string;
+  createdBy: string;
+}
+
+export const getPriceAdjustmentByServiceRequest = (
+  token: string,
+  serviceRequestId: string
+): Promise<PriceAdjustmentItem | null> =>
+  httpRequest<PriceAdjustmentItem | null>({
+    path: `/api/price-adjustments/service-request/${serviceRequestId}`,
     method: "GET",
     token
   });

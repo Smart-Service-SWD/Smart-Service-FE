@@ -389,9 +389,13 @@ export default function ReviewQueueScreen() {
                   <Text style={styles.metaText}>Thợ đã gán: {getAssignedAgentName(item.assignedProviderId)}</Text>
                   <Text style={styles.metaText}>Độ phức tạp: {item.complexity?.level ?? "Chưa có"}</Text>
 
-                  {item.estimatedCost ? (
+                  {item.finalPrice || item.estimatedCost ? (
                     <Text style={styles.metaText}>
-                      Chi phí ước tính: {formatCurrency(item.estimatedCost.amount, item.estimatedCost.currency)}
+                      {item.finalPrice ? "Chi phí đã duyệt: " : "Chi phí ước tính: "}
+                      {formatCurrency(
+                        item.finalPrice?.amount ?? item.estimatedCost?.amount ?? 0,
+                        item.finalPrice?.currency ?? item.estimatedCost?.currency ?? "VND"
+                      )}
                     </Text>
                   ) : null}
 
@@ -408,10 +412,16 @@ export default function ReviewQueueScreen() {
 
                 <View style={styles.requestActions}>
                   {pendingAdjustments[item.id] ? (
-                    <View style={styles.adjustmentNotice}>
-                      <Text style={styles.adjustmentTitle}>Yêu cầu tăng giá:</Text>
-                      <Text style={styles.adjustmentText}>Mới: {formatCurrency(pendingAdjustments[item.id].newPrice.amount, pendingAdjustments[item.id].newPrice.currency)}</Text>
+                      <View style={styles.adjustmentNotice}>
+                        <Text style={styles.adjustmentTitle}>Yêu cầu tăng giá:</Text>
+                        <Text style={styles.adjustmentText}>Mới: {formatCurrency(pendingAdjustments[item.id].newPriceAmount, pendingAdjustments[item.id].newPriceCurrency)}</Text>
                       <Text style={styles.adjustmentReason}>Lý do: {pendingAdjustments[item.id].reason}</Text>
+                      {pendingAdjustments[item.id].evidenceImageUrl ? (
+                        <View style={{ marginTop: 8, marginBottom: 8 }}>
+                          <Text style={[styles.adjustmentReason, { fontWeight: "700" }]}>Ảnh khảo sát thực tế (Bằng chứng):</Text>
+                          <Image source={{ uri: pendingAdjustments[item.id].evidenceImageUrl }} style={{ width: "100%", height: 160, borderRadius: 8, marginTop: 4, resizeMode: "cover" }} />
+                        </View>
+                      ) : null}
                       <View style={styles.flexRow}>
                         <ActionButton label="Duyệt giá" size="sm" onPress={() => void handlePriceAction(item.id, "approve")} />
                         <ActionButton label="Từ chối" size="sm" variant="danger" onPress={() => void handlePriceAction(item.id, "reject")} />

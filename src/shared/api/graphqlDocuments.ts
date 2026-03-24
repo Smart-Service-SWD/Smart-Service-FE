@@ -317,6 +317,18 @@ export const AGENT_ASSIGNMENTS_QUERY = `
         amount
         currency
       }
+      request: serviceRequest {
+        id
+        status
+        customerId
+        serviceDefinitionId
+        description
+        addressText
+        finalPrice {
+          amount
+          currency
+        }
+      }
     }
   }
 `;

@@ -196,9 +196,14 @@ export const rejectPriceAdjustment = (
 export interface PriceAdjustmentItem {
   id: string;
   serviceRequestId: string;
-  newPrice: { amount: number; currency: string };
+  oldPriceAmount: number;
+  oldPriceCurrency: string;
+  newPriceAmount: number;
+  newPriceCurrency: string;
   reason: string;
+  evidenceImageUrl: string;
   status: string;
+  createdAt: string;
   createdBy: string;
 }
 

@@ -393,7 +393,10 @@ export default function MyRequestsScreen() {
                   <Text style={styles.meta}>Mô tả: {detail.description}</Text>
                   <Text style={styles.meta}>Độ phức tạp: {detail.complexity?.level ?? "Chưa đánh giá"}</Text>
                   <Text style={styles.meta}>
-                    Chi phí ước tính: {detail.estimatedCost ? formatCurrency(detail.estimatedCost.amount, detail.estimatedCost.currency) : "Chưa có"}
+                    {detail.finalPrice ? "Chi phí đã duyệt: " : "Chi phí ước tính: "}
+                    {detail.finalPrice || detail.estimatedCost 
+                      ? formatCurrency(detail.finalPrice?.amount ?? detail.estimatedCost?.amount ?? 0, detail.finalPrice?.currency ?? detail.estimatedCost?.currency ?? "VND") 
+                      : "Chưa có"}
                   </Text>
                   
                   {detail.depositAmount && (

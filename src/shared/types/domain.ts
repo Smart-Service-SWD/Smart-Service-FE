@@ -87,6 +87,7 @@ export interface AssignmentItem {
   agentId?: string;
   assignedAt: string;
   estimatedCost: Money;
+  request?: ServiceRequestItem;
 }
 
 export interface MatchingResultItem {

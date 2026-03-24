@@ -286,10 +286,10 @@ export default function DispatchCenterScreen() {
     return wasAnalyzedByAI ? "AI chưa trả về" : "Chưa phân tích AI";
   };
 
-  const getEstimatedCostLabel = (request?: ServiceRequestItem | null) =>
-    request?.estimatedCost
-      ? formatCurrency(request.estimatedCost.amount, request.estimatedCost.currency)
-      : "Chưa có";
+  const getEstimatedCostLabel = (request?: ServiceRequestItem | null) => {
+    const price = request?.finalPrice || request?.estimatedCost;
+    return price ? formatCurrency(price.amount, price.currency) : "Chưa có";
+  };
 
   const getRequestedServiceLabel = (request?: ServiceRequestItem | null) => {
     if (!request?.serviceDefinitionId) return "Khách chưa chốt dịch vụ";

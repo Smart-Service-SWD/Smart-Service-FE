@@ -46,7 +46,9 @@ import {
   createActivityLog,
   createPriceAdjustmentRequest,
   setServiceAgentActiveStatus,
-  startAssignedRequest
+  startAssignedRequest,
+  getPriceAdjustmentByServiceRequest,
+  PriceAdjustmentItem
 } from "../api/agentApi";
 import LabeledInput from "../../../shared/ui/LabeledInput";
 
@@ -121,6 +123,8 @@ export default function AssignmentsScreen() {
   const [completionNotes, setCompletionNotes] = useState("");
   const [evidenceUrl, setEvidenceUrl] = useState("");
   const [selectedImage, setSelectedImage] = useState<{ uri: string; name: string; type: string } | null>(null);
+  const [adjustmentImage, setAdjustmentImage] = useState<{ uri: string; name: string; type: string } | null>(null);
+  const [currentAdjustment, setCurrentAdjustment] = useState<PriceAdjustmentItem | null>(null);
 
   const selectedWork = useMemo(
     () => items.find((item) => item.request.id === detailRequestId) ?? null,
@@ -180,30 +184,18 @@ export default function AssignmentsScreen() {
       });
       const uniqueAssignments = Array.from(latestAssignments.values());
 
-      const workItems = (
-        await Promise.all(
-          uniqueAssignments.map(async (assignment) => {
-            try {
-              const response = await graphqlRequest<RequestByIdResponse, { id: string }>(
-                REQUEST_BY_ID_QUERY,
-                { id: assignment.serviceRequestId },
-                session.accessToken
-              );
-              const request = response.getServiceRequestById
-                ? normalizeServiceRequest(response.getServiceRequestById)
-                : null;
-              if (!request || !ACTIVE_STATUSES.has(request.status)) return null;
-              return {
-                assignment,
-                request,
-                serviceName: request.serviceDefinitionId
-                  ? definitionNameById[request.serviceDefinitionId] ?? "Dịch vụ"
-                  : "Dịch vụ"
-              };
-            } catch { return null; }
-          })
-        )
-      )
+      const workItems = uniqueAssignments
+        .map((assignment) => {
+          const request = assignment.request ? normalizeServiceRequest(assignment.request) : null;
+          if (!request || !ACTIVE_STATUSES.has(request.status)) return null;
+          return {
+            assignment,
+            request,
+            serviceName: request.serviceDefinitionId
+              ? definitionNameById[request.serviceDefinitionId] ?? "Dịch vụ"
+              : "Dịch vụ"
+          };
+        })
         .filter((item): item is AgentWorkItem => item !== null)
         .sort((a, b) => {
           if (a.request.status !== b.request.status) return a.request.status === "IN_PROGRESS" ? -1 : 1;
@@ -247,12 +239,16 @@ export default function AssignmentsScreen() {
       setDetail(request);
       setCustomerProfile(nextCustomerProfile);
       
+      const adjustmentData = await getPriceAdjustmentByServiceRequest(session.accessToken, request.id);
+      setCurrentAdjustment(adjustmentData);
+      
       // Reset modal fields when switching assignments to avoid data leak
       setCompletionNotes("");
       setEvidenceUrl("");
       setSelectedImage(null);
       setNewPriceAmount("");
       setAdjustmentReason("");
+      setAdjustmentImage(null);
     } catch (loadError) {
       setError(asErrorMessage(loadError));
     } finally {
@@ -328,19 +324,32 @@ export default function AssignmentsScreen() {
       setError("Vui lòng nhập lý do.");
       return;
     }
+    if (!adjustmentImage) {
+      setError("Vui lòng đính kèm ảnh chụp bằng chứng.");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
-      await createPriceAdjustmentRequest(session.accessToken, {
-        serviceRequestId: detail.id,
-        newPrice: { amount, currency: detail.estimatedCost?.currency || "VND" },
-        reason: adjustmentReason,
-        createdBy: linkedServiceAgent.id
-      });
+      await createPriceAdjustmentRequest(
+        session.accessToken,
+        {
+          serviceRequestId: detail.id,
+          newPrice: { amount, currency: detail.estimatedCost?.currency || "VND" },
+          reason: adjustmentReason,
+          createdBy: linkedServiceAgent.id
+        },
+        adjustmentImage
+      );
       setSuccess("Đã gửi yêu cầu điều chỉnh giá.");
       setShowAdjustmentModal(false);
       setNewPriceAmount("");
       setAdjustmentReason("");
+      setAdjustmentImage(null);
+      
+      // Refresh context
+      const newAdj = await getPriceAdjustmentByServiceRequest(session.accessToken, detail.id);
+      setCurrentAdjustment(newAdj);
     } catch (err) {
       setError(asErrorMessage(err));
     } finally {
@@ -359,6 +368,24 @@ export default function AssignmentsScreen() {
       const asset = result.assets[0];
       const fileName = asset.uri.split("/").pop() || "evidence.jpg";
       setSelectedImage({
+        uri: asset.uri,
+        name: fileName,
+        type: "image/jpeg"
+      });
+    }
+  };
+
+  const pickAdjustmentImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.7
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      const asset = result.assets[0];
+      const fileName = asset.uri.split("/").pop() || "evidence.jpg";
+      setAdjustmentImage({
         uri: asset.uri,
         name: fileName,
         type: "image/jpeg"
@@ -426,7 +453,12 @@ export default function AssignmentsScreen() {
                 <Pressable style={styles.assignmentRow} onPress={() => void loadRequestDetail(item.request.id)}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.assignmentTitle}>{item.serviceName}</Text>
-                    <Text style={styles.assignmentMeta}>{formatDateTime(item.assignment.assignedAt)} • {formatCurrency(item.assignment.estimatedCost.amount, item.assignment.estimatedCost.currency)}</Text>
+                    <Text style={styles.assignmentMeta}>
+                      {formatDateTime(item.assignment.assignedAt)} • {formatCurrency(
+                        item.request.finalPrice?.amount ?? item.assignment.estimatedCost.amount,
+                        item.request.finalPrice?.currency ?? item.assignment.estimatedCost.currency
+                      )}
+                    </Text>
                   </View>
                   <View style={[styles.statusPill, getStatusStyle(item.request.status, styles)]}>
                     <Text style={[styles.statusPillText, getStatusTextStyle(item.request.status)]}>
@@ -448,10 +480,27 @@ export default function AssignmentsScreen() {
                         <ActionButton label="Bắt đầu làm việc" onPress={() => void handleStatusChange("IN_PROGRESS")} loading={loading} />
                       )}
                       {detail.status === "IN_PROGRESS" && (
-                        <>
-                          <ActionButton label="Đề xuất tăng giá" onPress={() => setShowAdjustmentModal(true)} variant="secondary" />
+                        <View style={{ width: "100%", gap: 10 }}>
+                          {currentAdjustment ? (() => {
+                            const adjStatus = currentAdjustment?.status?.toString()?.toUpperCase();
+                            const isAdjApproved = adjStatus === "APPROVED" || adjStatus === "1";
+                            const isAdjRejected = adjStatus === "REJECTED" || adjStatus === "2";
+                            
+                            return (
+                            <View style={{ backgroundColor: isAdjApproved ? "#f0fdf4" : isAdjRejected ? "#fef2f2" : "#fffbeb", padding: 12, borderRadius: 12, borderWidth: 1, borderColor: isAdjApproved ? "#bbf7d0" : isAdjRejected ? "#fecaca" : "#fde68a" }}>
+                              <Text style={{ fontSize: 13, fontWeight: "700", color: isAdjApproved ? "#166534" : isAdjRejected ? "#991b1b" : "#92400e" }}>
+                                Đã đề xuất giá mới: {formatCurrency(currentAdjustment.newPriceAmount, currentAdjustment.newPriceCurrency)}
+                              </Text>
+                              <Text style={{ fontSize: 12, color: isAdjApproved ? "#15803d" : isAdjRejected ? "#b91c1c" : "#b45309", marginTop: 4 }}>
+                                Trạng thái: {isAdjApproved ? "✅ Đã được duyệt" : isAdjRejected ? "❌ Bị từ chối" : "⏳ Đang chờ duyệt"}
+                              </Text>
+                            </View>
+                            );
+                          })() : (
+                            <ActionButton label="Đề xuất tăng giá" onPress={() => setShowAdjustmentModal(true)} variant="secondary" />
+                          )}
                           <ActionButton label="Báo cáo hoàn thành" onPress={() => setShowCompletionModal(true)} loading={loading} />
-                        </>
+                        </View>
                       )}
                     </View>
                   </View>
@@ -466,14 +515,31 @@ export default function AssignmentsScreen() {
             <View style={styles.modalContent}>
               <Text style={styles.cardTitle}>Đề xuất tăng giá</Text>
               <LabeledInput label="Giá mới" value={newPriceAmount} onChangeText={setNewPriceAmount} keyboardType="numeric" />
+              
+              <Text style={[styles.statusLabel, { marginTop: 10 }]}>Bằng chứng (Bắt buộc):</Text>
+              <View style={styles.imagePickerContainer}>
+                {adjustmentImage ? (
+                  <RNImage source={{ uri: adjustmentImage.uri }} style={styles.previewImage} />
+                ) : (
+                  <View style={styles.imagePlaceholder}>
+                    <MaterialIcons name="image" size={40} color="#94a3b8" />
+                    <Text style={styles.imagePlaceholderText}>Chưa có ảnh bằng chứng</Text>
+                  </View>
+                )}
+                <Pressable style={styles.pickButton} onPress={() => void pickAdjustmentImage()}>
+                  <Text style={styles.pickButtonText}>{adjustmentImage ? "Thay đổi ảnh" : "Chọn ảnh từ máy"}</Text>
+                </Pressable>
+              </View>
+
               <Text style={[styles.statusLabel, { marginTop: 10 }]}>Lý do:</Text>
-              <TextInput style={styles.textArea} value={adjustmentReason} onChangeText={setAdjustmentReason} multiline numberOfLines={3} placeholder="Lý do..." />
+              <TextInput style={styles.textArea} value={adjustmentReason} onChangeText={setAdjustmentReason} multiline numberOfLines={3} placeholder="Nhập lý do kỹ thuật chi tiết..." />
               <View style={styles.actionRow}>
                 <ActionButton label="Gửi" onPress={() => void handleCreateAdjustment()} loading={loading} />
                 <ActionButton label="Hủy" onPress={() => {
                   setShowAdjustmentModal(false);
                   setNewPriceAmount("");
                   setAdjustmentReason("");
+                  setAdjustmentImage(null);
                 }} variant="secondary" />
               </View>
             </View>
