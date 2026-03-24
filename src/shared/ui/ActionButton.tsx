@@ -1,10 +1,11 @@
-import { Pressable, StyleSheet, Text } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text } from "react-native";
 import { colors } from "../../app/theme/colors";
 
 interface ActionButtonProps {
   label: string;
   onPress: () => void;
   disabled?: boolean;
+  loading?: boolean;
   variant?: "primary" | "secondary" | "danger";
   size?: "md" | "sm";
 }
@@ -13,6 +14,7 @@ export default function ActionButton({
   label,
   onPress,
   disabled = false,
+  loading = false,
   variant = "primary",
   size = "md"
 }: ActionButtonProps) {
@@ -35,18 +37,22 @@ export default function ActionButton({
       onPress={onPress}
       disabled={disabled}
     >
-      <Text
-        style={[
-          styles.label,
-          isSmall && styles.labelSm,
-          isPrimary && styles.primaryLabel,
-          isSecondary && styles.secondaryLabel,
-          isDanger && styles.primaryLabel
-        ]}
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
+      {loading ? (
+        <ActivityIndicator color={isSecondary ? colors.primary : "#fff"} size="small" />
+      ) : (
+        <Text
+          style={[
+            styles.label,
+            isSmall && styles.labelSm,
+            isPrimary && styles.primaryLabel,
+            isSecondary && styles.secondaryLabel,
+            isDanger && styles.primaryLabel
+          ]}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+      )}
     </Pressable>
   );
 }

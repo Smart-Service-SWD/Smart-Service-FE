@@ -117,6 +117,32 @@ export const MY_REQUESTS_QUERY = `
       estimatedDuration
       ocrExtractedText
       wasAnalyzedByAI
+      finalPrice {
+        amount
+        currency
+      }
+      depositAmount {
+        amount
+        currency
+      }
+      isDepositPaid
+      commissionRate
+      commissionAmount {
+        amount
+        currency
+      }
+      workerAmount {
+        amount
+        currency
+      }
+      completionEvidences {
+        id
+        workerId
+        imageUrl
+        notes
+        type
+        createdAt
+      }
     }
   }
 `;
@@ -144,6 +170,32 @@ export const REQUEST_BY_ID_QUERY = `
       estimatedDuration
       ocrExtractedText
       wasAnalyzedByAI
+      finalPrice {
+        amount
+        currency
+      }
+      depositAmount {
+        amount
+        currency
+      }
+      isDepositPaid
+      commissionRate
+      commissionAmount {
+        amount
+        currency
+      }
+      workerAmount {
+        amount
+        currency
+      }
+      completionEvidences {
+        id
+        workerId
+        imageUrl
+        notes
+        type
+        createdAt
+      }
     }
   }
 `;
@@ -171,6 +223,32 @@ export const REQUESTS_BY_STATUS_QUERY = `
       estimatedDuration
       ocrExtractedText
       wasAnalyzedByAI
+      finalPrice {
+        amount
+        currency
+      }
+      depositAmount {
+        amount
+        currency
+      }
+      isDepositPaid
+      commissionRate
+      commissionAmount {
+        amount
+        currency
+      }
+      workerAmount {
+        amount
+        currency
+      }
+      completionEvidences {
+        id
+        workerId
+        imageUrl
+        notes
+        type
+        createdAt
+      }
     }
   }
 `;
@@ -198,6 +276,32 @@ export const ALL_REQUESTS_QUERY = `
       estimatedDuration
       ocrExtractedText
       wasAnalyzedByAI
+      finalPrice {
+        amount
+        currency
+      }
+      depositAmount {
+        amount
+        currency
+      }
+      isDepositPaid
+      commissionRate
+      commissionAmount {
+        amount
+        currency
+      }
+      workerAmount {
+        amount
+        currency
+      }
+      completionEvidences {
+        id
+        workerId
+        imageUrl
+        notes
+        type
+        createdAt
+      }
     }
   }
 `;

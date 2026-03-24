@@ -99,14 +99,18 @@ export const normalizeServiceRequests = <T extends { status: string }>(items: T[
   items.map(normalizeServiceRequest);
 
 const requestStatusLabels: Record<string, string> = {
-  AWAITING_ANALYSIS: "Chờ AI phân tích",
+  AWAITING_ANALYSIS: "Chờ AI",
   CREATED: "Mới tạo",
-
-  PENDING_REVIEW: "Chờ duyệt",
-  APPROVED: "Đã duyệt",
-  ASSIGNED: "Đã phân công",
-  IN_PROGRESS: "Đang thực hiện",
-  COMPLETED: "Hoàn thành",
+  PENDING_REVIEW: "Chờ gán thợ",
+  AWAITING_DEPOSIT: "Chờ cọc",
+  DEPOSIT_PAID: "Đã cọc",
+  ASSIGNED: "Đã gán",
+  IN_PROGRESS: "Đang làm",
+  AWAITING_COMPLETION_REVIEW: "Báo cáo hoàn thành",
+  COMPLETION_APPROVED: "Đã duyệt HT",
+  AWAITING_FINAL_PAYMENT: "Chờ trả hết",
+  FINAL_PAYMENT_PAID: "Đã trả đủ",
+  PAYOUT_COMPLETED: "Đã tất toán",
   CANCELLED: "Đã hủy"
 };
 

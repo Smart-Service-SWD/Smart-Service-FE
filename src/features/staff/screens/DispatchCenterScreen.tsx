@@ -48,7 +48,10 @@ import {
   assignProvider,
   createActivityLog,
   createAssignment,
-  evaluateComplexity
+  evaluateComplexity,
+  requestDeposit,
+  searchServiceAgents,
+  type ServiceAgentSearchItem
 } from "../api/staffApi";
 
 interface ServiceAgentsResponse {
@@ -185,6 +188,8 @@ export default function DispatchCenterScreen() {
   const [needsManualRequestSelection, setNeedsManualRequestSelection] = useState(false);
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("overview");
   const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false);
+  const [searchPage, setSearchPage] = useState(1);
+  const [searchResult, setSearchResult] = useState<{ items: ServiceAgentSearchItem[], total: number }>({ items: [], total: 0 });
 
   const applyMatchSelection = (match: AgentMatchCandidate | null) => {
     setSelectedAgentId(match?.agent.id ?? "");
@@ -254,6 +259,19 @@ export default function DispatchCenterScreen() {
     () => activeAgents.filter((agent) => (agent.capabilities?.length ?? 0) > 0),
     [activeAgents]
   );
+
+  const busyAgentIds = useMemo(() => {
+    return new Set(
+      requests
+        .filter(r => 
+          r.status === "ASSIGNED" || 
+          r.status === "IN_PROGRESS" || 
+          r.status === "AWAITING_COMPLETION_REVIEW"
+        )
+        .map(r => r.assignedProviderId)
+        .filter((id): id is string => !!id)
+    );
+  }, [requests]);
 
   const getCustomerName = (customerId?: string | null) =>
     customerId ? customerNamesById[customerId] ?? formatShortId(customerId) : "-";
@@ -339,6 +357,34 @@ export default function DispatchCenterScreen() {
     }
   };
 
+  const loadAgentsData = async () => {
+    if (!session || !selectedRequest || !selectedServiceId) return;
+    setLoading(true);
+    try {
+      const result = await searchServiceAgents(session.accessToken, {
+        categoryId: selectedRequest.categoryId ?? undefined,
+        serviceId: selectedServiceId,
+        minComplexity: selectedRequest.complexity?.level ?? complexityLevel,
+        page: searchPage,
+        pageSize: 5
+      });
+      setSearchResult({ items: result.items, total: result.totalCount });
+      if (result.items.length > 0 && !selectedAgentId) {
+        setSelectedAgentId(result.items[0].id);
+      }
+    } catch (err) {
+      setError(asErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "agent" && isWorkspaceOpen) {
+      void loadAgentsData();
+    }
+  }, [activeTab, isWorkspaceOpen, searchPage, selectedServiceId, complexityLevel]);
+
   const handleSelectRequest = (request: ServiceRequestItem) => {
     setNeedsManualRequestSelection(false);
     setSelectedRequestId(request.id);
@@ -384,7 +430,16 @@ export default function DispatchCenterScreen() {
     setSuccess("");
     try {
       const isReevaluation = selectedRequest.status === "PENDING_REVIEW";
-      await evaluateComplexity(session.accessToken, selectedRequest.id, complexityLevel);
+      const amount = Number.parseFloat(estimatedAmount);
+      const money = !Number.isNaN(amount) ? { amount, currency: currency.trim() || "VND" } : undefined;
+      
+      await evaluateComplexity(
+        session.accessToken, 
+        selectedRequest.id, 
+        complexityLevel,
+        selectedServiceId || undefined,
+        money
+      );
       await createActivityLog(session.accessToken, {
         serviceRequestId: selectedRequest.id,
         action: `Staff evaluated complexity ${complexityLevel} before dispatch`
@@ -463,6 +518,33 @@ export default function DispatchCenterScreen() {
       await loadInitialData();
     } catch (actionError) {
       setError(asErrorMessage(actionError));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRequestDeposit = async () => {
+    if (!session || !selectedRequest) return;
+    setLoading(true);
+    setError("");
+    setSuccess("");
+    try {
+      // 20% deposit based on estimated cost
+      const amount = selectedRequest.estimatedCost?.amount ?? 0;
+      await requestDeposit(
+        session.accessToken, 
+        selectedRequest.id, 
+        { amount: Math.floor(amount * 0.2), currency: "VND" }, 
+        0.2
+      );
+      await createActivityLog(session.accessToken, {
+        serviceRequestId: selectedRequest.id,
+        action: `Staff requested deposit for request ${selectedRequest.id}`
+      });
+      setSuccess("Đã gửi yêu cầu đặt cọc thành công cho khách hàng.");
+      await loadInitialData();
+    } catch (err) {
+      setError(asErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -671,11 +753,21 @@ export default function DispatchCenterScreen() {
 
                 <View style={styles.actionGroup}>
                   {selectedRequest.assignedProviderId ? (
-                    <ActionButton
-                      label="Xem lịch sử phân công"
-                      onPress={() => navigation.navigate("DispatchHistory", { requestId: selectedRequest.id })}
-                      variant="secondary"
-                    />
+                    <View style={styles.actionGroup}>
+                      {selectedRequest.status === "PENDING_REVIEW" && (
+                        <ActionButton
+                          label={loading ? "Đang xử lý..." : "Yêu cầu đặt cọc"}
+                          variant="primary"
+                          onPress={() => void handleRequestDeposit()}
+                          disabled={loading}
+                        />
+                      )}
+                      <ActionButton
+                        label="Xem lịch sử phân công"
+                        onPress={() => navigation.navigate("DispatchHistory", { requestId: selectedRequest.id })}
+                        variant="secondary"
+                      />
+                    </View>
                   ) : null}
                   <ActionButton
                     label={loading ? "Đang làm mới..." : "Làm mới dữ liệu"}
@@ -828,49 +920,71 @@ export default function DispatchCenterScreen() {
                         {readyAgentMatches.length > 0 ? (
                           <View style={styles.optionStack}>
                             <Text style={styles.subTitle}>Có thể gán ngay</Text>
-                            {readyAgentMatches.map((match) => (
-                              <View key={match.agent.id} style={styles.agentGroup}>
-                                <Pressable
-                                  style={[styles.optionCard, selectedAgentId === match.agent.id && styles.optionCardActive]}
-                                  onPress={() => handleSelectAgent(match)}
-                                >
-                                  <Text style={styles.selectedTitle}>{match.agent.fullName}</Text>
-                                  <Text style={styles.metaText}>Mã thợ: {formatShortId(match.agent.id)}</Text>
-                                  <Text style={styles.metaText}>Mức tối đa: {match.capability?.maxComplexity?.level ?? "?"}</Text>
-                                  <Text style={styles.metaText}>Điểm gợi ý: {match.score}</Text>
-                                  <Text style={styles.metaText}>{match.notes.join(" · ")}</Text>
-                                </Pressable>
-                                {selectedAgentId === match.agent.id ? renderActionPanel() : null}
-                              </View>
-                            ))}
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalAgentScroll}>
+                              {readyAgentMatches.map((match) => {
+                                const isBusy = busyAgentIds.has(match.agent.id);
+                                return (
+                                  <View key={match.agent.id} style={styles.agentCardWrapper}>
+                                    <Pressable
+                                      style={[
+                                        styles.optionCardHorizontal, 
+                                        selectedAgentId === match.agent.id && styles.optionCardActive
+                                      ]}
+                                      onPress={() => handleSelectAgent(match)}
+                                    >
+                                      <View style={styles.agentHeader}>
+                                        <Text style={styles.selectedTitle} numberOfLines={1}>{match.agent.fullName}</Text>
+                                        <View style={[styles.statusPill, { backgroundColor: isBusy ? "#fef2f2" : "#f0fdf4" }]}>
+                                          <Text style={[styles.statusText, { color: isBusy ? "#dc2626" : "#16a34a" }]}>
+                                            {isBusy ? "Đang bận" : "Sẵn sàng"}
+                                          </Text>
+                                        </View>
+                                      </View>
+                                      <Text style={styles.metaText}>Mức tối đa: {match.capability?.maxComplexity?.level ?? "?"}</Text>
+                                      <Text style={styles.metaText}>Điểm gợi ý: {match.score}</Text>
+                                      <Text style={styles.metaText} numberOfLines={1}>{match.notes.join(" · ")}</Text>
+                                    </Pressable>
+                                  </View>
+                                );
+                              })}
+                            </ScrollView>
+                            {selectedAgentMatch && readyAgentMatches.some(m => m.agent.id === selectedAgentId) ? renderActionPanel() : null}
                           </View>
                         ) : null}
 
                         {reviewAgentMatches.length > 0 ? (
                           <View style={styles.optionStack}>
                             <Text style={styles.subTitle}>Cần rà soát thêm</Text>
-                            <Text style={styles.metaText}>
-                              Các thợ dưới đây cùng danh mục nhưng chưa đủ mức độ phức tạp hoặc chưa gắn đúng dịch vụ.
-                            </Text>
-                            {reviewAgentMatches.map((match) => (
-                              <View key={match.agent.id} style={styles.agentGroup}>
-                                <Pressable
-                                  style={[
-                                    styles.optionCard,
-                                    styles.optionCardMuted,
-                                    selectedAgentId === match.agent.id && styles.optionCardActive
-                                  ]}
-                                  onPress={() => handleSelectAgent(match)}
-                                >
-                                  <Text style={styles.selectedTitle}>{match.agent.fullName}</Text>
-                                  <Text style={styles.metaText}>Mã thợ: {formatShortId(match.agent.id)}</Text>
-                                  <Text style={styles.metaText}>Mức tối đa: {match.capability?.maxComplexity?.level ?? "?"}</Text>
-                                  <Text style={styles.metaText}>Điểm tham khảo: {match.score}</Text>
-                                  <Text style={styles.metaText}>{match.notes.join(" · ")}</Text>
-                                </Pressable>
-                                {selectedAgentId === match.agent.id ? renderActionPanel() : null}
-                              </View>
-                            ))}
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalAgentScroll}>
+                              {reviewAgentMatches.map((match) => {
+                                const isBusy = busyAgentIds.has(match.agent.id);
+                                return (
+                                  <View key={match.agent.id} style={styles.agentCardWrapper}>
+                                    <Pressable
+                                      style={[
+                                        styles.optionCardHorizontal,
+                                        styles.optionCardMuted,
+                                        selectedAgentId === match.agent.id && styles.optionCardActive
+                                      ]}
+                                      onPress={() => handleSelectAgent(match)}
+                                    >
+                                      <View style={styles.agentHeader}>
+                                        <Text style={styles.selectedTitle} numberOfLines={1}>{match.agent.fullName}</Text>
+                                        <View style={[styles.statusPill, { backgroundColor: isBusy ? "#fef2f2" : "#f0fdf4" }]}>
+                                          <Text style={[styles.statusText, { color: isBusy ? "#dc2626" : "#16a34a" }]}>
+                                            {isBusy ? "Đang bận" : "Sẵn sàng"}
+                                          </Text>
+                                        </View>
+                                      </View>
+                                      <Text style={styles.metaText}>Mức tối đa: {match.capability?.maxComplexity?.level ?? "?"}</Text>
+                                      <Text style={styles.metaText}>Điểm tham khảo: {match.score}</Text>
+                                      <Text style={styles.metaText} numberOfLines={1}>{match.notes.join(" · ")}</Text>
+                                    </Pressable>
+                                  </View>
+                                );
+                              })}
+                            </ScrollView>
+                            {selectedAgentMatch && reviewAgentMatches.some(m => m.agent.id === selectedAgentId) ? renderActionPanel() : null}
                           </View>
                         ) : null}
                       </>
@@ -1075,6 +1189,23 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     backgroundColor: "#eff6ff"
   },
+  paginationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 16,
+    gap: 16
+  },
+  pageBtn: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: "#f1f5f9"
+  },
+  pageText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#475569"
+  },
   chipText: { color: "#64748b", fontSize: 12, fontWeight: "800" },
   chipTextActive: { color: colors.primary },
 
@@ -1141,6 +1272,19 @@ const styles = StyleSheet.create({
   selectedTitle: { color: "#0f172a", fontWeight: "800", fontSize: 14, lineHeight: 20 },
 
   agentGroup: { gap: 8 },
+  agentCardWrapper: { width: 220, marginRight: 12 },
+  optionCardHorizontal: {
+    backgroundColor: "#f0f4ff",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 14,
+    padding: 12,
+    gap: 4,
+    height: 110,
+    justifyContent: "space-between"
+  },
+  horizontalAgentScroll: { paddingRight: 20 },
+  agentHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
   actionPanel: {
     borderWidth: 1,
     borderColor: colors.primary,

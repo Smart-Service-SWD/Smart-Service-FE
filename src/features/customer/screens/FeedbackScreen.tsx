@@ -98,7 +98,7 @@ export default function FeedbackScreen() {
         ),
         graphqlRequest<CompletedRequestsResponse, { status?: string | null }>(
           MY_REQUESTS_QUERY,
-          { status: "COMPLETED" },
+          { status: null },
           session.accessToken
         ),
         graphqlRequest<ServiceAgentsResponse>(
@@ -110,7 +110,10 @@ export default function FeedbackScreen() {
       ]);
 
       setItems(feedbackData.getMyServiceFeedbacks);
-      setCompletedRequests(requestData.getMyServiceRequests);
+      
+      // Filter requests that are logically completed (Status >= 10: FinalPaymentPaid, PayoutCompleted)
+      const finishedRequests = requestData.getMyServiceRequests.filter(req => (req.status as any) >= 10);
+      setCompletedRequests(finishedRequests);
       setAgentNamesById(
         Object.fromEntries(agentData.getServiceAgents.map((agent) => [agent.id, agent.fullName]))
       );
@@ -119,7 +122,7 @@ export default function FeedbackScreen() {
           serviceDefData.getServiceDefinitions.map((service) => [service.id, service.name])
         )
       );
-      const availableIds = requestData.getMyServiceRequests
+      const availableIds = finishedRequests
         .filter(
           (req) =>
             !feedbackData.getMyServiceFeedbacks.some(

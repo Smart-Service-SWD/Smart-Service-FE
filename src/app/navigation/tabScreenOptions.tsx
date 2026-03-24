@@ -20,7 +20,8 @@ type TabName =
   | "Dashboard"
   | "Users"
   | "Services"
-  | "AdminFeedback";
+  | "AdminFeedback"
+  | "PayoutHistory";
 
 interface TabMeta {
   label: string;
@@ -41,7 +42,8 @@ const tabMeta: Record<TabName, TabMeta> = {
   Dashboard: { label: "Tổng quan", icon: "dashboard" },
   Users: { label: "Người dùng", icon: "groups" },
   Services: { label: "Dịch vụ", icon: "miscellaneous-services" },
-  AdminFeedback: { label: "Feedback", icon: "star-outline" }
+  AdminFeedback: { label: "Feedback", icon: "star-outline" },
+  PayoutHistory: { label: "Thu nhập", icon: "account-balance-wallet" }
 };
 
 export const getTabScreenOptions = ({

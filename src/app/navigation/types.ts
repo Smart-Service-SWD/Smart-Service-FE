@@ -26,6 +26,7 @@ export type CustomerTabParamList = {
 export type AgentTabParamList = {
   Assignments: undefined;
   RequestBoard: undefined;
+  PayoutHistory: undefined;
   Profile: undefined;
 };
 

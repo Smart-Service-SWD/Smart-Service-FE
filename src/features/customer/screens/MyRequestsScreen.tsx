@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
+import QRCode from 'react-native-qrcode-svg';
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
@@ -35,6 +36,7 @@ import type {
   ServiceRequestItem
 } from "../../../shared/types/domain";
 import ActionButton from "../../../shared/ui/ActionButton";
+import { markAsPaid } from "../../staff/api/staffApi";
 
 interface MyRequestsResponse {
   getMyServiceRequests: ServiceRequestItem[];
@@ -60,10 +62,15 @@ const statusOptions = [
   { label: "Chờ AI", value: "AWAITING_ANALYSIS" },
   { label: "Mới tạo", value: "CREATED" },
   { label: "Chờ duyệt", value: "PENDING_REVIEW" },
-  { label: "Đã duyệt", value: "APPROVED" },
+  { label: "Chờ cọc", value: "AWAITING_DEPOSIT" },
+  { label: "Đã cọc", value: "DEPOSIT_PAID" },
   { label: "Đã phân công", value: "ASSIGNED" },
   { label: "Đang làm", value: "IN_PROGRESS" },
-  { label: "Hoàn thành", value: "COMPLETED" }
+  { label: "Đang kiểm tra", value: "AWAITING_COMPLETION_REVIEW" },
+  { label: "Đã duyệt hoàn thành", value: "COMPLETION_APPROVED" },
+  { label: "Chờ thanh toán cuối", value: "AWAITING_FINAL_PAYMENT" },
+  { label: "Đã thanh toán đủ", value: "FINAL_PAYMENT_PAID" },
+  { label: "Hoàn tất", value: "PAYOUT_COMPLETED" }
 ] as const;
 
 const canCancelBeforeStaffConfirmation = (status?: string | null) =>
@@ -81,6 +88,9 @@ export default function MyRequestsScreen() {
   const [serviceNamesById, setServiceNamesById] = useState<Record<string, string>>({});
   const [agentNamesById, setAgentNamesById] = useState<Record<string, string>>({});
   const [reviewedRequestIds, setReviewedRequestIds] = useState<string[]>([]);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState(0);
+  const [paymentType, setPaymentType] = useState<"DEPOSIT" | "FINAL">("DEPOSIT");
   const [loading, setLoading] = useState(false);
   const [cancelingRequestId, setCancelingRequestId] = useState("");
   const [error, setError] = useState("");
@@ -385,9 +395,31 @@ export default function MyRequestsScreen() {
                   <Text style={styles.meta}>
                     Chi phí ước tính: {detail.estimatedCost ? formatCurrency(detail.estimatedCost.amount, detail.estimatedCost.currency) : "Chưa có"}
                   </Text>
+                  
+                  {detail.depositAmount && (
+                    <Text style={styles.meta}>
+                      Số tiền đã cọc: {formatCurrency(detail.depositAmount.amount, detail.depositAmount.currency)}
+                    </Text>
+                  )}
+
                   <Text style={styles.meta}>Thợ sửa chữa: {getAgentName(detail.assignedProviderId)}</Text>
                   {detail.addressText ? <Text style={styles.meta}>Địa chỉ: {detail.addressText}</Text> : null}
-                  <Text style={styles.meta}>Thời gian tạo: {formatDateTime(detail.createdAt)}</Text>
+                  
+                  {(detail.status === "AWAITING_DEPOSIT" || detail.status === "AWAITING_FINAL_PAYMENT") && (
+                    <ActionButton
+                      label={detail.status === "AWAITING_DEPOSIT" ? "Thanh toán tiền cọc" : "Thanh toán phần còn lại"}
+                      onPress={() => {
+                        const amt = detail.status === "AWAITING_DEPOSIT" 
+                          ? detail.depositAmount?.amount ?? 0 
+                          : (detail.finalPrice?.amount ?? detail.estimatedCost?.amount ?? 0) - (detail.depositAmount?.amount ?? 0);
+                        setPaymentAmount(amt);
+                        setPaymentType(detail.status === "AWAITING_DEPOSIT" ? "DEPOSIT" : "FINAL");
+                        setShowPaymentModal(true);
+                      }}
+                      variant="primary"
+                    />
+                  )}
+
                   {canCancelBeforeStaffConfirmation(detail.status) ? (
                     <View style={styles.cancelBox}>
                       <Text style={styles.meta}>Bạn có thể hủy ở bước này vì staff chưa xác nhận độ phức tạp.</Text>
@@ -405,6 +437,66 @@ export default function MyRequestsScreen() {
       ) : null}
 
       
+      <Modal visible={showPaymentModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {paymentType === "DEPOSIT" ? "Thanh toán đặt cọc" : "Thanh toán tất toán"}
+              </Text>
+              <Pressable onPress={() => setShowPaymentModal(false)}>
+                <MaterialIcons name="close" size={24} color="#64748b" />
+              </Pressable>
+            </View>
+            
+            <View style={styles.qrContainer}>
+              <View style={styles.qrShadow}>
+                {detailRequestId ? (
+                  <QRCode
+                    value={`SMARTSERVICE_PAY_${detailRequestId}_${paymentType}_${paymentAmount}`}
+                    size={200}
+                    color={colors.primary}
+                    backgroundColor="white"
+                    quietZone={10}
+                  />
+                ) : (
+                  <ActivityIndicator color={colors.primary} />
+                )}
+              </View>
+              <Text style={styles.qrAmountText}>{formatCurrency(paymentAmount, "VND")}</Text>
+              <Text style={styles.qrInstruction}>Vui lòng quét mã QR để thực hiện chuyển khoản</Text>
+            </View>
+
+            <View style={styles.modalActions}>
+              <ActionButton 
+                label={loading ? "Đang xử lý..." : "Đã chuyển khoản"}
+                disabled={loading}
+                onPress={async () => {
+                  if (!session) return;
+                  setLoading(true);
+                  try {
+                    await markAsPaid(session.accessToken, detailRequestId);
+                    setShowPaymentModal(false);
+                    Alert.alert("Thông báo", "Thanh toán của bạn đã được ghi nhận thành công.");
+                    await load();
+                    await loadRequestDetail(detailRequestId);
+                  } catch (err) {
+                    Alert.alert("Lỗi", asErrorMessage(err));
+                  } finally {
+                    setLoading(false);
+                  }
+                }} 
+              />
+              <ActionButton 
+                label="Đóng" 
+                variant="secondary" 
+                onPress={() => setShowPaymentModal(false)} 
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -666,6 +758,76 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 20,
     fontSize: 13
+  },
+  
+  // Modal & QR
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 28,
+    padding: 24,
+    width: "100%",
+    maxWidth: 400,
+    gap: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 5
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#0f172a"
+  },
+  qrContainer: {
+    alignItems: "center",
+    gap: 20,
+    paddingVertical: 10
+  },
+  qrShadow: {
+    padding: 12,
+    backgroundColor: "#fff",
+    borderRadius: 24,
+    shadowColor: "#2563eb",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 4
+  },
+  qrImage: {
+    width: 200,
+    height: 200,
+    borderRadius: 12,
+    backgroundColor: "#f8fafc"
+  },
+  qrAmountText: {
+    fontSize: 24,
+    fontWeight: "900",
+    color: colors.primary,
+    letterSpacing: 0.5
+  },
+  qrInstruction: {
+    fontSize: 14,
+    color: "#64748b",
+    textAlign: "center",
+    lineHeight: 20
+  },
+  modalActions: {
+    gap: 12,
+    marginTop: 10
   }
 });
 
