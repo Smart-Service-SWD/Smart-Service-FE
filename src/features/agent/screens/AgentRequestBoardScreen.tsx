@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useFocusEffect } from "@react-navigation/native";
 import { colors } from "../../../app/theme/colors";
 import BrandLogo from "../../../shared/ui/BrandLogo";
 import { useAuth } from "../../auth/AuthContext";
@@ -78,7 +79,7 @@ export default function AgentRequestBoardScreen() {
     [items, selectedRequestId]
   );
 
-  const loadHistory = async () => {
+  const loadHistory = useCallback(async () => {
     if (!session) return;
     setLoading(true);
     setError("");
@@ -115,9 +116,19 @@ export default function AgentRequestBoardScreen() {
         session.accessToken
       );
 
+      // Deduplicate by serviceRequestId (keep latest assignedAt)
+      const latestAssignments = new Map<string, AssignmentItem>();
+      data.getAssignmentsByAgentId.forEach(assignment => {
+        const existing = latestAssignments.get(assignment.serviceRequestId);
+        if (!existing || new Date(assignment.assignedAt).getTime() > new Date(existing.assignedAt).getTime()) {
+          latestAssignments.set(assignment.serviceRequestId, assignment);
+        }
+      });
+      const uniqueAssignments = Array.from(latestAssignments.values());
+
       const completedItems = (
         await Promise.all(
-          data.getAssignmentsByAgentId.map(async (assignment) => {
+          uniqueAssignments.map(async (assignment) => {
             try {
               const response = await graphqlRequest<RequestByIdResponse, { id: string }>(
                 REQUEST_BY_ID_QUERY,
@@ -129,7 +140,7 @@ export default function AgentRequestBoardScreen() {
                 ? normalizeServiceRequest(response.getServiceRequestById)
                 : null;
 
-              if (!request || request.status !== "COMPLETED") {
+              if (!request || (request.status !== "FINAL_PAYMENT_PAID" && request.status !== "PAYOUT_COMPLETED")) {
                 return null;
               }
 
@@ -155,7 +166,7 @@ export default function AgentRequestBoardScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [session]);
 
   const loadCustomerProfile = async (customerId?: string) => {
     if (!session || !customerId) {
@@ -175,10 +186,11 @@ export default function AgentRequestBoardScreen() {
     }
   };
 
-  useEffect(() => {
-    void loadHistory();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.accessToken]);
+  useFocusEffect(
+    useCallback(() => {
+      void loadHistory();
+    }, [loadHistory])
+  );
 
   useEffect(() => {
     if (!items.length) {

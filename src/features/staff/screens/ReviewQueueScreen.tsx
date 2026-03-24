@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { Modal, Image, ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import QRCode from 'react-native-qrcode-svg';
@@ -168,7 +168,7 @@ export default function ReviewQueueScreen() {
   const dropdownLabel =
     selectedStatuses.length === 0 ? "Tất cả trạng thái" : `${selectedStatuses.length} trạng thái`;
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!session) return;
     setLoading(true);
     setError("");
@@ -203,7 +203,7 @@ export default function ReviewQueueScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [session]);
 
   const handlePriceAction = async (requestId: string, action: "approve" | "reject") => {
     if (!session || !pendingAdjustments[requestId]) return;
@@ -254,10 +254,11 @@ export default function ReviewQueueScreen() {
     }
   };
 
-  useEffect(() => {
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.accessToken]);
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load])
+  );
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
@@ -486,7 +487,7 @@ export default function ReviewQueueScreen() {
 
                     {item.status === "AWAITING_FINAL_PAYMENT" && (
                       <ActionButton
-                        label="Xem QR & Xác nhận trả đủ"
+                        label="Xác nhận trả đủ"
                         onPress={() => {
                           setSelectedRequestId(item.id);
                           setQrAmount(item.finalPrice?.amount ?? item.estimatedCost?.amount ?? 0);

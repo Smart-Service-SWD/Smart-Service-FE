@@ -111,8 +111,10 @@ export default function FeedbackScreen() {
 
       setItems(feedbackData.getMyServiceFeedbacks);
       
-      // Filter requests that are logically completed (Status >= 10: FinalPaymentPaid, PayoutCompleted)
-      const finishedRequests = requestData.getMyServiceRequests.filter(req => (req.status as any) >= 10);
+      // Filter requests that are logically completed
+      const finishedRequests = requestData.getMyServiceRequests.filter(req => 
+        req.status === "FINAL_PAYMENT_PAID" || req.status === "PAYOUT_COMPLETED"
+      );
       setCompletedRequests(finishedRequests);
       setAgentNamesById(
         Object.fromEntries(agentData.getServiceAgents.map((agent) => [agent.id, agent.fullName]))
@@ -146,22 +148,6 @@ export default function FeedbackScreen() {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.accessToken]);
-
-  useEffect(() => {
-    if (route.params?.requestId) {
-      const nextId = route.params.requestId;
-      if (availableRequests.some((item) => item.id === nextId)) {
-        setRequestId(nextId);
-        setError("");
-      } else if (reviewedRequestIds.has(nextId)) {
-        setError("Yêu cầu này đã được đánh giá rồi.");
-      } else {
-        setError("Chỉ có thể đánh giá các yêu cầu đã hoàn thành.");
-      }
-      navigation.setParams({ requestId: undefined });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [availableRequests, navigation, reviewedRequestIds, route.params?.requestId]);
 
   const handleCreate = async () => {
     if (!session) return;
@@ -240,7 +226,11 @@ export default function FeedbackScreen() {
                   <Pressable
                     key={item.id}
                     style={[styles.requestRow, active && styles.requestRowActive]}
-                    onPress={() => setRequestId(item.id)}
+                    onPress={() => {
+                      setRequestId(item.id);
+                      setError("");
+                      setSuccess("");
+                    }}
                   >
                     <View style={styles.requestRowLeft}>
                       <View style={[styles.radioOuter, active && styles.radioOuterActive]}>

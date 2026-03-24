@@ -89,9 +89,9 @@ export interface PayoutItem {
   id: string;
   serviceRequestId: string;
   agentId: string;
-  amount: Money;
+  amount: { amount: number; currency: string };
   commissionRate: number;
-  netAmount: Money;
+  netAmount: { amount: number; currency: string };
   payoutDate: string;
 }
 

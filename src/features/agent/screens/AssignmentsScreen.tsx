@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
 import { colors } from "../../../app/theme/colors";
 import BrandLogo from "../../../shared/ui/BrandLogo";
@@ -75,7 +76,31 @@ interface AgentWorkItem {
   serviceName: string;
 }
 
-const ACTIVE_STATUSES = new Set(["ASSIGNED", "IN_PROGRESS"]);
+const ACTIVE_STATUSES = new Set([
+  "ASSIGNED", 
+  "IN_PROGRESS", 
+  "AWAITING_COMPLETION_REVIEW", 
+  "COMPLETION_APPROVED", 
+  "AWAITING_FINAL_PAYMENT"
+]);
+
+const getStatusStyle = (status: string, styles: any) => {
+  if (status === "IN_PROGRESS") return styles.statusPillProgress;
+  if (status.startsWith("AWAITING_COMPLETION")) return styles.statusPillReview;
+  if (status === "COMPLETION_APPROVED" || status === "AWAITING_FINAL_PAYMENT") return styles.statusPillWaiting;
+  if (status === "FINAL_PAYMENT_PAID" || status === "PAYOUT_COMPLETED") return styles.statusPillSuccess;
+  if (status === "CANCELLED") return styles.statusPillDanger;
+  return styles.statusPillAssigned;
+};
+
+const getStatusTextStyle = (status: string) => {
+  if (status.startsWith("AWAITING_COMPLETION")) return { color: "#991b1b" };
+  if (status === "COMPLETION_APPROVED" || status === "AWAITING_FINAL_PAYMENT") return { color: "#16a34a" };
+  if (status === "IN_PROGRESS") return { color: "#b45309" };
+  if (status === "FINAL_PAYMENT_PAID" || status === "PAYOUT_COMPLETED") return { color: "#15803d" };
+  if (status === "CANCELLED") return { color: "#b91c1c" };
+  return { color: "#1e40af" }; // ASSIGNED default text
+};
 
 export default function AssignmentsScreen() {
   const { session } = useAuth();
@@ -112,7 +137,7 @@ export default function AssignmentsScreen() {
     return userData.getUserById;
   };
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!session) return;
     setLoading(true);
     setError("");
@@ -145,9 +170,19 @@ export default function AssignmentsScreen() {
         session.accessToken
       );
 
+      // Deduplicate by serviceRequestId (keep latest assignedAt)
+      const latestAssignments = new Map<string, AssignmentItem>();
+      data.getAssignmentsByAgentId.forEach(assignment => {
+        const existing = latestAssignments.get(assignment.serviceRequestId);
+        if (!existing || new Date(assignment.assignedAt).getTime() > new Date(existing.assignedAt).getTime()) {
+          latestAssignments.set(assignment.serviceRequestId, assignment);
+        }
+      });
+      const uniqueAssignments = Array.from(latestAssignments.values());
+
       const workItems = (
         await Promise.all(
-          data.getAssignmentsByAgentId.map(async (assignment) => {
+          uniqueAssignments.map(async (assignment) => {
             try {
               const response = await graphqlRequest<RequestByIdResponse, { id: string }>(
                 REQUEST_BY_ID_QUERY,
@@ -181,12 +216,21 @@ export default function AssignmentsScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [session]);
 
   const loadRequestDetail = async (requestedId?: string) => {
     if (!session) return;
     const requestId = requestedId ?? detailRequestId;
     if (!requestId.trim()) return;
+
+    // Cho phép đóng mở (Toggle)
+    if (requestedId && detailRequestId === requestId.trim()) {
+      setDetailRequestId("");
+      setDetail(null);
+      setCustomerProfile(null);
+      return;
+    }
+
     setLoading(true);
     setError("");
     try {
@@ -322,7 +366,11 @@ export default function AssignmentsScreen() {
     }
   };
 
-  useEffect(() => { void load(); }, [session?.accessToken]);
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load])
+  );
 
   useEffect(() => {
     if (!items.length) {
@@ -371,41 +419,47 @@ export default function AssignmentsScreen() {
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Danh sách ({items.length})</Text>
-          {items.map((item) => (
-            <Pressable key={item.assignment.id} style={[styles.assignmentRow, detailRequestId === item.request.id && styles.assignmentRowSelected]} onPress={() => void loadRequestDetail(item.request.id)}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.assignmentTitle}>{item.serviceName}</Text>
-                <Text style={styles.assignmentMeta}>{formatDateTime(item.assignment.assignedAt)} • {formatCurrency(item.assignment.estimatedCost.amount, item.assignment.estimatedCost.currency)}</Text>
-              </View>
-              <View style={[styles.statusPill, item.request.status === "IN_PROGRESS" ? styles.statusPillProgress : styles.statusPillAssigned]}>
-                <Text style={styles.statusPillText}>{formatRequestStatus(item.request.status)}</Text>
-              </View>
-            </Pressable>
-          ))}
-        </View>
+          {items.map((item) => {
+            const isExpanded = detailRequestId === item.request.id;
+            return (
+              <View key={item.assignment.id} style={[styles.assignmentWrapper, isExpanded && styles.assignmentWrapperExpanded]}>
+                <Pressable style={styles.assignmentRow} onPress={() => void loadRequestDetail(item.request.id)}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.assignmentTitle}>{item.serviceName}</Text>
+                    <Text style={styles.assignmentMeta}>{formatDateTime(item.assignment.assignedAt)} • {formatCurrency(item.assignment.estimatedCost.amount, item.assignment.estimatedCost.currency)}</Text>
+                  </View>
+                  <View style={[styles.statusPill, getStatusStyle(item.request.status, styles)]}>
+                    <Text style={[styles.statusPillText, getStatusTextStyle(item.request.status)]}>
+                      {formatRequestStatus(item.request.status)}
+                    </Text>
+                  </View>
+                </Pressable>
 
-        {detail && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Chi tiết</Text>
-            <Text style={styles.detailText}>Khách: {customerProfile?.fullName || "-"}</Text>
-            <Text style={styles.detailText}>SĐT: {customerProfile?.phoneNumber || "-"}</Text>
-            <Text style={styles.detailText}>Mô tả: {detail.description}</Text>
-            <Text style={styles.detailText}>Giá ước tính: {formatCurrency(detail.estimatedCost?.amount ?? 0, detail.estimatedCost?.currency ?? "VND")}</Text>
-            <Text style={styles.detailText}>Địa chỉ: {detail.addressText}</Text>
-            
-            <View style={styles.actionRow}>
-              {detail.status === "ASSIGNED" && (
-                <ActionButton label="Bắt đầu" onPress={() => void handleStatusChange("IN_PROGRESS")} loading={loading} />
-              )}
-              {detail.status === "IN_PROGRESS" && (
-                <>
-                  <ActionButton label="Đề xuất tăng giá" onPress={() => setShowAdjustmentModal(true)} variant="secondary" />
-                  <ActionButton label="Gửi hoàn thành" onPress={() => setShowCompletionModal(true)} loading={loading} />
-                </>
-              )}
-            </View>
-          </View>
-        )}
+                {isExpanded && detail && (
+                  <View style={styles.expandedContent}>
+                    <View style={styles.detailDivider} />
+                    <Text style={styles.detailText}><Text style={styles.detailLabel}>Khách hàng: </Text>{customerProfile?.fullName || "-"}</Text>
+                    <Text style={styles.detailText}><Text style={styles.detailLabel}>Số điện thoại: </Text>{customerProfile?.phoneNumber || "-"}</Text>
+                    <Text style={styles.detailText}><Text style={styles.detailLabel}>Địa chỉ: </Text>{detail.addressText}</Text>
+                    <Text style={styles.detailText}><Text style={styles.detailLabel}>Mô tả lỗi: </Text>{detail.description}</Text>
+                    
+                    <View style={styles.actionRow}>
+                      {detail.status === "ASSIGNED" && (
+                        <ActionButton label="Bắt đầu làm việc" onPress={() => void handleStatusChange("IN_PROGRESS")} loading={loading} />
+                      )}
+                      {detail.status === "IN_PROGRESS" && (
+                        <>
+                          <ActionButton label="Đề xuất tăng giá" onPress={() => setShowAdjustmentModal(true)} variant="secondary" />
+                          <ActionButton label="Báo cáo hoàn thành" onPress={() => setShowCompletionModal(true)} loading={loading} />
+                        </>
+                      )}
+                    </View>
+                  </View>
+                )}
+              </View>
+            );
+          })}
+        </View>
 
         <Modal visible={showAdjustmentModal} transparent animationType="slide">
           <View style={styles.modalOverlay}>
@@ -493,14 +547,23 @@ const styles = StyleSheet.create({
   toggleBtnOff: { backgroundColor: "#dc2626" },
   toggleBtnText: { color: "#fff", fontWeight: "700" },
   card: { backgroundColor: "#fff", borderRadius: 20, padding: 16, gap: 12 },
-  cardTitle: { fontSize: 15, fontWeight: "800" },
-  assignmentRow: { flexDirection: "row", padding: 12, backgroundColor: "#f8fafc", borderRadius: 12, gap: 10 },
-  assignmentRowSelected: { borderColor: colors.primary, borderWidth: 1 },
+  cardTitle: { fontSize: 15, fontWeight: "800", marginBottom: 4 },
+  assignmentWrapper: { backgroundColor: "#f8fafc", borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: "transparent" },
+  assignmentWrapperExpanded: { borderColor: colors.primary, backgroundColor: "#fff", elevation: 2, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
+  assignmentRow: { flexDirection: "row", padding: 14, gap: 10, alignItems: "center" },
+  expandedContent: { padding: 14, paddingTop: 0 },
+  detailDivider: { height: 1, backgroundColor: "#e2e8f0", marginBottom: 12 },
+  detailLabel: { fontWeight: "700", color: "#475569" },
   assignmentTitle: { fontSize: 14, fontWeight: "700" },
-  assignmentMeta: { fontSize: 12, color: "#64748b" },
+  assignmentMeta: { fontSize: 12, color: "#64748b", marginTop: 4 },
   statusPill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 },
+
   statusPillAssigned: { backgroundColor: "#eff6ff" },
   statusPillProgress: { backgroundColor: "#fef3c7" },
+  statusPillReview: { backgroundColor: "#fef2f2" },
+  statusPillWaiting: { backgroundColor: "#f0fdf4" },
+  statusPillSuccess: { backgroundColor: "#dcfce7" },
+  statusPillDanger: { backgroundColor: "#fee2e2" },
   statusPillText: { fontSize: 10, fontWeight: "800" },
   detailText: { fontSize: 14, color: "#334155" },
   actionRow: { flexDirection: "row", gap: 10, marginTop: 10 },

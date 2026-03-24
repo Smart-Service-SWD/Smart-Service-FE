@@ -246,7 +246,11 @@ export const payoutServiceRequest = (
   serviceRequestId: string
 ): Promise<void> =>
   httpRequest<void>({
-    path: `/api/service-requests/${serviceRequestId}/payout`,
+    path: `/api/payouts/process`,
     method: "POST",
-    token
+    token,
+    body: {
+      serviceRequestId,
+      commissionPercent: 20
+    }
   });

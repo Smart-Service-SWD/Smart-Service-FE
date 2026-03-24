@@ -365,7 +365,7 @@ export default function MyRequestsScreen() {
                     variant="danger"
                   />
                 </>
-              ) : item.status === "COMPLETED" ? (
+              ) : (item.status === "FINAL_PAYMENT_PAID" || item.status === "PAYOUT_COMPLETED") ? (
                 reviewedRequestIds.includes(item.id) ? (
                   <Text style={styles.feedbackDone}>Đã gửi đánh giá</Text>
                 ) : (

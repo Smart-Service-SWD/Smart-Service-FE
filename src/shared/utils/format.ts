@@ -101,7 +101,7 @@ export const normalizeServiceRequests = <T extends { status: string }>(items: T[
 const requestStatusLabels: Record<string, string> = {
   AWAITING_ANALYSIS: "Chờ AI",
   CREATED: "Mới tạo",
-  PENDING_REVIEW: "Chờ gán thợ",
+  PENDING_REVIEW: "Đang điều phối",
   AWAITING_DEPOSIT: "Chờ cọc",
   DEPOSIT_PAID: "Đã cọc",
   ASSIGNED: "Đã gán",

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useFocusEffect } from "@react-navigation/native";
 import { colors } from "../../../app/theme/colors";
 import BrandLogo from "../../../shared/ui/BrandLogo";
 import { useAuth } from "../../auth/AuthContext";
@@ -31,7 +32,7 @@ export default function PayoutHistoryScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!session) return;
     setLoading(true);
     setError("");
@@ -59,11 +60,13 @@ export default function PayoutHistoryScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [session]);
 
-  useEffect(() => {
-    void load();
-  }, [session?.accessToken]);
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load])
+  );
 
   const renderItem = ({ item }: { item: PayoutItem }) => (
     <View style={styles.payoutCard}>
