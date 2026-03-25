@@ -97,6 +97,35 @@ const canCancelBeforeStaffConfirmation = (status?: string | null) =>
 
 const normalizeId = (value?: string | null) => value?.trim().toLowerCase() ?? "";
 
+const toStatusKey = (status?: string | null) => {
+  const normalizedStatus = normalizeRequestStatus(status) ?? "";
+  if (!normalizedStatus) return "";
+
+  return normalizedStatus
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/[\s-]+/g, "_")
+    .toUpperCase();
+};
+
+const isPaymentConfirmedForType = (status: string | null | undefined, type: "DEPOSIT" | "FINAL") => {
+  const statusKey = toStatusKey(status);
+
+  if (type === "DEPOSIT") {
+    return [
+      "DEPOSIT_PAID",
+      "ASSIGNED",
+      "IN_PROGRESS",
+      "AWAITING_COMPLETION_REVIEW",
+      "COMPLETION_APPROVED",
+      "AWAITING_FINAL_PAYMENT",
+      "FINAL_PAYMENT_PAID",
+      "PAYOUT_COMPLETED"
+    ].includes(statusKey);
+  }
+
+  return ["FINAL_PAYMENT_PAID", "PAYOUT_COMPLETED"].includes(statusKey);
+};
+
 export default function MyRequestsScreen() {
   const { session } = useAuth();
   const navigation = useNavigation<BottomTabNavigationProp<CustomerTabParamList>>();
@@ -317,13 +346,32 @@ export default function MyRequestsScreen() {
   };
 
   const handleSyncPaymentAfterTransfer = async () => {
-    if (!detailRequestId) {
+    if (!detailRequestId || !session) {
       return;
     }
 
-    setShowPaymentModal(false);
-    await loadRequestDetail(detailRequestId);
-    await load();
+    try {
+      const syncResult = await syncPaymentStatus(session.accessToken, detailRequestId);
+      const isPaid = isPaymentConfirmedForType(syncResult.serviceRequestStatus, paymentType);
+
+      await loadRequestDetail(detailRequestId);
+      await load();
+
+      if (isPaid) {
+        setShowPaymentModal(false);
+        Alert.alert(
+          "Thanh toán thành công",
+          paymentType === "DEPOSIT"
+            ? "Hệ thống đã ghi nhận thanh toán tiền cọc."
+            : "Hệ thống đã ghi nhận thanh toán phần còn lại."
+        );
+        return;
+      }
+
+      Alert.alert("Chưa ghi nhận thanh toán", "Vui lòng đợi vài giây rồi kiểm tra lại.");
+    } catch (syncError) {
+      Alert.alert("Lỗi thanh toán", asErrorMessage(syncError));
+    }
   };
 
   const performCancelRequest = async (requestId: string) => {
@@ -449,6 +497,64 @@ export default function MyRequestsScreen() {
     }
     return () => { active = false; };
   }, [showPaymentModal, detailRequestId, paymentType, paymentLinkCache, session]);
+
+
+  useEffect(() => {
+    if (!showPaymentModal || !detailRequestId || !session) {
+      return;
+    }
+
+    let active = true;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const autoSyncPaymentStatus = async () => {
+      try {
+        const syncResult = await syncPaymentStatus(session.accessToken, detailRequestId);
+        if (!active) {
+          return;
+        }
+
+        const isPaid = isPaymentConfirmedForType(syncResult.serviceRequestStatus, paymentType);
+        if (!isPaid) {
+          return;
+        }
+
+        active = false;
+        if (intervalId) {
+          clearInterval(intervalId);
+        }
+
+        await loadRequestDetail(detailRequestId);
+        await load();
+        setShowPaymentModal(false);
+
+        Alert.alert(
+          "Thanh toán thành công",
+          paymentType === "DEPOSIT"
+            ? "Hệ thống đã ghi nhận thanh toán tiền cọc."
+            : "Hệ thống đã ghi nhận thanh toán phần còn lại."
+        );
+      } catch {
+        // Keep polling resilient if sync endpoint is temporarily unavailable.
+      }
+    };
+
+    const timeoutId = setTimeout(() => {
+      void autoSyncPaymentStatus();
+    }, 1800);
+
+    intervalId = setInterval(() => {
+      void autoSyncPaymentStatus();
+    }, 4000);
+
+    return () => {
+      active = false;
+      clearTimeout(timeoutId);
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [showPaymentModal, detailRequestId, session, paymentType, load]);
 
   const dropdownLabel =
     selectedStatuses.length === 0
