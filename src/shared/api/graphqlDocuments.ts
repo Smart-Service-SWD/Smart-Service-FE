@@ -514,3 +514,27 @@ export const ACTIVITY_LOGS_BY_REQUEST_QUERY = `
     }
   }
 `;
+
+export const MY_SERVICE_AGENT_QUERY = `
+  query MyServiceAgent {
+    getMyServiceAgent {
+      id
+      userId
+      fullName
+      isActive
+      balance {
+        amount
+        currency
+      }
+      capabilities {
+        id
+        categoryId
+        maxComplexity {
+          level
+        }
+        serviceIds
+      }
+    }
+  }
+`;
+

@@ -1,4 +1,4 @@
-import { httpRequest } from "../../../shared/api/httpClient";
+import { ApiError, httpRequest } from "../../../shared/api/httpClient";
 export { createActivityLog } from "../../../shared/api/activityApi";
 import type { Money } from "../../../shared/types/domain";
 
@@ -131,12 +131,21 @@ export interface PriceAdjustmentItem {
   createdBy: string;
 }
 
-export const getPriceAdjustmentByServiceRequest = (
+export const getPriceAdjustmentByServiceRequest = async (
   token: string,
   serviceRequestId: string
-): Promise<PriceAdjustmentItem | null> =>
-  httpRequest<PriceAdjustmentItem | null>({
-    path: `/api/price-adjustments/service-request/${serviceRequestId}`,
-    method: "GET",
-    token
-  });
+): Promise<PriceAdjustmentItem | null> => {
+  try {
+    return await httpRequest<PriceAdjustmentItem | null>({
+      path: `/api/price-adjustments/service-request/${serviceRequestId}`,
+      method: "GET",
+      token
+    });
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      return null;
+    }
+    throw error;
+  }
+};
+

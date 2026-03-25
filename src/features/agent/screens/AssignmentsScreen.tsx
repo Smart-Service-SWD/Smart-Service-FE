@@ -21,7 +21,7 @@ import { graphqlRequest } from "../../../shared/api/graphqlClient";
 import {
   AGENT_ASSIGNMENTS_QUERY,
   REQUEST_BY_ID_QUERY,
-  SERVICE_AGENTS_QUERY,
+  MY_SERVICE_AGENT_QUERY,
   SERVICE_DEFINITIONS_QUERY,
   USER_BY_ID_QUERY
 } from "../../../shared/api/graphqlDocuments";
@@ -60,8 +60,8 @@ interface RequestByIdResponse {
   getServiceRequestById: ServiceRequestItem | null;
 }
 
-interface ServiceAgentsResponse {
-  getServiceAgents: ServiceAgentItem[];
+interface MyServiceAgentResponse {
+  getMyServiceAgent: ServiceAgentItem | null;
 }
 
 interface ServiceDefinitionsResponse {
@@ -147,12 +147,11 @@ export default function AssignmentsScreen() {
     setError("");
     setBindingMessage("");
     try {
-      const [serviceAgentData, serviceDefinitionData] = await Promise.all([
-        graphqlRequest<ServiceAgentsResponse>(SERVICE_AGENTS_QUERY, undefined, session.accessToken),
+      const [myServiceAgentData, serviceDefinitionData] = await Promise.all([
+        graphqlRequest<MyServiceAgentResponse>(MY_SERVICE_AGENT_QUERY, undefined, session.accessToken),
         graphqlRequest<ServiceDefinitionsResponse>(SERVICE_DEFINITIONS_QUERY)
       ]);
-      const linkedAgent =
-        serviceAgentData.getServiceAgents.find((agent) => agent.userId === session.userId) ?? null;
+      const linkedAgent = myServiceAgentData.getMyServiceAgent;
       setLinkedServiceAgent(linkedAgent);
 
       if (!linkedAgent) {
@@ -442,8 +441,8 @@ export default function AssignmentsScreen() {
               <Text style={[styles.availText, { color: isActive ? "#16a34a" : "#94a3b8" }]}>{isActive ? "Đang nhận việc" : "Tạm ngưng"}</Text>
             </View>
           </View>
-          <Pressable style={[styles.toggleBtn, isActive ? styles.toggleBtnOff : styles.toggleBtnOn]} onPress={() => void handleToggleAvailability()} disabled={updatingAvailability}>
-            {updatingAvailability ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.toggleBtnText}>{isActive ? "Tắt" : "Bật"}</Text>}
+          <Pressable style={[styles.toggleBtn, isActive ? styles.toggleBtnOff : styles.toggleBtnOn]} onPress={() => void handleToggleAvailability()} disabled={updatingAvailability || !linkedServiceAgent}>
+            {updatingAvailability ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.toggleBtnText}>{linkedServiceAgent ? (isActive ? "Tắt" : "Bật") : "N/A"}</Text>}
           </Pressable>
         </View>
 
@@ -657,3 +656,4 @@ const styles = StyleSheet.create({
   pickButton: { backgroundColor: colors.primary, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10 },
   pickButtonText: { color: "#fff", fontWeight: "700", fontSize: 14 }
 });
+

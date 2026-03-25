@@ -17,7 +17,7 @@ import { graphqlRequest } from "../../../shared/api/graphqlClient";
 import {
   AGENT_ASSIGNMENTS_QUERY,
   REQUEST_BY_ID_QUERY,
-  SERVICE_AGENTS_QUERY,
+  MY_SERVICE_AGENT_QUERY,
   SERVICE_DEFINITIONS_QUERY,
   USER_BY_ID_QUERY
 } from "../../../shared/api/graphqlDocuments";
@@ -46,8 +46,8 @@ interface RequestByIdResponse {
   getServiceRequestById: ServiceRequestItem | null;
 }
 
-interface ServiceAgentsResponse {
-  getServiceAgents: ServiceAgentItem[];
+interface MyServiceAgentResponse {
+  getMyServiceAgent: ServiceAgentItem | null;
 }
 
 interface ServiceDefinitionsResponse {
@@ -86,13 +86,12 @@ export default function AgentRequestBoardScreen() {
     setBindingMessage("");
 
     try {
-      const [serviceAgentData, serviceDefinitionData] = await Promise.all([
-        graphqlRequest<ServiceAgentsResponse>(SERVICE_AGENTS_QUERY, undefined, session.accessToken),
+      const [myServiceAgentData, serviceDefinitionData] = await Promise.all([
+        graphqlRequest<MyServiceAgentResponse>(MY_SERVICE_AGENT_QUERY, undefined, session.accessToken),
         graphqlRequest<ServiceDefinitionsResponse>(SERVICE_DEFINITIONS_QUERY)
       ]);
 
-      const linkedAgent =
-        serviceAgentData.getServiceAgents.find((agent) => agent.userId === session.userId) ?? null;
+      const linkedAgent = myServiceAgentData.getMyServiceAgent;
 
       setLinkedServiceAgent(linkedAgent);
 
@@ -467,3 +466,4 @@ const styles = StyleSheet.create({
   },
   completedText: { color: "#1d4ed8", fontWeight: "800", fontSize: 14 }
 });
+

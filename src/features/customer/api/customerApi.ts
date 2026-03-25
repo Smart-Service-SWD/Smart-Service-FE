@@ -107,6 +107,14 @@ export interface PaymentLinkResult {
   qrCode: string;
 }
 
+export interface SyncPaymentStatusResult {
+  serviceRequestId: string;
+  serviceRequestStatus: string;
+  paymentStatus: string;
+  orderCode?: number | null;
+  updated: boolean;
+}
+
 export const createDepositLink = (
   token: string,
   serviceRequestId: string,
@@ -131,5 +139,15 @@ export const createFinalLink = (
     method: "POST",
     token,
     body: { returnUrl, cancelUrl }
+  });
+
+export const syncPaymentStatus = (
+  token: string,
+  serviceRequestId: string
+): Promise<SyncPaymentStatusResult> =>
+  httpRequest<SyncPaymentStatusResult>({
+    path: `/api/payments/${serviceRequestId}/sync-status`,
+    method: "POST",
+    token
   });
 

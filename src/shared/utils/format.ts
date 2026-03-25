@@ -14,12 +14,24 @@ export const formatDateTime = (value: string): string => {
 export const formatCurrency = (
   amount: number,
   currency: string = "VND"
-): string =>
-  new Intl.NumberFormat("vi-VN", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 0
-  }).format(amount);
+): string => {
+  const normalizedAmount = Number.isFinite(amount) ? amount : 0;
+  const normalizedCurrency = currency?.trim().toUpperCase();
+  const safeCurrency =
+    normalizedCurrency && /^[A-Z]{3}$/.test(normalizedCurrency)
+      ? normalizedCurrency
+      : "VND";
+
+  try {
+    return new Intl.NumberFormat("vi-VN", {
+      style: "currency",
+      currency: safeCurrency,
+      maximumFractionDigits: 0
+    }).format(normalizedAmount);
+  } catch {
+    return `${Math.round(normalizedAmount).toLocaleString("vi-VN")} đ`;
+  }
+};
 
 export const asErrorMessage = (error: unknown): string => {
   if (error instanceof ApiError) {
@@ -156,6 +168,8 @@ export const formatShortId = (value?: string | null): string => {
 
   return `${value.slice(0, 8)}…${value.slice(-4)}`;
 };
+
+
 
 
 

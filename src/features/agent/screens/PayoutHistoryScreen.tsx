@@ -13,7 +13,7 @@ import { colors } from "../../../app/theme/colors";
 import BrandLogo from "../../../shared/ui/BrandLogo";
 import { useAuth } from "../../auth/AuthContext";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
-import { SERVICE_AGENTS_QUERY } from "../../../shared/api/graphqlDocuments";
+import { MY_SERVICE_AGENT_QUERY } from "../../../shared/api/graphqlDocuments";
 import {
   asErrorMessage,
   formatCurrency,
@@ -22,8 +22,8 @@ import {
 import type { ServiceAgentItem } from "../../../shared/types/domain";
 import { getPayoutsByAgent, type PayoutItem } from "../api/agentApi";
 
-interface ServiceAgentsResponse {
-  getServiceAgents: ServiceAgentItem[];
+interface MyServiceAgentResponse {
+  getMyServiceAgent: ServiceAgentItem | null;
 }
 
 export default function PayoutHistoryScreen() {
@@ -38,17 +38,16 @@ export default function PayoutHistoryScreen() {
     setError("");
 
     try {
-      const agentData = await graphqlRequest<ServiceAgentsResponse>(
-        SERVICE_AGENTS_QUERY,
+      const agentData = await graphqlRequest<MyServiceAgentResponse>(
+        MY_SERVICE_AGENT_QUERY,
         undefined,
         session.accessToken
       );
 
-      const linkedAgent = agentData.getServiceAgents.find(
-        (agent) => agent.userId === session.userId
-      );
+      const linkedAgent = agentData.getMyServiceAgent;
 
       if (!linkedAgent) {
+        setPayouts([]);
         setError("Không tìm thấy hồ sơ thợ gắn với tài khoản này.");
         return;
       }
@@ -175,3 +174,7 @@ const styles = StyleSheet.create({
   emptyContainer: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 100, gap: 12 },
   emptyText: { color: "#94a3b8", fontSize: 14 }
 });
+
+
+
+

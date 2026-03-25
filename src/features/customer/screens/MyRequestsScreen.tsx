@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View, Linking } from "react-native";
+import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View, Linking, RefreshControl } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import QRCode from 'react-native-qrcode-svg';
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -9,7 +9,7 @@ import { colors } from "../../../app/theme/colors";
 import BrandLogo from "../../../shared/ui/BrandLogo";
 import type { CustomerTabParamList } from "../../../app/navigation/types";
 import { useAuth } from "../../auth/AuthContext";
-import { cancelServiceRequest, createDepositLink, createFinalLink } from "../api/customerApi";
+import { cancelServiceRequest, createDepositLink, createFinalLink, syncPaymentStatus } from "../api/customerApi";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
 import { ApiError } from "../../../shared/api/httpClient";
 import {
@@ -36,7 +36,6 @@ import type {
   ServiceRequestItem
 } from "../../../shared/types/domain";
 import ActionButton from "../../../shared/ui/ActionButton";
-import { markAsPaid } from "../../staff/api/staffApi";
 
 interface MyRequestsResponse {
   getMyServiceRequests: ServiceRequestItem[];
@@ -94,8 +93,10 @@ export default function MyRequestsScreen() {
   const [loading, setLoading] = useState(false);
   const [paymentUrl, setPaymentUrl] = useState("");
   const [qrCodeData, setQrCodeData] = useState("");
+  const [paymentLinkCache, setPaymentLinkCache] = useState<Record<string, { checkoutUrl: string; qrCode: string }>>({});
   const [cancelingRequestId, setCancelingRequestId] = useState("");
   const [error, setError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
 
   const getAgentName = (agentId?: string | null) =>
     agentId ? agentNamesById[agentId] ?? formatShortId(agentId) : "Chưa phân công";
@@ -142,6 +143,24 @@ export default function MyRequestsScreen() {
       setError(asErrorMessage(loadError));
     } finally {
       setLoading(false);
+      setRefreshing(false);
+    }
+  }, [session]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    void load();
+  }, [load]);
+
+  const syncRequestPaymentStatus = useCallback(async (requestId: string) => {
+    if (!session) {
+      return;
+    }
+
+    try {
+      await syncPaymentStatus(session.accessToken, requestId);
+    } catch {
+      // Keep detail load resilient even if PayOS sync is temporarily unavailable.
     }
   }, [session]);
 
@@ -164,6 +183,7 @@ export default function MyRequestsScreen() {
     setLoading(true);
     setError("");
     try {
+      await syncRequestPaymentStatus(requestId.trim());
       const requestData = await graphqlRequest<RequestByIdResponse, { id: string }>(
         REQUEST_BY_ID_QUERY,
         { id: requestId.trim() },
@@ -181,6 +201,16 @@ export default function MyRequestsScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSyncPaymentAfterTransfer = async () => {
+    if (!detailRequestId) {
+      return;
+    }
+
+    setShowPaymentModal(false);
+    await loadRequestDetail(detailRequestId);
+    await load();
   };
 
   const performCancelRequest = async (requestId: string) => {
@@ -264,11 +294,20 @@ export default function MyRequestsScreen() {
     let active = true;
     if (showPaymentModal && detailRequestId && session) {
       const fetchPaymentUrl = async () => {
+        const cacheKey = `${detailRequestId}:${paymentType}`;
+        const cachedLink = paymentLinkCache[cacheKey];
+
+        if (cachedLink) {
+          setPaymentUrl(cachedLink.checkoutUrl);
+          setQrCodeData(cachedLink.qrCode);
+          return;
+        }
+
         setPaymentUrl("");
         try {
           // URLs for redirection after PayOS payment
-          const returnUrl = "https://google.com";
-          const cancelUrl = "https://google.com";
+          const returnUrl = "smartservice://payment-success";
+          const cancelUrl = "smartservice://payment-cancel";
 
           const result = paymentType === "DEPOSIT"
             ? await createDepositLink(session.accessToken, detailRequestId, returnUrl, cancelUrl)
@@ -277,6 +316,13 @@ export default function MyRequestsScreen() {
           if (active) {
             setPaymentUrl(result.checkoutUrl);
             setQrCodeData(result.qrCode);
+            setPaymentLinkCache((prev) => ({
+              ...prev,
+              [cacheKey]: {
+                checkoutUrl: result.checkoutUrl,
+                qrCode: result.qrCode
+              }
+            }));
           }
         } catch (err) {
           if (active) {
@@ -289,7 +335,7 @@ export default function MyRequestsScreen() {
       void fetchPaymentUrl();
     }
     return () => { active = false; };
-  }, [showPaymentModal, detailRequestId, paymentType, session]);
+  }, [showPaymentModal, detailRequestId, paymentType, paymentLinkCache, session]);
 
   const dropdownLabel =
     selectedStatuses.length === 0
@@ -302,6 +348,9 @@ export default function MyRequestsScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} tintColor={colors.primary} />
+        }
       >
         {/* Header */}
         <View style={styles.header}>
@@ -428,14 +477,16 @@ export default function MyRequestsScreen() {
                   <Text style={styles.meta}>Độ phức tạp: {detail.complexity?.level ?? "Chưa đánh giá"}</Text>
                   <Text style={styles.meta}>
                     {detail.finalPrice ? "Chi phí đã duyệt: " : "Chi phí ước tính: "}
-                    {detail.finalPrice || detail.estimatedCost 
-                      ? formatCurrency(detail.finalPrice?.amount ?? detail.estimatedCost?.amount ?? 0, detail.finalPrice?.currency ?? detail.estimatedCost?.currency ?? "VND") 
-                      : "Chưa có"}
-                  </Text>
+                      {detail.finalPrice || detail.estimatedCost 
+                        ? formatCurrency(detail.finalPrice?.amount ?? detail.estimatedCost?.amount ?? 0, detail.finalPrice?.currency ?? detail.estimatedCost?.currency ?? "VND") 
+                        : "Chưa có"}
+                      {" "}
+                      <MaterialIcons name="refresh" size={14} color={colors.primary} onPress={() => loadRequestDetail(detail.id)} />
+                    </Text>
                   
                   {detail.depositAmount && (
                     <Text style={styles.meta}>
-                      Số tiền đã cọc: {formatCurrency(detail.depositAmount.amount, detail.depositAmount.currency)}
+                      {detail.isDepositPaid ? "Số tiền đã cọc" : "Số tiền cần cọc"}: {formatCurrency(detail.depositAmount.amount, detail.depositAmount.currency)}
                     </Text>
                   )}
 
@@ -510,6 +561,13 @@ export default function MyRequestsScreen() {
                 onPress={() => {
                   if (paymentUrl) Linking.openURL(paymentUrl);
                 }} 
+              />
+              <ActionButton
+                label="Tôi đã thanh toán, kiểm tra lại"
+                variant="secondary"
+                onPress={() => {
+                  void handleSyncPaymentAfterTransfer();
+                }}
               />
               <ActionButton 
                 label="Đóng" 
