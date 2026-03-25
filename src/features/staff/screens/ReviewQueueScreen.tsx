@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import { Modal, Image, ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
-import QRCode from 'react-native-qrcode-svg';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "../../../app/theme/colors";
 import BrandLogo from "../../../shared/ui/BrandLogo";
@@ -14,6 +13,7 @@ import {
   ALL_REQUESTS_QUERY,
   SERVICE_AGENTS_QUERY,
   SERVICE_DEFINITIONS_QUERY,
+  USER_BY_ID_QUERY,
   USERS_QUERY
 } from "../../../shared/api/graphqlDocuments";
 import {
@@ -24,7 +24,7 @@ import {
   approveCompletion,
   rejectCompletion,
   markAsAwaitingPayment,
-  markAsPaid,
+  syncPaymentStatus,
   payoutServiceRequest,
   type PriceAdjustmentItem
 } from "../api/staffApi";
@@ -36,6 +36,7 @@ import {
   formatShortId,
   normalizeServiceRequests
 } from "../../../shared/utils/format";
+import { resolveImageUrl } from "../../../shared/utils/media";
 import type { ServiceAgentItem, ServiceDefinition, ServiceRequestItem, UserProfile } from "../../../shared/types/domain";
 import ActionButton from "../../../shared/ui/ActionButton";
 
@@ -53,6 +54,14 @@ interface ServiceAgentsResponse {
 
 interface UsersResponse {
   getUsers: UserProfile[];
+}
+
+interface ServiceAgentByIdResponse {
+  getServiceAgentById: ServiceAgentItem | null;
+}
+
+interface UserByIdResponse {
+  getUserById: UserProfile | null;
 }
 
 const STATUS_GROUPS = {
@@ -111,6 +120,19 @@ const canOpenDispatch = (request: ServiceRequestItem | null) =>
 const getStatusStyle = (status?: string | null) =>
   STATUS_COLORS[status ?? ""] ?? { bg: "#f0f4ff", text: "#64748b" };
 
+const normalizeId = (value?: string | null) => value?.trim().toLowerCase() ?? "";
+
+const SERVICE_AGENT_BY_ID_QUERY = `
+  query ServiceAgentById($id: UUID!) {
+    getServiceAgentById(id: $id) {
+      id
+      userId
+      fullName
+    }
+  }
+`;
+
+
 const getAiValueLabel = (value?: string | null, wasAnalyzedByAI?: boolean) => {
   if (value?.trim()) return value;
   return wasAnalyzedByAI ? "AI chưa trả về" : "Chưa phân tích AI";
@@ -129,8 +151,7 @@ export default function ReviewQueueScreen() {
   const [customerNamesById, setCustomerNamesById] = useState<Record<string, string>>({});
   const [agentNamesById, setAgentNamesById] = useState<Record<string, string>>({});
   const [pendingAdjustments, setPendingAdjustments] = useState<Record<string, PriceAdjustmentItem>>({});
-  const [showQrModal, setShowQrModal] = useState(false);
-  const [qrAmount, setQrAmount] = useState(0);
+  const [failedAdjustmentEvidenceByRequest, setFailedAdjustmentEvidenceByRequest] = useState<Record<string, boolean>>({});
   const [selectedRequestId, setSelectedRequestId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -152,11 +173,31 @@ export default function ReviewQueueScreen() {
     [items]
   );
 
-  const getCustomerName = (customerId?: string | null) =>
-    customerId ? customerNamesById[customerId] ?? formatShortId(customerId) : "-";
+  const getCustomerName = (customerId?: string | null) => {
+    if (!customerId) return "-";
+    const key = normalizeId(customerId);
+    return customerNamesById[customerId] ?? customerNamesById[key] ?? formatShortId(customerId);
+  };
 
-  const getAssignedAgentName = (agentId?: string | null) =>
-    agentId ? agentNamesById[agentId] ?? formatShortId(agentId) : "Chưa gán";
+  const getAssignedAgentName = (agentId?: string | null, fallbackWorkerId?: string | null) => {
+    const key = normalizeId(agentId);
+    if (key) {
+      const resolvedByAssignedId = agentNamesById[key] ?? customerNamesById[key];
+      if (resolvedByAssignedId) {
+        return resolvedByAssignedId;
+      }
+    }
+
+    const fallbackKey = normalizeId(fallbackWorkerId);
+    if (fallbackKey) {
+      const resolvedByWorkerId = agentNamesById[fallbackKey] ?? customerNamesById[fallbackKey];
+      if (resolvedByWorkerId) {
+        return resolvedByWorkerId;
+      }
+    }
+
+    return agentId ? formatShortId(agentId) : "Chưa gán";
+  };
 
   const toggleStatus = (value: string) => {
     setSelectedStatuses((prev) =>
@@ -179,24 +220,156 @@ export default function ReviewQueueScreen() {
         graphqlRequest<ServiceAgentsResponse>(SERVICE_AGENTS_QUERY, undefined, session.accessToken)
       ]);
 
-      setItems(normalizeServiceRequests(requestData.getServiceRequests));
+      const requests = normalizeServiceRequests(requestData.getServiceRequests);
+      setItems(requests);
 
       setServiceNamesById(
         Object.fromEntries(serviceData.getServiceDefinitions.map((service) => [service.id, service.name]))
       );
 
-      setCustomerNamesById(
-        Object.fromEntries(userData.getUsers.map((user) => [user.id, user.fullName]))
+      const userNamesByNormalizedId = Object.fromEntries(
+        userData.getUsers.flatMap((user) => {
+          const key = normalizeId(user.id);
+          const fullName = user.fullName?.trim();
+          return key && fullName ? ([[key, fullName]] as Array<[string, string]>) : [];
+        })
       );
 
-      setAgentNamesById(
-        Object.fromEntries(agentData.getServiceAgents.map((agent) => [agent.id, agent.fullName]))
+      const customerNameMap = Object.fromEntries(
+        userData.getUsers.flatMap((user) => {
+          const entries: Array<[string, string]> = [];
+          const fullName = user.fullName?.trim();
+          if (!fullName) {
+            return entries;
+          }
+
+          entries.push([user.id, fullName]);
+
+          const normalizedId = normalizeId(user.id);
+          if (normalizedId) {
+            entries.push([normalizedId, fullName]);
+          }
+
+          return entries;
+        })
       );
+
+      const agentNameMap = Object.fromEntries(
+        agentData.getServiceAgents.flatMap((agent) => {
+          const entries: Array<[string, string]> = [];
+          const userIdKey = normalizeId(agent.userId);
+          const fullName = agent.fullName?.trim() || (userIdKey ? userNamesByNormalizedId[userIdKey] : "");
+          if (!fullName) {
+            return entries;
+          }
+
+          const serviceAgentIdKey = normalizeId(agent.id);
+          if (serviceAgentIdKey) {
+            entries.push([serviceAgentIdKey, fullName]);
+          }
+
+          if (userIdKey) {
+            entries.push([userIdKey, fullName]);
+          }
+
+          return entries;
+        })
+      );
+
+      const unresolvedAgentIds = Array.from(
+        new Set(
+          requests.flatMap((request) => {
+            const unresolvedIds: string[] = [];
+            const assignedKey = normalizeId(request.assignedProviderId);
+            if (assignedKey && !agentNameMap[assignedKey] && !customerNameMap[assignedKey]) {
+              unresolvedIds.push(assignedKey);
+            }
+
+            for (const evidence of request.completionEvidences ?? []) {
+              const workerKey = normalizeId(evidence.workerId);
+              if (workerKey && !agentNameMap[workerKey] && !customerNameMap[workerKey]) {
+                unresolvedIds.push(workerKey);
+              }
+            }
+
+            return unresolvedIds;
+          })
+        )
+      );
+
+      if (unresolvedAgentIds.length > 0) {
+        const resolvedEntries = await Promise.all(
+          unresolvedAgentIds.map(async (candidateId) => {
+            try {
+              const agentByIdData = await graphqlRequest<ServiceAgentByIdResponse, { id: string }>(
+                SERVICE_AGENT_BY_ID_QUERY,
+                { id: candidateId },
+                session.accessToken
+              );
+
+              const agent = agentByIdData.getServiceAgentById;
+              if (agent) {
+                let resolvedName = agent.fullName?.trim() ?? "";
+
+                if (!resolvedName && agent.userId) {
+                  try {
+                    const userByIdData = await graphqlRequest<UserByIdResponse, { id: string }>(
+                      USER_BY_ID_QUERY,
+                      { id: agent.userId },
+                      session.accessToken
+                    );
+                    resolvedName = userByIdData.getUserById?.fullName?.trim() ?? "";
+                  } catch {
+                    // Fallback below keeps UI usable when user lookup fails.
+                  }
+                }
+
+                if (resolvedName) {
+                  return [
+                    [normalizeId(agent.id), resolvedName] as [string, string],
+                    [normalizeId(agent.userId), resolvedName] as [string, string],
+                    [candidateId, resolvedName] as [string, string]
+                  ];
+                }
+              }
+            } catch {
+              // Continue to user lookup fallback below.
+            }
+
+            try {
+              const userByIdData = await graphqlRequest<UserByIdResponse, { id: string }>(
+                USER_BY_ID_QUERY,
+                { id: candidateId },
+                session.accessToken
+              );
+              const fallbackName = userByIdData.getUserById?.fullName?.trim();
+              return fallbackName ? ([[candidateId, fallbackName]] as Array<[string, string]>) : [];
+            } catch {
+              return [];
+            }
+          })
+        );
+
+        resolvedEntries.forEach((entries) => {
+          entries.forEach(([key, fullName]) => {
+            if (key && fullName) {
+              agentNameMap[key] = fullName;
+              if (!customerNameMap[key]) {
+                customerNameMap[key] = fullName;
+              }
+            }
+          });
+        });
+      }
+
+      setCustomerNamesById(customerNameMap);
+      setAgentNamesById(agentNameMap);
 
       const adjustmentData = await getPendingPriceAdjustments(session.accessToken);
       setPendingAdjustments(
         Object.fromEntries(adjustmentData.map(adj => [adj.serviceRequestId, adj]))
       );
+      setFailedAdjustmentEvidenceByRequest({});
     } catch (loadError) {
       setError(asErrorMessage(loadError));
     } finally {
@@ -222,9 +395,11 @@ export default function ReviewQueueScreen() {
     }
   };
 
-  const handleRequestAction = async (requestId: string, action: "request-deposit" | "approve-completion" | "reject-completion" | "request-final" | "confirm-paid" | "payout") => {
+  const handleRequestAction = async (requestId: string, action: "request-deposit" | "approve-completion" | "reject-completion" | "request-final" | "sync-final-payment" | "payout") => {
     if (!session) return;
     setLoading(true);
+    setError("");
+    let syncFinalPaymentNotice: string | null = null;
     try {
       if (action === "request-deposit") {
         // Simple demo: request 20% deposit
@@ -237,13 +412,21 @@ export default function ReviewQueueScreen() {
         await rejectCompletion(session.accessToken, requestId);
       } else if (action === "request-final") {
         await markAsAwaitingPayment(session.accessToken, requestId);
-      } else if (action === "confirm-paid") {
-        await markAsPaid(session.accessToken, requestId);
+      } else if (action === "sync-final-payment") {
+        const syncResult = await syncPaymentStatus(session.accessToken, requestId);
+        if (
+          syncResult.serviceRequestStatus !== "FINAL_PAYMENT_PAID" &&
+          syncResult.serviceRequestStatus !== "PAYOUT_COMPLETED"
+        ) {
+          syncFinalPaymentNotice = "Khách chưa thanh toán xong phần còn lại. Vui lòng chờ và kiểm tra lại.";
+        }
       } else if (action === "payout") {
         await payoutServiceRequest(session.accessToken, requestId);
       }
       await load();
-      if (action === "confirm-paid") setShowQrModal(false);
+      if (syncFinalPaymentNotice) {
+        setError(syncFinalPaymentNotice);
+      }
     } catch (err) {
       setError(asErrorMessage(err));
     } finally {
@@ -361,6 +544,32 @@ export default function ReviewQueueScreen() {
           {filteredItems.map((item) => {
             const statusStyle = getStatusStyle(item.status);
             const isSelected = selectedRequestId === item.id;
+            const pendingAdjustment = pendingAdjustments[item.id];
+            const pendingAdjustmentEvidenceUrl = resolveImageUrl(pendingAdjustment?.evidenceImageUrl);
+            const isAdjustmentEvidenceFailed = failedAdjustmentEvidenceByRequest[item.id] ?? false;
+            const sortedCompletionEvidences = [...(item.completionEvidences ?? [])].sort(
+              (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            );
+            const latestCompletionEvidenceWithUrl = sortedCompletionEvidences
+              .map((ev) => ({ evidence: ev, imageUrl: resolveImageUrl(ev.imageUrl) }))
+              .find((entry) => !!entry.imageUrl);
+            const completionEvidencesToDisplay = latestCompletionEvidenceWithUrl
+              ? [latestCompletionEvidenceWithUrl]
+              : [];
+            const fallbackWorkerId = sortedCompletionEvidences[0]?.workerId ?? null;
+            const latestCompletionEvidenceNote =
+              sortedCompletionEvidences
+                .map((ev) => ev.notes?.trim())
+                .find(
+                  (note) =>
+                    !!note &&
+                    note !== "Ảnh bằng chứng tải lên từ thợ."
+                ) ??
+              sortedCompletionEvidences[0]?.notes?.trim() ??
+              null;
+            const shouldShowCompletionEvidenceSection =
+              item.status === "AWAITING_COMPLETION_REVIEW" &&
+              (completionEvidencesToDisplay.length > 0 || !!latestCompletionEvidenceNote);
 
             return (
               <View key={item.id} style={[styles.requestRow, isSelected && styles.requestRowSelected]}>
@@ -383,7 +592,7 @@ export default function ReviewQueueScreen() {
                   ) : null}
 
                   <Text style={styles.metaText}>Khách hàng: {getCustomerName(item.customerId)}</Text>
-                  <Text style={styles.metaText}>Thợ đã gán: {getAssignedAgentName(item.assignedProviderId)}</Text>
+                  <Text style={styles.metaText}>Thợ đã gán: {getAssignedAgentName(item.assignedProviderId, fallbackWorkerId)}</Text>
                   <Text style={styles.metaText}>Độ phức tạp: {item.complexity?.level ?? "Chưa có"}</Text>
 
                   {item.finalPrice || item.estimatedCost ? (
@@ -408,15 +617,32 @@ export default function ReviewQueueScreen() {
                 </Pressable>
 
                 <View style={styles.requestActions}>
-                  {pendingAdjustments[item.id] ? (
-                      <View style={styles.adjustmentNotice}>
-                        <Text style={styles.adjustmentTitle}>Yêu cầu tăng giá:</Text>
-                        <Text style={styles.adjustmentText}>Mới: {formatCurrency(pendingAdjustments[item.id].newPriceAmount, pendingAdjustments[item.id].newPriceCurrency)}</Text>
-                      <Text style={styles.adjustmentReason}>Lý do: {pendingAdjustments[item.id].reason}</Text>
-                      {pendingAdjustments[item.id].evidenceImageUrl ? (
+                  {pendingAdjustment ? (
+                    <View style={styles.adjustmentNotice}>
+                      <Text style={styles.adjustmentTitle}>Yêu cầu tăng giá:</Text>
+                      <Text style={styles.adjustmentText}>Mới: {formatCurrency(pendingAdjustment.newPriceAmount, pendingAdjustment.newPriceCurrency)}</Text>
+                      <Text style={styles.adjustmentReason}>Lý do: {pendingAdjustment.reason}</Text>
+                      {pendingAdjustment.evidenceImageUrl ? (
                         <View style={{ marginTop: 8, marginBottom: 8 }}>
                           <Text style={[styles.adjustmentReason, { fontWeight: "700" }]}>Ảnh khảo sát thực tế (Bằng chứng):</Text>
-                          <Image source={{ uri: pendingAdjustments[item.id].evidenceImageUrl }} style={{ width: "100%", height: 160, borderRadius: 8, marginTop: 4, resizeMode: "cover" }} />
+                          {pendingAdjustmentEvidenceUrl && !isAdjustmentEvidenceFailed ? (
+                            <Image
+                              source={{ uri: pendingAdjustmentEvidenceUrl }}
+                              onError={() =>
+                                setFailedAdjustmentEvidenceByRequest((previous) => ({
+                                  ...previous,
+                                  [item.id]: true
+                                }))
+                              }
+                              style={{ width: "100%", height: 160, borderRadius: 8, marginTop: 4, resizeMode: "cover" }}
+                            />
+                          ) : (
+                            <Text style={styles.imageUnavailableText}>
+                              {pendingAdjustmentEvidenceUrl
+                                ? "Không tải được ảnh bằng chứng từ máy chủ."
+                                : "Ảnh bằng chứng cũ chưa có URL công khai."}
+                            </Text>
+                          )}
                         </View>
                       ) : null}
                       <View style={styles.flexRow}>
@@ -426,18 +652,27 @@ export default function ReviewQueueScreen() {
                     </View>
                   ) : null}
 
-                  {item.status === "AWAITING_COMPLETION_REVIEW" && item.completionEvidences && item.completionEvidences.length > 0 && (
+                  {shouldShowCompletionEvidenceSection && (
                     <View style={styles.evidenceGallery}>
-                      <Text style={styles.evidenceTitle}>Bằng chứng hoàn thành ({item.completionEvidences.length})</Text>
+                      <Text style={styles.evidenceTitle}>Bằng chứng hoàn thành ({completionEvidencesToDisplay.length})</Text>
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.evidenceScroll}>
-                        {item.completionEvidences.map(ev => (
-                          <View key={ev.id} style={styles.evidenceThumb}>
-                            <Image source={{ uri: ev.imageUrl }} style={styles.evidenceImage} />
-                          </View>
-                        ))}
+                        {completionEvidencesToDisplay.map((entry) => {
+                          const completionEvidenceUrl = entry.imageUrl;
+                          return (
+                            <View key={entry.evidence.id} style={styles.evidenceThumb}>
+                              {completionEvidenceUrl ? (
+                                <Image source={{ uri: completionEvidenceUrl }} style={styles.evidenceImage} />
+                              ) : (
+                                <View style={[styles.evidenceImage, styles.evidenceImageFallback]}>
+                                  <Text style={styles.evidenceImageFallbackText}>Không tải được ảnh</Text>
+                                </View>
+                              )}
+                            </View>
+                          );
+                        })}
                       </ScrollView>
-                      {item.completionEvidences[0].notes ? (
-                        <Text style={styles.evidenceNotes}>Ghi chú: {item.completionEvidences[0].notes}</Text>
+                      {latestCompletionEvidenceNote ? (
+                        <Text style={styles.evidenceNotes}>Ghi chú: {latestCompletionEvidenceNote}</Text>
                       ) : null}
                     </View>
                   )}
@@ -478,7 +713,7 @@ export default function ReviewQueueScreen() {
 
                     {item.status === "COMPLETION_APPROVED" && (
                       <ActionButton
-                        label="Tạo QR thanh toán cuối"
+                        label="Chờ khách thanh toán cuối"
                         onPress={() => handleRequestAction(item.id, "request-final")}
                         variant="primary"
                       />
@@ -486,12 +721,8 @@ export default function ReviewQueueScreen() {
 
                     {item.status === "AWAITING_FINAL_PAYMENT" && (
                       <ActionButton
-                        label="Xác nhận trả đủ"
-                        onPress={() => {
-                          setSelectedRequestId(item.id);
-                          setQrAmount(item.finalPrice?.amount ?? item.estimatedCost?.amount ?? 0);
-                          setShowQrModal(true);
-                        }}
+                        label="Kiểm tra thanh toán cuối"
+                        onPress={() => handleRequestAction(item.id, "sync-final-payment")}
                       />
                     )}
 
@@ -528,47 +759,6 @@ export default function ReviewQueueScreen() {
         <View style={{ height: 80 }} />
       </ScrollView>
 
-      <Modal visible={showQrModal} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.cardTitle}>Quét mã thanh toán (Demo)</Text>
-              <Pressable onPress={() => setShowQrModal(false)}>
-                <MaterialIcons name="close" size={24} color="#64748b" />
-              </Pressable>
-            </View>
-            
-            <View style={styles.qrContainer}>
-              {selectedRequestId ? (
-                <QRCode
-                  value={`SMARTSERVICE_PAYMENT_${selectedRequestId}`}
-                  size={200}
-                  color={colors.primary}
-                  backgroundColor="white"
-                  quietZone={10}
-                />
-              ) : (
-                <ActivityIndicator color={colors.primary} size="large" />
-              )}
-              <Text style={styles.qrAmountText}>Tổng tiền: {formatCurrency(qrAmount, "VND")}</Text>
-              <Text style={styles.qrInstruction}>Vui lòng quét mã để thanh toán đơn hàng</Text>
-            </View>
-
-            <View style={styles.modalActions}>
-              <ActionButton 
-                label="Xác nhận khách đã trả" 
-                onPress={() => handleRequestAction(selectedRequestId, "confirm-paid")} 
-                loading={loading}
-              />
-              <ActionButton 
-                label="Đóng" 
-                variant="secondary" 
-                onPress={() => setShowQrModal(false)} 
-              />
-            </View>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -734,6 +924,7 @@ const styles = StyleSheet.create({
   adjustmentTitle: { fontSize: 13, fontWeight: "800", color: "#92400e" },
   adjustmentText: { fontSize: 13, fontWeight: "700", color: "#b45309" },
   adjustmentReason: { fontSize: 12, color: "#92400e", fontStyle: "italic" },
+  imageUnavailableText: { fontSize: 12, color: "#b45309", marginTop: 6 },
   flexRow: { flexDirection: "row", gap: 10, marginTop: 4 },
   actionButtonGroup: { gap: 8, marginTop: 4 },
   
@@ -809,6 +1000,17 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%"
   },
+  evidenceImageFallback: {
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#e2e8f0",
+    paddingHorizontal: 6
+  },
+  evidenceImageFallbackText: {
+    fontSize: 10,
+    color: "#64748b",
+    textAlign: "center"
+  },
   evidenceNotes: {
     fontSize: 12,
     color: "#64748b",
@@ -816,6 +1018,10 @@ const styles = StyleSheet.create({
     marginTop: 4
   }
 });
+
+
+
+
 
 
 

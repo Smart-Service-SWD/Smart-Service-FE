@@ -487,16 +487,22 @@ export default function AssignmentsScreen() {
                             const adjStatus = currentAdjustment?.status?.toString()?.toUpperCase();
                             const isAdjApproved = adjStatus === "APPROVED" || adjStatus === "1";
                             const isAdjRejected = adjStatus === "REJECTED" || adjStatus === "2";
-                            
+                            const canResubmitAdjustment = isAdjRejected;
+
                             return (
-                            <View style={{ backgroundColor: isAdjApproved ? "#f0fdf4" : isAdjRejected ? "#fef2f2" : "#fffbeb", padding: 12, borderRadius: 12, borderWidth: 1, borderColor: isAdjApproved ? "#bbf7d0" : isAdjRejected ? "#fecaca" : "#fde68a" }}>
-                              <Text style={{ fontSize: 13, fontWeight: "700", color: isAdjApproved ? "#166534" : isAdjRejected ? "#991b1b" : "#92400e" }}>
-                                Đã đề xuất giá mới: {formatCurrency(currentAdjustment.newPriceAmount, currentAdjustment.newPriceCurrency)}
-                              </Text>
-                              <Text style={{ fontSize: 12, color: isAdjApproved ? "#15803d" : isAdjRejected ? "#b91c1c" : "#b45309", marginTop: 4 }}>
-                                Trạng thái: {isAdjApproved ? "✅ Đã được duyệt" : isAdjRejected ? "❌ Bị từ chối" : "⏳ Đang chờ duyệt"}
-                              </Text>
-                            </View>
+                              <View style={{ width: "100%", gap: 10 }}>
+                                <View style={{ backgroundColor: isAdjApproved ? "#f0fdf4" : isAdjRejected ? "#fef2f2" : "#fffbeb", padding: 12, borderRadius: 12, borderWidth: 1, borderColor: isAdjApproved ? "#bbf7d0" : isAdjRejected ? "#fecaca" : "#fde68a" }}>
+                                  <Text style={{ fontSize: 13, fontWeight: "700", color: isAdjApproved ? "#166534" : isAdjRejected ? "#991b1b" : "#92400e" }}>
+                                    Đã đề xuất giá mới: {formatCurrency(currentAdjustment.newPriceAmount, currentAdjustment.newPriceCurrency)}
+                                  </Text>
+                                  <Text style={{ fontSize: 12, color: isAdjApproved ? "#15803d" : isAdjRejected ? "#b91c1c" : "#b45309", marginTop: 4 }}>
+                                    Trạng thái: {isAdjApproved ? "✅ Đã được duyệt" : isAdjRejected ? "❌ Bị từ chối" : "⏳ Đang chờ duyệt"}
+                                  </Text>
+                                </View>
+                                {canResubmitAdjustment ? (
+                                  <ActionButton label="Đề xuất lại tăng giá" onPress={() => setShowAdjustmentModal(true)} variant="secondary" />
+                                ) : null}
+                              </View>
                             );
                           })() : (
                             <ActionButton label="Đề xuất tăng giá" onPress={() => setShowAdjustmentModal(true)} variant="secondary" />
@@ -656,5 +662,6 @@ const styles = StyleSheet.create({
   pickButton: { backgroundColor: colors.primary, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10 },
   pickButtonText: { color: "#fff", fontWeight: "700", fontSize: 14 }
 });
+
 
 

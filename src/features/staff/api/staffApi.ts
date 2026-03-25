@@ -139,7 +139,10 @@ export const rejectCompletion = async (
   await httpRequest<unknown>({
     path: `/api/service-requests/${serviceRequestId}/reject-completion`,
     method: "PATCH",
-    token
+    token,
+    body: {
+      reason: ""
+    }
   });
 };
 
@@ -246,6 +249,24 @@ export const markAsPaid = (
   httpRequest<void>({
     path: `/api/service-requests/${serviceRequestId}/paid`,
     method: "PATCH",
+    token
+  });
+
+export interface SyncPaymentStatusResult {
+  serviceRequestId: string;
+  serviceRequestStatus: string;
+  paymentStatus: string;
+  orderCode?: number | null;
+  updated: boolean;
+}
+
+export const syncPaymentStatus = (
+  token: string,
+  serviceRequestId: string
+): Promise<SyncPaymentStatusResult> =>
+  httpRequest<SyncPaymentStatusResult>({
+    path: `/api/payments/${serviceRequestId}/sync-status`,
+    method: "POST",
     token
   });
 
