@@ -81,6 +81,7 @@ interface AgentMatchCandidate {
 }
 
 type WorkspaceTab = "overview" | "complexity" | "service" | "agent";
+type AgentAvailabilityFilter = "ALL" | "READY" | "BUSY";
 
 const complexityLevels = [1, 2, 3, 4, 5] as const;
 
@@ -90,6 +91,12 @@ const workspaceTabLabels: Record<WorkspaceTab, string> = {
   service: "Dịch vụ",
   agent: "Thợ"
 };
+
+const availabilityFilterOptions: Array<{ label: string; value: AgentAvailabilityFilter }> = [
+  { label: "Tất cả", value: "ALL" },
+  { label: "Sẵn sàng", value: "READY" },
+  { label: "Đang bận", value: "BUSY" }
+];
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   PENDING_REVIEW: { bg: "#fefce8", text: "#ca8a04" },
@@ -190,6 +197,7 @@ export default function DispatchCenterScreen() {
   const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false);
   const [searchPage, setSearchPage] = useState(1);
   const [searchResult, setSearchResult] = useState<{ items: ServiceAgentSearchItem[], total: number }>({ items: [], total: 0 });
+  const [agentAvailabilityFilter, setAgentAvailabilityFilter] = useState<AgentAvailabilityFilter>("ALL");
 
   const applyMatchSelection = (match: AgentMatchCandidate | null) => {
     setSelectedAgentId(match?.agent.id ?? "");
@@ -272,6 +280,35 @@ export default function DispatchCenterScreen() {
         .filter((id): id is string => !!id)
     );
   }, [requests]);
+
+  const matchesAvailabilityFilter = useCallback((agentId: string) => {
+    const isBusy = busyAgentIds.has(agentId);
+
+    if (agentAvailabilityFilter === "READY") {
+      return !isBusy;
+    }
+
+    if (agentAvailabilityFilter === "BUSY") {
+      return isBusy;
+    }
+
+    return true;
+  }, [agentAvailabilityFilter, busyAgentIds]);
+
+  const visibleAgentMatches = useMemo(
+    () => agentMatches.filter((item) => matchesAvailabilityFilter(item.agent.id)),
+    [agentMatches, matchesAvailabilityFilter]
+  );
+
+  const filteredReadyAgentMatches = useMemo(
+    () => readyAgentMatches.filter((item) => matchesAvailabilityFilter(item.agent.id)),
+    [readyAgentMatches, matchesAvailabilityFilter]
+  );
+
+  const filteredReviewAgentMatches = useMemo(
+    () => reviewAgentMatches.filter((item) => matchesAvailabilityFilter(item.agent.id)),
+    [reviewAgentMatches, matchesAvailabilityFilter]
+  );
 
   const getCustomerName = (customerId?: string | null) =>
     customerId ? customerNamesById[customerId] ?? formatShortId(customerId) : "-";
@@ -650,16 +687,18 @@ export default function DispatchCenterScreen() {
   }, [selectedRequest, session?.accessToken]);
 
   useEffect(() => {
-    if (!selectedAgentMatch && agentMatches.length > 0) {
-      applyMatchSelection(readyAgentMatches[0] ?? agentMatches[0] ?? null);
+    if (!selectedAgentMatch && visibleAgentMatches.length > 0) {
+      applyMatchSelection(filteredReadyAgentMatches[0] ?? visibleAgentMatches[0] ?? null);
       return;
     }
+
     if (!selectedAgentId) return;
-    const stillEligible = agentMatches.some((item) => item.agent.id === selectedAgentId);
+
+    const stillEligible = visibleAgentMatches.some((item) => item.agent.id === selectedAgentId);
     if (!stillEligible) {
-      applyMatchSelection(readyAgentMatches[0] ?? agentMatches[0] ?? null);
+      applyMatchSelection(filteredReadyAgentMatches[0] ?? visibleAgentMatches[0] ?? null);
     }
-  }, [agentMatches, readyAgentMatches, selectedAgentId, selectedAgentMatch]);
+  }, [filteredReadyAgentMatches, selectedAgentId, selectedAgentMatch, visibleAgentMatches]);
 
   // ✅ Theo yêu cầu: title luôn giữ nguyên, không đổi theo request
   const screenTitle = "Điều phối và gán thợ";
@@ -937,11 +976,32 @@ export default function DispatchCenterScreen() {
                       </>
                     ) : agentMatches.length > 0 ? (
                       <>
-                        {readyAgentMatches.length > 0 ? (
+                        <View style={styles.optionStack}>
+                          <Text style={styles.subTitle}>Lọc trạng thái thợ</Text>
+                          <View style={styles.chipRow}>
+                            {availabilityFilterOptions.map((option) => {
+                              const active = agentAvailabilityFilter === option.value;
+                              return (
+                                <Pressable
+                                  key={option.value}
+                                  style={[styles.chip, active && styles.chipActive]}
+                                  onPress={() => setAgentAvailabilityFilter(option.value)}
+                                >
+                                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{option.label}</Text>
+                                </Pressable>
+                              );
+                            })}
+                          </View>
+                          <Text style={styles.metaText}>
+                            Hiển thị {visibleAgentMatches.length}/{agentMatches.length} thợ theo bộ lọc.
+                          </Text>
+                        </View>
+
+                        {filteredReadyAgentMatches.length > 0 ? (
                           <View style={styles.optionStack}>
                             <Text style={styles.subTitle}>Có thể gán ngay</Text>
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalAgentScroll}>
-                              {readyAgentMatches.map((match) => {
+                              {filteredReadyAgentMatches.map((match) => {
                                 const isBusy = busyAgentIds.has(match.agent.id);
                                 return (
                                   <View key={match.agent.id} style={styles.agentCardWrapper}>
@@ -953,9 +1013,9 @@ export default function DispatchCenterScreen() {
                                       onPress={() => handleSelectAgent(match)}
                                     >
                                       <View style={styles.agentHeader}>
-                                        <Text style={styles.selectedTitle} numberOfLines={1}>{match.agent.fullName}</Text>
-                                        <View style={[styles.statusPill, { backgroundColor: isBusy ? "#fef2f2" : "#f0fdf4" }]}>
-                                          <Text style={[styles.statusText, { color: isBusy ? "#dc2626" : "#16a34a" }]}>
+                                        <Text style={[styles.selectedTitle, styles.agentNameText]} numberOfLines={1}>{match.agent.fullName}</Text>
+                                        <View style={[styles.statusPill, styles.agentStatusPill, { backgroundColor: isBusy ? "#fef2f2" : "#f0fdf4" }]}>
+                                          <Text numberOfLines={1} style={[styles.statusText, styles.agentStatusText, { color: isBusy ? "#dc2626" : "#16a34a" }]}>
                                             {isBusy ? "Đang bận" : "Sẵn sàng"}
                                           </Text>
                                         </View>
@@ -968,15 +1028,15 @@ export default function DispatchCenterScreen() {
                                 );
                               })}
                             </ScrollView>
-                            {selectedAgentMatch && readyAgentMatches.some(m => m.agent.id === selectedAgentId) ? renderActionPanel() : null}
+                            {selectedAgentMatch && filteredReadyAgentMatches.some(m => m.agent.id === selectedAgentId) ? renderActionPanel() : null}
                           </View>
                         ) : null}
 
-                        {reviewAgentMatches.length > 0 ? (
+                        {filteredReviewAgentMatches.length > 0 ? (
                           <View style={styles.optionStack}>
                             <Text style={styles.subTitle}>Cần rà soát thêm</Text>
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalAgentScroll}>
-                              {reviewAgentMatches.map((match) => {
+                              {filteredReviewAgentMatches.map((match) => {
                                 const isBusy = busyAgentIds.has(match.agent.id);
                                 return (
                                   <View key={match.agent.id} style={styles.agentCardWrapper}>
@@ -989,9 +1049,9 @@ export default function DispatchCenterScreen() {
                                       onPress={() => handleSelectAgent(match)}
                                     >
                                       <View style={styles.agentHeader}>
-                                        <Text style={styles.selectedTitle} numberOfLines={1}>{match.agent.fullName}</Text>
-                                        <View style={[styles.statusPill, { backgroundColor: isBusy ? "#fef2f2" : "#f0fdf4" }]}>
-                                          <Text style={[styles.statusText, { color: isBusy ? "#dc2626" : "#16a34a" }]}>
+                                        <Text style={[styles.selectedTitle, styles.agentNameText]} numberOfLines={1}>{match.agent.fullName}</Text>
+                                        <View style={[styles.statusPill, styles.agentStatusPill, { backgroundColor: isBusy ? "#fef2f2" : "#f0fdf4" }]}>
+                                          <Text numberOfLines={1} style={[styles.statusText, styles.agentStatusText, { color: isBusy ? "#dc2626" : "#16a34a" }]}>
                                             {isBusy ? "Đang bận" : "Sẵn sàng"}
                                           </Text>
                                         </View>
@@ -1004,8 +1064,12 @@ export default function DispatchCenterScreen() {
                                 );
                               })}
                             </ScrollView>
-                            {selectedAgentMatch && reviewAgentMatches.some(m => m.agent.id === selectedAgentId) ? renderActionPanel() : null}
+                            {selectedAgentMatch && filteredReviewAgentMatches.some(m => m.agent.id === selectedAgentId) ? renderActionPanel() : null}
                           </View>
+                        ) : null}
+
+                        {filteredReadyAgentMatches.length === 0 && filteredReviewAgentMatches.length === 0 ? (
+                          <Text style={styles.metaText}>Bộ lọc hiện tại không có thợ phù hợp. Hãy đổi bộ lọc để xem thêm.</Text>
                         ) : null}
                       </>
                     ) : (
@@ -1304,7 +1368,10 @@ const styles = StyleSheet.create({
     justifyContent: "space-between"
   },
   horizontalAgentScroll: { paddingRight: 20 },
-  agentHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
+  agentHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 8 },
+  agentNameText: { flex: 1, minWidth: 0 },
+  agentStatusPill: { flexShrink: 0, marginLeft: 6, paddingHorizontal: 6, paddingVertical: 4, alignSelf: "flex-start" },
+  agentStatusText: { fontSize: 9 },
   actionPanel: {
     borderWidth: 1,
     borderColor: colors.primary,
@@ -1328,3 +1395,7 @@ const styles = StyleSheet.create({
   queueHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 10 },
   queueTitle: { color: "#0f172a", fontWeight: "800", fontSize: 14, lineHeight: 20, flex: 1 }
 });
+
+
+
+
