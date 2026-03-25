@@ -478,10 +478,10 @@ export default function AssignmentsScreen() {
                     <Text style={styles.detailText}><Text style={styles.detailLabel}>Mô tả lỗi: </Text>{detail.description}</Text>
                     
                     <View style={styles.actionRow}>
-                      {detail.status === "ASSIGNED" && (
+                      {item.request.status === "ASSIGNED" && (
                         <ActionButton label="Bắt đầu làm việc" onPress={() => void handleStatusChange("IN_PROGRESS")} loading={loading} />
                       )}
-                      {detail.status === "IN_PROGRESS" && (
+                      {item.request.status === "IN_PROGRESS" && (
                         <View style={{ width: "100%", gap: 10 }}>
                           {currentAdjustment ? (() => {
                             const adjStatus = currentAdjustment?.status?.toString()?.toUpperCase();
@@ -656,4 +656,5 @@ const styles = StyleSheet.create({
   pickButton: { backgroundColor: colors.primary, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10 },
   pickButtonText: { color: "#fff", fontWeight: "700", fontSize: 14 }
 });
+
 

@@ -17,7 +17,8 @@ import {
   MY_REQUESTS_QUERY,
   REQUEST_BY_ID_QUERY,
   SERVICE_AGENTS_QUERY,
-  SERVICE_DEFINITIONS_QUERY
+  SERVICE_DEFINITIONS_QUERY,
+  USER_BY_ID_QUERY
 } from "../../../shared/api/graphqlDocuments";
 import {
   asErrorMessage,
@@ -33,7 +34,8 @@ import type {
   ServiceAgentItem,
   ServiceFeedbackItem,
   ServiceDefinition,
-  ServiceRequestItem
+  ServiceRequestItem,
+  UserProfile
 } from "../../../shared/types/domain";
 import ActionButton from "../../../shared/ui/ActionButton";
 
@@ -57,6 +59,23 @@ interface ServiceAgentsResponse {
   getServiceAgents: ServiceAgentItem[];
 }
 
+interface ServiceAgentByIdResponse {
+  getServiceAgentById: ServiceAgentItem | null;
+}
+
+interface UserByIdResponse {
+  getUserById: UserProfile | null;
+}
+
+const SERVICE_AGENT_BY_ID_QUERY = `
+  query ServiceAgentById($id: UUID!) {
+    getServiceAgentById(id: $id) {
+      id
+      userId
+      fullName
+    }
+  }
+`;
 const statusOptions = [
   { label: "Chờ AI", value: "AWAITING_ANALYSIS" },
   { label: "Mới tạo", value: "CREATED" },
@@ -75,6 +94,8 @@ const statusOptions = [
 const canCancelBeforeStaffConfirmation = (status?: string | null) =>
   normalizeRequestStatus(status) === "AWAITING_ANALYSIS" ||
   normalizeRequestStatus(status) === "CREATED";
+
+const normalizeId = (value?: string | null) => value?.trim().toLowerCase() ?? "";
 
 export default function MyRequestsScreen() {
   const { session } = useAuth();
@@ -98,8 +119,10 @@ export default function MyRequestsScreen() {
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
 
-  const getAgentName = (agentId?: string | null) =>
-    agentId ? agentNamesById[agentId] ?? formatShortId(agentId) : "Chưa phân công";
+  const getAgentName = (agentId?: string | null) => {
+    const key = normalizeId(agentId);
+    return key ? agentNamesById[key] ?? formatShortId(agentId) : "Chưa phân công";
+  };
 
   const load = useCallback(async () => {
     if (!session) {
@@ -127,13 +150,103 @@ export default function MyRequestsScreen() {
         )
       ]);
 
-      setItems(normalizeServiceRequests(requestData.getMyServiceRequests));
+      const requests = normalizeServiceRequests(requestData.getMyServiceRequests);
+      const agentNameMap = Object.fromEntries(
+        agentData.getServiceAgents.flatMap((agent) => {
+          const entries: Array<[string, string]> = [];
+          const fullName = agent.fullName?.trim();
+          if (!fullName) {
+            return entries;
+          }
+
+          const serviceAgentIdKey = normalizeId(agent.id);
+          if (serviceAgentIdKey) {
+            entries.push([serviceAgentIdKey, fullName]);
+          }
+
+          const userIdKey = normalizeId(agent.userId);
+          if (userIdKey) {
+            entries.push([userIdKey, fullName]);
+          }
+
+          return entries;
+        })
+      );
+
+      const missingAssignedIds = Array.from(
+        new Set(
+          requests
+            .map((request) => normalizeId(request.assignedProviderId))
+            .filter((id) => !!id && !agentNameMap[id])
+        )
+      );
+
+      if (missingAssignedIds.length > 0) {
+        const resolvedEntries = await Promise.all(
+          missingAssignedIds.map(async (assignedId) => {
+            try {
+              const agentByIdData = await graphqlRequest<ServiceAgentByIdResponse, { id: string }>(
+                SERVICE_AGENT_BY_ID_QUERY,
+                { id: assignedId },
+                session.accessToken
+              );
+
+              const agent = agentByIdData.getServiceAgentById;
+              if (agent) {
+                let resolvedName = agent.fullName?.trim() ?? "";
+                if (!resolvedName && agent.userId) {
+                  try {
+                    const userByIdData = await graphqlRequest<UserByIdResponse, { id: string }>(
+                      USER_BY_ID_QUERY,
+                      { id: agent.userId },
+                      session.accessToken
+                    );
+                    resolvedName = userByIdData.getUserById?.fullName?.trim() ?? "";
+                  } catch {
+                    // Fallback below keeps UI usable when user lookup fails.
+                  }
+                }
+
+                if (resolvedName) {
+                  return [
+                    [normalizeId(agent.id), resolvedName] as [string, string],
+                    [normalizeId(agent.userId), resolvedName] as [string, string],
+                    [assignedId, resolvedName] as [string, string]
+                  ];
+                }
+              }
+            } catch {
+              // Continue to user lookup fallback below.
+            }
+
+            try {
+              const userByIdData = await graphqlRequest<UserByIdResponse, { id: string }>(
+                USER_BY_ID_QUERY,
+                { id: assignedId },
+                session.accessToken
+              );
+              const fallbackName = userByIdData.getUserById?.fullName?.trim();
+              return fallbackName ? ([[assignedId, fallbackName]] as Array<[string, string]>) : [];
+            } catch {
+              return [];
+            }
+          })
+        );
+
+        resolvedEntries.forEach((entries) => {
+          entries.forEach(([key, fullName]) => {
+            if (key && fullName) {
+              agentNameMap[key] = fullName;
+            }
+          });
+        });
+      }
+
+      setItems(requests);
       setServiceNamesById(
         Object.fromEntries(serviceData.getServiceDefinitions.map((service) => [service.id, service.name]))
       );
-      setAgentNamesById(
-        Object.fromEntries(agentData.getServiceAgents.map((agent) => [agent.id, agent.fullName]))
-      );
+      setAgentNamesById(agentNameMap);
       setReviewedRequestIds(
         Array.from(
           new Set(feedbackData.getMyServiceFeedbacks.map((feedback) => feedback.serviceRequestId))
@@ -912,4 +1025,8 @@ const styles = StyleSheet.create({
     marginTop: 10
   }
 });
+
+
+
+
 

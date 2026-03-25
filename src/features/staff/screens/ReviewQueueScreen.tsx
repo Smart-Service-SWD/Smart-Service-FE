@@ -26,7 +26,6 @@ import {
   markAsAwaitingPayment,
   markAsPaid,
   payoutServiceRequest,
-  startService,
   type PriceAdjustmentItem
 } from "../api/staffApi";
 import {
@@ -223,7 +222,7 @@ export default function ReviewQueueScreen() {
     }
   };
 
-  const handleRequestAction = async (requestId: string, action: "request-deposit" | "approve-completion" | "reject-completion" | "request-final" | "confirm-paid" | "payout" | "start-service") => {
+  const handleRequestAction = async (requestId: string, action: "request-deposit" | "approve-completion" | "reject-completion" | "request-final" | "confirm-paid" | "payout") => {
     if (!session) return;
     setLoading(true);
     try {
@@ -242,8 +241,6 @@ export default function ReviewQueueScreen() {
         await markAsPaid(session.accessToken, requestId);
       } else if (action === "payout") {
         await payoutServiceRequest(session.accessToken, requestId);
-      } else if (action === "start-service") {
-        await startService(session.accessToken, requestId);
       }
       await load();
       if (action === "confirm-paid") setShowQrModal(false);
@@ -461,14 +458,6 @@ export default function ReviewQueueScreen() {
                         label="Yêu cầu đặt cọc"
                         variant="primary"
                         onPress={() => handleRequestAction(item.id, "request-deposit")}
-                      />
-                    )}
-
-                    {item.status === "ASSIGNED" && (
-                      <ActionButton
-                        label="Bắt đầu công việc"
-                        onPress={() => handleRequestAction(item.id, "start-service")}
-                        variant="primary"
                       />
                     )}
 
@@ -827,6 +816,7 @@ const styles = StyleSheet.create({
     marginTop: 4
   }
 });
+
 
 
 
