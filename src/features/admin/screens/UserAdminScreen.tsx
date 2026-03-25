@@ -74,6 +74,9 @@ const getUserInitials = (fullName?: string | null) => {
     .join("");
 };
 
+const normalizeId = (value?: string | null) => value?.trim().toLowerCase() ?? "";
+const normalizeText = (value?: string | null) => value?.trim().toLowerCase() ?? "";
+
 const toCapabilityDrafts = (capabilities?: AgentCapabilityItem[] | null): CapabilityDraft[] =>
   capabilities?.length
     ? capabilities.map((capability) => ({
@@ -105,6 +108,8 @@ export default function UserAdminScreen() {
   const [loadingServicesForCategory, setLoadingServicesForCategory] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [agentSyncNotice, setAgentSyncNotice] = useState("");
+  const [agentSyncError, setAgentSyncError] = useState("");
   const [activePanel, setActivePanel] = useState<ActivePanel>(null);
 
   // ✅ Thu gọn/expand danh sách user
@@ -115,10 +120,19 @@ export default function UserAdminScreen() {
     [users, selectedUserId]
   );
 
-  const selectedServiceAgent = useMemo(
-    () => (selectedUser ? serviceAgents.find((agent) => agent.userId === selectedUser.id) ?? null : null),
-    [selectedUser, serviceAgents]
-  );
+  const selectedServiceAgent = useMemo(() => {
+    if (!selectedUser) return null;
+    const selectedUserKey = normalizeId(selectedUser.id);
+    const byUserId = serviceAgents.find((agent) => normalizeId(agent.userId) === selectedUserKey) ?? null;
+    if (byUserId) return byUserId;
+
+    // Legacy fallback: old data may have ServiceAgent rows without UserId link.
+    const selectedUserNameKey = normalizeText(selectedUser.fullName);
+    if (!selectedUserNameKey) return null;
+
+    const sameNameAgents = serviceAgents.filter((agent) => normalizeText(agent.fullName) === selectedUserNameKey);
+    return sameNameAgents.length === 1 ? sameNameAgents[0] : null;
+  }, [selectedUser, serviceAgents]);
 
   const selectedUserRole = String(selectedUser?.role ?? "").toUpperCase();
 
@@ -152,17 +166,21 @@ export default function UserAdminScreen() {
 
     setError("");
     setSuccess("");
+    setAgentSyncNotice("");
+    setAgentSyncError("");
     setActivePanel("update");
   };
 
-  const loadUsers = async (token: string) => {
+  const loadUsers = async (token: string): Promise<UserProfile[]> => {
     const data = await graphqlRequest<UsersResponse>(USERS_QUERY, undefined, token);
     setUsers(data.getUsers);
+    return data.getUsers;
   };
 
-  const loadServiceAgents = async (token: string) => {
+  const loadServiceAgents = async (token: string): Promise<ServiceAgentItem[]> => {
     const data = await graphqlRequest<ServiceAgentsResponse>(SERVICE_AGENTS_QUERY, undefined, token);
     setServiceAgents(data.getServiceAgents);
+    return data.getServiceAgents;
   };
 
   const loadCategories = async () => {
@@ -395,6 +413,50 @@ export default function UserAdminScreen() {
       await Promise.all([loadUsers(session.accessToken), loadServiceAgents(session.accessToken)]);
     } catch (updateError) {
       setError(asErrorMessage(updateError));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEnsureAgentProfile = async () => {
+    if (!session) return;
+    const userId = selectedUserId.trim();
+    if (!userId) {
+      const message = "Chọn người dùng từ danh sách trước";
+      setError(message);
+      setAgentSyncError(message);
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    setSuccess("");
+    setAgentSyncNotice("");
+    setAgentSyncError("");
+    try {
+      await updateUserRole(session.accessToken, userId, {
+        role: toBackendRole("AGENT")
+      });
+      const [, refreshedAgents] = await Promise.all([
+        loadUsers(session.accessToken),
+        loadServiceAgents(session.accessToken)
+      ]);
+
+      const linkedAgent = refreshedAgents.find((agent) => normalizeId(agent.userId) === normalizeId(userId));
+      if (!linkedAgent) {
+        const message = "Đã gửi đồng bộ nhưng BE vẫn chưa trả hồ sơ ServiceAgent cho user này.";
+        setAgentSyncError(message);
+        setError(message);
+        return;
+      }
+
+      setSuccess("Đã đồng bộ hồ sơ ServiceAgent cho tài khoản thợ.");
+      setAgentSyncNotice("Đồng bộ thành công, bạn có thể cập nhật capability ngay.");
+      setTargetRole("AGENT");
+    } catch (syncError) {
+      const message = asErrorMessage(syncError);
+      setError(message);
+      setAgentSyncError(message);
     } finally {
       setLoading(false);
     }
@@ -811,9 +873,20 @@ export default function UserAdminScreen() {
                     />
                   </>
                 ) : (
-                  <Text style={styles.warningText}>
-                    User đang mang role thợ nhưng FE chưa tìm thấy hồ sơ ServiceAgent được liên kết bằng userId.
-                  </Text>
+                  <View style={{ gap: 10 }}>
+                    <Text style={styles.warningText}>
+                      User đang mang role thợ nhưng FE chưa tìm thấy hồ sơ ServiceAgent được liên kết bằng userId.
+                    </Text>
+                    <ActionButton
+                      label={loading ? "Đang đồng bộ..." : "Đồng bộ hồ sơ thợ"}
+                      onPress={() => void handleEnsureAgentProfile()}
+                      disabled={loading || !selectedUserId}
+                      loading={loading}
+                      variant="secondary"
+                    />
+                    {agentSyncNotice ? <Text style={styles.metaText}>{agentSyncNotice}</Text> : null}
+                    {agentSyncError ? <Text style={styles.warningText}>{agentSyncError}</Text> : null}
+                  </View>
                 )}
               </View>
             ) : null}
@@ -1129,4 +1202,9 @@ const styles = StyleSheet.create({
   userAvatarText: { color: "#2563eb", fontSize: 15, fontWeight: "800" },
   userName: { color: "#0f172a", fontWeight: "800", fontSize: 14 }
 });
+
+
+
+
+
 
