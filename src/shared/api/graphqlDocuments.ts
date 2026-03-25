@@ -355,6 +355,10 @@ export const SERVICE_AGENTS_QUERY = `
       userId
       fullName
       isActive
+      balance {
+        amount
+        currency
+      }
       capabilities {
         id
         categoryId

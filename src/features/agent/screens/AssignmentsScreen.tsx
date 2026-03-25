@@ -436,6 +436,9 @@ export default function AssignmentsScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.agentName}>{linkedServiceAgent?.fullName ?? "Thợ"}</Text>
+              <Text style={styles.balanceText}>
+                Số dư: {formatCurrency(linkedServiceAgent?.balance?.amount ?? 0, linkedServiceAgent?.balance?.currency ?? "VND")}
+              </Text>
               <Text style={[styles.availText, { color: isActive ? "#16a34a" : "#94a3b8" }]}>{isActive ? "Đang nhận việc" : "Tạm ngưng"}</Text>
             </View>
           </View>
@@ -607,6 +610,7 @@ const styles = StyleSheet.create({
   agentAvatarInactive: { backgroundColor: "#f1f5f9" },
   agentAvatarText: { fontSize: 18, fontWeight: "800" },
   agentName: { fontSize: 15, fontWeight: "800" },
+  balanceText: { fontSize: 13, fontWeight: "700", color: colors.primary, marginTop: 2 },
   availText: { fontSize: 12, fontWeight: "600" },
   toggleBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10 },
   toggleBtnOn: { backgroundColor: "#2563eb" },

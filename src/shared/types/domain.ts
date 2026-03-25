@@ -104,6 +104,7 @@ export interface ServiceAgentItem {
   userId?: string | null;
   fullName: string;
   isActive: boolean;
+  balance?: Money | null;
   capabilities?: AgentCapabilityItem[] | null;
 }
 

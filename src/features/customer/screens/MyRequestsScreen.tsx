@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View, Linking } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import QRCode from 'react-native-qrcode-svg';
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -9,7 +9,7 @@ import { colors } from "../../../app/theme/colors";
 import BrandLogo from "../../../shared/ui/BrandLogo";
 import type { CustomerTabParamList } from "../../../app/navigation/types";
 import { useAuth } from "../../auth/AuthContext";
-import { cancelServiceRequest } from "../api/customerApi";
+import { cancelServiceRequest, createDepositLink, createFinalLink } from "../api/customerApi";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
 import { ApiError } from "../../../shared/api/httpClient";
 import {
@@ -92,6 +92,8 @@ export default function MyRequestsScreen() {
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [paymentType, setPaymentType] = useState<"DEPOSIT" | "FINAL">("DEPOSIT");
   const [loading, setLoading] = useState(false);
+  const [paymentUrl, setPaymentUrl] = useState("");
+  const [qrCodeData, setQrCodeData] = useState("");
   const [cancelingRequestId, setCancelingRequestId] = useState("");
   const [error, setError] = useState("");
 
@@ -256,6 +258,38 @@ export default function MyRequestsScreen() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredItems.length, selectedStatuses]);
+
+  // Fetch Payment Link when Modal Opens
+  useEffect(() => {
+    let active = true;
+    if (showPaymentModal && detailRequestId && session) {
+      const fetchPaymentUrl = async () => {
+        setPaymentUrl("");
+        try {
+          // URLs for redirection after PayOS payment
+          const returnUrl = "https://google.com";
+          const cancelUrl = "https://google.com";
+
+          const result = paymentType === "DEPOSIT"
+            ? await createDepositLink(session.accessToken, detailRequestId, returnUrl, cancelUrl)
+            : await createFinalLink(session.accessToken, detailRequestId, returnUrl, cancelUrl);
+
+          if (active) {
+            setPaymentUrl(result.checkoutUrl);
+            setQrCodeData(result.qrCode);
+          }
+        } catch (err) {
+          if (active) {
+            Alert.alert("Lỗi thanh toán", asErrorMessage(err));
+            setShowPaymentModal(false);
+          }
+        }
+      };
+
+      void fetchPaymentUrl();
+    }
+    return () => { active = false; };
+  }, [showPaymentModal, detailRequestId, paymentType, session]);
 
   const dropdownLabel =
     selectedStatuses.length === 0
@@ -454,9 +488,9 @@ export default function MyRequestsScreen() {
             
             <View style={styles.qrContainer}>
               <View style={styles.qrShadow}>
-                {detailRequestId ? (
+                {paymentUrl ? (
                   <QRCode
-                    value={`SMARTSERVICE_PAY_${detailRequestId}_${paymentType}_${paymentAmount}`}
+                    value={qrCodeData || paymentUrl}
                     size={200}
                     color={colors.primary}
                     backgroundColor="white"
@@ -472,22 +506,9 @@ export default function MyRequestsScreen() {
 
             <View style={styles.modalActions}>
               <ActionButton 
-                label={loading ? "Đang xử lý..." : "Đã chuyển khoản"}
-                disabled={loading}
-                onPress={async () => {
-                  if (!session) return;
-                  setLoading(true);
-                  try {
-                    await markAsPaid(session.accessToken, detailRequestId);
-                    setShowPaymentModal(false);
-                    Alert.alert("Thông báo", "Thanh toán của bạn đã được ghi nhận thành công.");
-                    await load();
-                    await loadRequestDetail(detailRequestId);
-                  } catch (err) {
-                    Alert.alert("Lỗi", asErrorMessage(err));
-                  } finally {
-                    setLoading(false);
-                  }
+                label="Mở trang thanh toán"
+                onPress={() => {
+                  if (paymentUrl) Linking.openURL(paymentUrl);
                 }} 
               />
               <ActionButton 

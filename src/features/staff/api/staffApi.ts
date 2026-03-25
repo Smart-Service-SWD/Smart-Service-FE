@@ -75,17 +75,20 @@ export const evaluateComplexity = (
   complexityLevel: number,
   serviceId?: string,
   estimatedCost?: Money
-): Promise<void> =>
-  httpRequest<void>({
+): Promise<void> => {
+  const payload = {
+    complexity: { level: complexityLevel },
+    serviceDefinitionId: serviceId,
+    estimatedCost
+  };
+  console.log("EvaluateComplexity Payload:", JSON.stringify(payload, null, 2));
+  return httpRequest<void>({
     path: `/api/service-requests/${serviceRequestId}/evaluate-complexity`,
     method: "PATCH",
-    body: {
-      complexity: { level: complexityLevel },
-      serviceDefinitionId: serviceId,
-      estimatedCost
-    },
+    body: payload,
     token
   });
+};
 
 export const assignProvider = async (
   token: string,

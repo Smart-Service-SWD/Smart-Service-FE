@@ -263,9 +263,9 @@ export default function DispatchCenterScreen() {
   const busyAgentIds = useMemo(() => {
     return new Set(
       requests
-        .filter(r => 
-          r.status === "ASSIGNED" || 
-          r.status === "IN_PROGRESS" || 
+        .filter(r =>
+          r.status === "ASSIGNED" ||
+          r.status === "IN_PROGRESS" ||
           r.status === "AWAITING_COMPLETION_REVIEW"
         )
         .map(r => r.assignedProviderId)
@@ -430,12 +430,14 @@ export default function DispatchCenterScreen() {
     setSuccess("");
     try {
       const isReevaluation = selectedRequest.status === "PENDING_REVIEW";
-      const amount = Number.parseFloat(estimatedAmount);
+      // Loại bỏ dấu chấm trước khi parse (thói quen nhập liệu hàng nghìn của VN)
+      const cleanAmount = estimatedAmount.toString().replace(/\./g, "");
+      const amount = Number.parseFloat(cleanAmount);
       const money = !Number.isNaN(amount) ? { amount, currency: currency.trim() || "VND" } : undefined;
-      
+
       await evaluateComplexity(
-        session.accessToken, 
-        selectedRequest.id, 
+        session.accessToken,
+        selectedRequest.id,
         complexityLevel,
         selectedServiceId || undefined,
         money
@@ -451,8 +453,16 @@ export default function DispatchCenterScreen() {
       );
       setActiveTab("service");
       await loadInitialData();
-    } catch (actionError) {
-      setError(asErrorMessage(actionError));
+    } catch (actionError: any) {
+      console.error("EvaluateComplexity Error:", actionError);
+      let errorMsg = asErrorMessage(actionError);
+      if (actionError?.details && Array.isArray(actionError.details) && actionError.details.length > 0) {
+        const detail = actionError.details[0];
+        if (detail.exceptionMsg) {
+          errorMsg += `\nLý do: ${detail.exceptionMsg}`;
+        }
+      }
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -483,7 +493,9 @@ export default function DispatchCenterScreen() {
       setError("Thợ đang chọn chưa được gắn cho dịch vụ này. Hãy đổi dịch vụ hoặc chọn thợ khác.");
       return;
     }
-    const amount = Number.parseFloat(estimatedAmount);
+    // Loại bỏ dấu chấm trước khi parse (thói quen nhập liệu hàng nghìn của VN)
+    const cleanAmount = estimatedAmount.toString().replace(/\./g, "");
+    const amount = Number.parseFloat(cleanAmount);
     if (Number.isNaN(amount) || amount < 0) {
       setError("Chi phí ước tính phải là số không âm");
       return;
@@ -516,8 +528,16 @@ export default function DispatchCenterScreen() {
       setActiveTab("overview");
       navigation.setParams({ requestId: undefined });
       await loadInitialData();
-    } catch (actionError) {
-      setError(asErrorMessage(actionError));
+    } catch (actionError: any) {
+      console.error("AssignProvider Error:", actionError);
+      let errorMsg = asErrorMessage(actionError);
+      if (actionError?.details && Array.isArray(actionError.details) && actionError.details.length > 0) {
+        const detail = actionError.details[0];
+        if (detail.exceptionMsg) {
+          errorMsg += `\nLý do: ${detail.exceptionMsg}`;
+        }
+      }
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -532,9 +552,9 @@ export default function DispatchCenterScreen() {
       // 20% deposit based on estimated cost
       const amount = selectedRequest.estimatedCost?.amount ?? 0;
       await requestDeposit(
-        session.accessToken, 
-        selectedRequest.id, 
-        { amount: Math.floor(amount * 0.2), currency: "VND" }, 
+        session.accessToken,
+        selectedRequest.id,
+        { amount: Math.floor(amount * 0.2), currency: "VND" },
         0.2
       );
       await createActivityLog(session.accessToken, {
@@ -688,14 +708,14 @@ export default function DispatchCenterScreen() {
               {/* Workspace: request info */}
               <View style={[styles.card, { borderColor: colors.primary }]}>
                 <View style={styles.workspaceTop}>
-  <Text style={styles.requestDesc} numberOfLines={2}>
-    {selectedRequest.description}
-  </Text>
+                  <Text style={styles.requestDesc} numberOfLines={2}>
+                    {selectedRequest.description}
+                  </Text>
 
-  <Pressable style={styles.backIconBtn} onPress={closeWorkspace} hitSlop={10}>
-    <MaterialIcons name="keyboard-return" size={20} color={colors.primary} />
-  </Pressable>
-</View>
+                  <Pressable style={styles.backIconBtn} onPress={closeWorkspace} hitSlop={10}>
+                    <MaterialIcons name="keyboard-return" size={20} color={colors.primary} />
+                  </Pressable>
+                </View>
                 <View style={styles.badgeRow}>
                   {(() => {
                     const statusStyle = getStatusStyle(selectedRequest.status);
@@ -927,7 +947,7 @@ export default function DispatchCenterScreen() {
                                   <View key={match.agent.id} style={styles.agentCardWrapper}>
                                     <Pressable
                                       style={[
-                                        styles.optionCardHorizontal, 
+                                        styles.optionCardHorizontal,
                                         selectedAgentId === match.agent.id && styles.optionCardActive
                                       ]}
                                       onPress={() => handleSelectAgent(match)}
