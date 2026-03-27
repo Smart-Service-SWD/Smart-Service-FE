@@ -18,5 +18,6 @@ export const colors = {
   successSoft: "#dcfce7",
   warning: "#b45309",
   warningSoft: "#fef3c7",
-  shadow: "rgba(15, 23, 42, 0.08)"
+  shadow: "rgba(15, 23, 42, 0.08)",
+  tabBar: "#f8f6f6"
 };

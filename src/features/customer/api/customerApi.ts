@@ -98,5 +98,56 @@ export const cancelServiceRequest = (
   httpRequest<ServiceRequestStatusResult>({
     path: `/api/service-requests/${serviceRequestId}/cancel`,
     method: "PATCH",
+  });
+
+export interface PaymentLinkResult {
+  orderCode: number;
+  checkoutUrl: string;
+  status: string;
+  qrCode: string;
+}
+
+export interface SyncPaymentStatusResult {
+  serviceRequestId: string;
+  serviceRequestStatus: string;
+  paymentStatus: string;
+  orderCode?: number | null;
+  updated: boolean;
+}
+
+export const createDepositLink = (
+  token: string,
+  serviceRequestId: string,
+  returnUrl: string,
+  cancelUrl: string
+): Promise<PaymentLinkResult> =>
+  httpRequest<PaymentLinkResult>({
+    path: `/api/payments/${serviceRequestId}/create-deposit-link`,
+    method: "POST",
+    token,
+    body: { returnUrl, cancelUrl }
+  });
+
+export const createFinalLink = (
+  token: string,
+  serviceRequestId: string,
+  returnUrl: string,
+  cancelUrl: string
+): Promise<PaymentLinkResult> =>
+  httpRequest<PaymentLinkResult>({
+    path: `/api/payments/${serviceRequestId}/create-final-link`,
+    method: "POST",
+    token,
+    body: { returnUrl, cancelUrl }
+  });
+
+export const syncPaymentStatus = (
+  token: string,
+  serviceRequestId: string
+): Promise<SyncPaymentStatusResult> =>
+  httpRequest<SyncPaymentStatusResult>({
+    path: `/api/payments/${serviceRequestId}/sync-status`,
+    method: "POST",
     token
   });
+

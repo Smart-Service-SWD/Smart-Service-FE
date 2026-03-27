@@ -7,6 +7,7 @@ import {
   TextInput,
   View
 } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "../../../app/theme/colors";
 import { useAuth } from "../../auth/AuthContext";
@@ -231,7 +232,7 @@ export default function ProfileScreen() {
               <Text style={styles.avatarText}>{initials}</Text>
             </View>
             <View style={styles.avatarCameraBadge}>
-              <Text style={styles.cameraIcon}>📷</Text>
+              <MaterialIcons name="photo-camera" size={12} color="#fff" />
             </View>
           </View>
 
@@ -247,11 +248,11 @@ export default function ProfileScreen() {
             {/* Contact info */}
             <View style={styles.contactList}>
               <View style={styles.contactRow}>
-                <Text style={styles.contactIcon}>✉️</Text>
+                <MaterialIcons name="mail-outline" size={14} color="#64748b" />
                 <Text style={styles.contactText}>{session?.email ?? "-"}</Text>
               </View>
               <View style={styles.contactRow}>
-                <Text style={styles.contactIcon}>📞</Text>
+                <MaterialIcons name="phone" size={14} color="#64748b" />
                 <Text style={styles.contactText}>{phoneDisplay}</Text>
               </View>
             </View>
@@ -262,12 +263,12 @@ export default function ProfileScreen() {
         <View style={styles.statusRow}>
           <View style={[styles.statusPill, isLocked ? styles.statusPillDanger : styles.statusPillSuccess]}>
             <Text style={[styles.statusPillText, isLocked ? styles.statusTextDanger : styles.statusTextSuccess]}>
-              {isLocked ? "🔒 Đã khóa" : "✅ Hoạt động"}
+              {isLocked ? (<><MaterialIcons name="lock" size={12} color={colors.danger} /> Đã khóa</>) : (<><MaterialIcons name="check-circle" size={12} color={colors.success} /> Hoạt động</>)}
             </Text>
           </View>
           <View style={styles.statusPill}>
             <Text style={styles.statusPillText}>
-              {session ? "🟢 Phiên đang hoạt động" : "⚪ Không có phiên"}
+              {session ? (<><MaterialIcons name="fiber-manual-record" size={8} color="#16a34a" /> Phiên đang hoạt động</>) : (<><MaterialIcons name="fiber-manual-record" size={8} color="#94a3b8" /> Không có phiên</>)}
             </Text>
           </View>
         </View>
@@ -275,13 +276,13 @@ export default function ProfileScreen() {
         {/* Messages */}
         {!!error && (
           <View style={styles.messageBox}>
-            <Text style={styles.messageBadge}>⚠️ Lỗi</Text>
+            <Text style={styles.messageBadge}><MaterialIcons name="warning-amber" size={12} color={colors.danger} /> Lỗi</Text>
             <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
         {!!success && (
           <View style={[styles.messageBox, styles.successBox]}>
-            <Text style={styles.messageBadge}>✅ Thành công</Text>
+            <Text style={styles.messageBadge}><MaterialIcons name="check-circle" size={12} color={colors.success} /> Thành công</Text>
             <Text style={styles.successText}>{success}</Text>
           </View>
         )}
@@ -296,13 +297,13 @@ export default function ProfileScreen() {
               onPress={() => togglePanel("edit")}
             >
               <View style={styles.actionIconWrap}>
-                <Text style={styles.actionIconEmoji}>✏️</Text>
+                <MaterialIcons name="edit" size={18} color={colors.text} />
               </View>
               <View style={styles.actionCardText}>
                 <Text style={styles.actionCardTitle}>Chỉnh sửa hồ sơ</Text>
                 <Text style={styles.actionCardSub}>Thay đổi thông tin cá nhân</Text>
               </View>
-              <Text style={styles.chevron}>{activePanel === "edit" ? "⌃" : "›"}</Text>
+              <MaterialIcons name={activePanel === "edit" ? "keyboard-arrow-up" : "chevron-right"} size={20} color="#cbd5e1" />
             </Pressable>
 
             {activePanel === "edit" && (
@@ -348,13 +349,13 @@ export default function ProfileScreen() {
               onPress={() => togglePanel("password")}
             >
               <View style={styles.actionIconWrap}>
-                <Text style={styles.actionIconEmoji}>🔑</Text>
+                <MaterialIcons name="vpn-key" size={18} color={colors.text} />
               </View>
               <View style={styles.actionCardText}>
                 <Text style={styles.actionCardTitle}>Cập nhật mật khẩu</Text>
                 <Text style={styles.actionCardSub}>Bảo mật tài khoản</Text>
               </View>
-              <Text style={styles.chevron}>{activePanel === "password" ? "⌃" : "›"}</Text>
+              <MaterialIcons name={activePanel === "password" ? "keyboard-arrow-up" : "chevron-right"} size={20} color="#cbd5e1" />
             </Pressable>
 
             {activePanel === "password" && (
@@ -373,7 +374,7 @@ export default function ProfileScreen() {
                       selectionColor={colors.primary}
                     />
                     <Pressable style={styles.eyeBtn} onPress={() => setShowCurrent(v => !v)}>
-                      <Text>{showCurrent ? "🙈" : "👁️"}</Text>
+                      <MaterialIcons name={showCurrent ? "visibility-off" : "visibility"} size={20} color="#64748b" />
                     </Pressable>
                   </View>
                 </View>
@@ -391,7 +392,7 @@ export default function ProfileScreen() {
                       selectionColor={colors.primary}
                     />
                     <Pressable style={styles.eyeBtn} onPress={() => setShowNew(v => !v)}>
-                      <Text>{showNew ? "🙈" : "👁️"}</Text>
+                      <MaterialIcons name={showNew ? "visibility-off" : "visibility"} size={20} color="#64748b" />
                     </Pressable>
                   </View>
                 </View>
@@ -409,7 +410,7 @@ export default function ProfileScreen() {
                       selectionColor={colors.primary}
                     />
                     <Pressable style={styles.eyeBtn} onPress={() => setShowConfirm(v => !v)}>
-                      <Text>{showConfirm ? "🙈" : "👁️"}</Text>
+                      <MaterialIcons name={showConfirm ? "visibility-off" : "visibility"} size={20} color="#64748b" />
                     </Pressable>
                   </View>
                 </View>
@@ -433,13 +434,13 @@ export default function ProfileScreen() {
               onPress={() => togglePanel("info")}
             >
               <View style={styles.actionIconWrap}>
-                <Text style={styles.actionIconEmoji}>🪪</Text>
+                <MaterialIcons name="badge" size={18} color={colors.text} />
               </View>
               <View style={styles.actionCardText}>
                 <Text style={styles.actionCardTitle}>Thông tin tài khoản</Text>
                 <Text style={styles.actionCardSub}>Chi tiết định danh hệ thống</Text>
               </View>
-              <Text style={styles.chevron}>{activePanel === "info" ? "⌃" : "›"}</Text>
+              <MaterialIcons name={activePanel === "info" ? "keyboard-arrow-up" : "chevron-right"} size={20} color="#cbd5e1" />
             </Pressable>
 
             {activePanel === "info" && (
@@ -477,7 +478,7 @@ export default function ProfileScreen() {
           style={({ pressed }) => [styles.logoutButton, pressed && styles.logoutButtonPressed]}
           onPress={() => void logout()}
         >
-          <Text style={styles.logoutIcon}>🚪</Text>
+          <MaterialIcons name="logout" size={18} color={colors.danger} />
           <Text style={styles.logoutText}>Đăng xuất</Text>
         </Pressable>
       </ScrollView>

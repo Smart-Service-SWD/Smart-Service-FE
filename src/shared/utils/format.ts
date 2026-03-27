@@ -14,12 +14,24 @@ export const formatDateTime = (value: string): string => {
 export const formatCurrency = (
   amount: number,
   currency: string = "VND"
-): string =>
-  new Intl.NumberFormat("vi-VN", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 0
-  }).format(amount);
+): string => {
+  const normalizedAmount = Number.isFinite(amount) ? amount : 0;
+  const normalizedCurrency = currency?.trim().toUpperCase();
+  const safeCurrency =
+    normalizedCurrency && /^[A-Z]{3}$/.test(normalizedCurrency)
+      ? normalizedCurrency
+      : "VND";
+
+  try {
+    return new Intl.NumberFormat("vi-VN", {
+      style: "currency",
+      currency: safeCurrency,
+      maximumFractionDigits: 0
+    }).format(normalizedAmount);
+  } catch {
+    return `${Math.round(normalizedAmount).toLocaleString("vi-VN")} đ`;
+  }
+};
 
 export const asErrorMessage = (error: unknown): string => {
   if (error instanceof ApiError) {
@@ -74,15 +86,43 @@ export const asErrorMessage = (error: unknown): string => {
   return "Đã xảy ra lỗi không mong muốn";
 };
 
+export const normalizeRequestStatus = (status?: string | null): string | null => {
+  if (!status) {
+    return status ?? null;
+  }
+
+  return status === "URGENT_DISPATCH" ? "CREATED" : status;
+};
+
+export const normalizeServiceRequest = <T extends { status: string }>(item: T): T => {
+  const normalizedStatus = normalizeRequestStatus(item.status);
+
+  if (!normalizedStatus || normalizedStatus === item.status) {
+    return item;
+  }
+
+  return {
+    ...item,
+    status: normalizedStatus
+  };
+};
+
+export const normalizeServiceRequests = <T extends { status: string }>(items: T[]): T[] =>
+  items.map(normalizeServiceRequest);
+
 const requestStatusLabels: Record<string, string> = {
-  AWAITING_ANALYSIS: "Chờ AI phân tích",
+  AWAITING_ANALYSIS: "Chờ AI",
   CREATED: "Mới tạo",
-  URGENT_DISPATCH: "Điều phối khẩn",
-  PENDING_REVIEW: "Chờ duyệt",
-  APPROVED: "Đã duyệt",
-  ASSIGNED: "Đã phân công",
-  IN_PROGRESS: "Đang thực hiện",
-  COMPLETED: "Hoàn thành",
+  PENDING_REVIEW: "Đang điều phối",
+  AWAITING_DEPOSIT: "Chờ cọc",
+  DEPOSIT_PAID: "Đã cọc",
+  ASSIGNED: "Đã gán",
+  IN_PROGRESS: "Đang làm",
+  AWAITING_COMPLETION_REVIEW: "Báo cáo hoàn thành",
+  COMPLETION_APPROVED: "Đã duyệt HT",
+  AWAITING_FINAL_PAYMENT: "Chờ trả hết",
+  FINAL_PAYMENT_PAID: "Đã trả đủ",
+  PAYOUT_COMPLETED: "Đã tất toán",
   CANCELLED: "Đã hủy"
 };
 
@@ -94,11 +134,13 @@ const roleLabels: Record<string, string> = {
 };
 
 export const formatRequestStatus = (status?: string | null): string => {
-  if (!status) {
+  const normalizedStatus = normalizeRequestStatus(status);
+
+  if (!normalizedStatus) {
     return "-";
   }
 
-  return requestStatusLabels[status] ?? status;
+  return requestStatusLabels[normalizedStatus] ?? normalizedStatus;
 };
 
 export const formatRoleLabel = (role?: string | null): string => {
@@ -126,3 +168,8 @@ export const formatShortId = (value?: string | null): string => {
 
   return `${value.slice(0, 8)}…${value.slice(-4)}`;
 };
+
+
+
+
+

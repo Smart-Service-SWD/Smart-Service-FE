@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -7,42 +7,47 @@ import {
   Text,
   View
 } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useFocusEffect } from "@react-navigation/native";
 import { colors } from "../../../app/theme/colors";
+import BrandLogo from "../../../shared/ui/BrandLogo";
 import { useAuth } from "../../auth/AuthContext";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
 import {
-  ALL_REQUESTS_QUERY,
-  ASSIGNMENTS_BY_REQUEST_QUERY,
-  MATCHING_RESULTS_BY_REQUEST_QUERY,
+  AGENT_ASSIGNMENTS_QUERY,
+  REQUEST_BY_ID_QUERY,
+  MY_SERVICE_AGENT_QUERY,
   SERVICE_DEFINITIONS_QUERY,
   USER_BY_ID_QUERY
 } from "../../../shared/api/graphqlDocuments";
 import {
   asErrorMessage,
+  formatCurrency,
   formatDateTime,
   formatRequestStatus,
-  formatShortId
+  formatShortId,
+  normalizeServiceRequest
 } from "../../../shared/utils/format";
 import type {
   AssignmentItem,
-  MatchingResultItem,
+  ServiceAgentItem,
   ServiceDefinition,
   ServiceRequestItem,
   UserProfile
 } from "../../../shared/types/domain";
 import ActionButton from "../../../shared/ui/ActionButton";
 
-interface AllRequestsResponse {
-  getServiceRequests: ServiceRequestItem[];
+interface AssignmentResponse {
+  getAssignmentsByAgentId: AssignmentItem[];
 }
 
-interface AssignmentByRequestResponse {
-  getAssignmentsByServiceRequestId: AssignmentItem[];
+interface RequestByIdResponse {
+  getServiceRequestById: ServiceRequestItem | null;
 }
 
-interface MatchingByRequestResponse {
-  getMatchingResultsByServiceRequestId: MatchingResultItem[];
+interface MyServiceAgentResponse {
+  getMyServiceAgent: ServiceAgentItem | null;
 }
 
 interface ServiceDefinitionsResponse {
@@ -53,138 +58,155 @@ interface UserByIdResponse {
   getUserById: UserProfile | null;
 }
 
-const statusOptions = [
-  "ALL",
-  "AWAITING_ANALYSIS",
-  "CREATED",
-  "URGENT_DISPATCH",
-  "PENDING_REVIEW",
-  "APPROVED",
-  "ASSIGNED",
-  "IN_PROGRESS",
-  "COMPLETED",
-  "CANCELLED"
-] as const;
-
-const STATUS_LABELS: Record<(typeof statusOptions)[number], string> = {
-  ALL: "Tất cả",
-  AWAITING_ANALYSIS: "Chờ AI",
-  CREATED: "Mới",
-  URGENT_DISPATCH: "Khẩn",
-  PENDING_REVIEW: "Chờ duyệt",
-  APPROVED: "Đã duyệt",
-  ASSIGNED: "Đã gán",
-  IN_PROGRESS: "Đang làm",
-  COMPLETED: "Hoàn thành",
-  CANCELLED: "Đã hủy"
-};
-
-const STATUS_COLORS: Partial<Record<string, { bg: string; text: string }>> = {
-  URGENT_DISPATCH: { bg: "#fef2f2", text: "#dc2626" },
-  COMPLETED: { bg: "#eff6ff", text: "#2563eb" },
-  CANCELLED: { bg: "#f0f4ff", text: "#94a3b8" },
-  ASSIGNED: { bg: "#eff6ff", text: "#2563eb" },
-  IN_PROGRESS: { bg: "#fefce8", text: "#ca8a04" }
-};
+interface CompletedWorkItem {
+  assignment: AssignmentItem;
+  request: ServiceRequestItem;
+  serviceName: string;
+}
 
 export default function AgentRequestBoardScreen() {
   const { session } = useAuth();
-  const [items, setItems] = useState<ServiceRequestItem[]>([]);
-  const [statusFilter, setStatusFilter] = useState<(typeof statusOptions)[number]>("ALL");
+  const [items, setItems] = useState<CompletedWorkItem[]>([]);
   const [selectedRequestId, setSelectedRequestId] = useState("");
-  const [serviceNamesById, setServiceNamesById] = useState<Record<string, string>>({});
+  const [linkedServiceAgent, setLinkedServiceAgent] = useState<ServiceAgentItem | null>(null);
   const [customerProfile, setCustomerProfile] = useState<UserProfile | null>(null);
-  const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
-  const [matches, setMatches] = useState<MatchingResultItem[]>([]);
+  const [bindingMessage, setBindingMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const filteredItems = useMemo(() => {
-    if (statusFilter === "ALL") return items;
-    return items.filter((item) => item.status === statusFilter);
-  }, [items, statusFilter]);
-
-  const selectedRequest = useMemo(
-    () => items.find((item) => item.id === selectedRequestId) ?? null,
+  const selectedItem = useMemo(
+    () => items.find((item) => item.request.id === selectedRequestId) ?? null,
     [items, selectedRequestId]
   );
 
-  const loadBoard = async () => {
+  const loadHistory = useCallback(async () => {
     if (!session) return;
     setLoading(true);
     setError("");
+    setBindingMessage("");
+
     try {
-      const [requestData, serviceData] = await Promise.all([
-        graphqlRequest<AllRequestsResponse>(
-          ALL_REQUESTS_QUERY,
-          undefined,
-          session.accessToken
-        ),
+      const [myServiceAgentData, serviceDefinitionData] = await Promise.all([
+        graphqlRequest<MyServiceAgentResponse>(MY_SERVICE_AGENT_QUERY, undefined, session.accessToken),
         graphqlRequest<ServiceDefinitionsResponse>(SERVICE_DEFINITIONS_QUERY)
       ]);
-      setItems(requestData.getServiceRequests);
-      setServiceNamesById(
-        Object.fromEntries(serviceData.getServiceDefinitions.map((service) => [service.id, service.name]))
+
+      const linkedAgent = myServiceAgentData.getMyServiceAgent;
+
+      setLinkedServiceAgent(linkedAgent);
+
+      if (!linkedAgent) {
+        setItems([]);
+        setSelectedRequestId("");
+        setCustomerProfile(null);
+        setBindingMessage(
+          "Tài khoản này chưa được gắn với hồ sơ thợ kỹ thuật, nên chưa thể tải lịch sử hoàn thành."
+        );
+        return;
+      }
+
+      const definitionNameById = Object.fromEntries(
+        serviceDefinitionData.getServiceDefinitions.map((service) => [service.id, service.name])
       );
+
+      const data = await graphqlRequest<AssignmentResponse, { agentId: string }>(
+        AGENT_ASSIGNMENTS_QUERY,
+        { agentId: linkedAgent.id },
+        session.accessToken
+      );
+
+      // Deduplicate by serviceRequestId (keep latest assignedAt)
+      const latestAssignments = new Map<string, AssignmentItem>();
+      data.getAssignmentsByAgentId.forEach(assignment => {
+        const existing = latestAssignments.get(assignment.serviceRequestId);
+        if (!existing || new Date(assignment.assignedAt).getTime() > new Date(existing.assignedAt).getTime()) {
+          latestAssignments.set(assignment.serviceRequestId, assignment);
+        }
+      });
+      const uniqueAssignments = Array.from(latestAssignments.values());
+
+      const completedItems = (
+        await Promise.all(
+          uniqueAssignments.map(async (assignment) => {
+            try {
+              const response = await graphqlRequest<RequestByIdResponse, { id: string }>(
+                REQUEST_BY_ID_QUERY,
+                { id: assignment.serviceRequestId },
+                session.accessToken
+              );
+
+              const request = response.getServiceRequestById
+                ? normalizeServiceRequest(response.getServiceRequestById)
+                : null;
+
+              if (!request || (request.status !== "FINAL_PAYMENT_PAID" && request.status !== "PAYOUT_COMPLETED")) {
+                return null;
+              }
+
+              return {
+                assignment,
+                request,
+                serviceName: request.serviceDefinitionId
+                  ? definitionNameById[request.serviceDefinitionId] ?? "Dịch vụ"
+                  : "Dịch vụ"
+              } satisfies CompletedWorkItem;
+            } catch {
+              return null;
+            }
+          })
+        )
+      )
+        .filter((item): item is CompletedWorkItem => item !== null)
+        .sort((a, b) => new Date(b.assignment.assignedAt).getTime() - new Date(a.assignment.assignedAt).getTime());
+
+      setItems(completedItems);
     } catch (loadError) {
       setError(asErrorMessage(loadError));
     } finally {
       setLoading(false);
     }
-  };
+  }, [session]);
 
-  const loadLinkedData = async (requestedId?: string) => {
-    if (!session) return;
-    const requestId = requestedId ?? selectedRequestId;
-    if (!requestId.trim()) {
-      setError("Hãy chọn một yêu cầu từ danh sách");
+  const loadCustomerProfile = async (customerId?: string) => {
+    if (!session || !customerId) {
+      setCustomerProfile(null);
       return;
     }
-    setLoading(true);
-    setError("");
+
     try {
-      const request = items.find((item) => item.id === requestId.trim()) ?? null;
-      const [assignmentData, matchingData, userData] = await Promise.all([
-        graphqlRequest<AssignmentByRequestResponse, { serviceRequestId: string }>(
-          ASSIGNMENTS_BY_REQUEST_QUERY,
-          { serviceRequestId: requestId.trim() },
-          session.accessToken
-        ),
-        graphqlRequest<MatchingByRequestResponse, { serviceRequestId: string }>(
-          MATCHING_RESULTS_BY_REQUEST_QUERY,
-          { serviceRequestId: requestId.trim() },
-          session.accessToken
-        ),
-        request?.customerId
-          ? graphqlRequest<UserByIdResponse, { id: string }>(
-            USER_BY_ID_QUERY,
-            { id: request.customerId },
-            session.accessToken
-          )
-          : Promise.resolve<UserByIdResponse | null>(null)
-      ]);
-      setSelectedRequestId(requestId.trim());
-      setAssignments(assignmentData.getAssignmentsByServiceRequestId);
-      setMatches(matchingData.getMatchingResultsByServiceRequestId);
-      setCustomerProfile(userData?.getUserById ?? null);
-    } catch (loadError) {
-      setError(asErrorMessage(loadError));
-    } finally {
-      setLoading(false);
+      const userData = await graphqlRequest<UserByIdResponse, { id: string }>(
+        USER_BY_ID_QUERY,
+        { id: customerId },
+        session.accessToken
+      );
+      setCustomerProfile(userData.getUserById);
+    } catch {
+      setCustomerProfile(null);
     }
   };
 
-  useEffect(() => {
-    if (selectedRequest) return;
-    setCustomerProfile(null);
-  }, [selectedRequest]);
+  useFocusEffect(
+    useCallback(() => {
+      void loadHistory();
+    }, [loadHistory])
+  );
 
   useEffect(() => {
-    void loadBoard();
+    if (!items.length) {
+      setSelectedRequestId("");
+      setCustomerProfile(null);
+      return;
+    }
+
+    if (!selectedRequestId || !items.some((item) => item.request.id === selectedRequestId)) {
+      setSelectedRequestId(items[0].request.id);
+    }
+  }, [items, selectedRequestId]);
+
+  useEffect(() => {
+    void loadCustomerProfile(selectedItem?.request.customerId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.accessToken]);
-
-  const getStatusStyle = (status: string) => STATUS_COLORS[status] ?? { bg: "#f0f4ff", text: "#64748b" };
+  }, [selectedItem?.request.customerId, session?.accessToken]);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
@@ -193,130 +215,130 @@ export default function AgentRequestBoardScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Bảng yêu cầu</Text>
-          <Text style={styles.headerSub}>Tra cứu và xem thông tin yêu cầu dịch vụ</Text>
+          <View style={styles.headerLeft}>
+            <View style={styles.logoBox}>
+              <BrandLogo size={40} />
+            </View>
+            <View>
+              <Text style={styles.headerTitle}>Lịch sử công việc</Text>
+              <Text style={styles.headerSub}>Các đơn bạn đã hoàn thành</Text>
+            </View>
+          </View>
         </View>
 
-        {/* Filter chips */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScroll}
-        >
-          {statusOptions.map((opt) => {
-            const active = statusFilter === opt;
-            return (
-              <Pressable
-                key={opt}
-                style={[styles.filterChip, active && styles.filterChipActive]}
-                onPress={() => setStatusFilter(opt)}
-              >
-                <Text style={[styles.filterText, active && styles.filterTextActive]}>
-                  {STATUS_LABELS[opt]}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-
-        {/* Error / Loading */}
         {!!error && (
           <View style={styles.errorBox}>
-            <Text style={styles.errorText}>⚠️ {error}</Text>
+            <Text style={styles.errorText}>
+              <MaterialIcons name="warning-amber" size={14} color={colors.danger} /> {error}
+            </Text>
           </View>
         )}
-        {loading && !selectedRequestId && (
-          <View style={styles.loadingRow}>
-            <ActivityIndicator color={colors.primary} size="small" />
-            <Text style={styles.loadingText}>Đang tải...</Text>
+        {!!bindingMessage && (
+          <View style={styles.infoBox}>
+            <Text style={styles.infoText}>
+              <MaterialIcons name="info-outline" size={14} color="#1d4ed8" /> {bindingMessage}
+            </Text>
           </View>
         )}
 
-        {/* Request list */}
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryMetric}>
+            <Text style={styles.summaryNumber}>{items.length}</Text>
+            <Text style={styles.summaryLabel}>Đơn hoàn thành</Text>
+          </View>
+          <View style={styles.summaryMetaWrap}>
+            <Text style={styles.summaryMeta}>Thợ: {linkedServiceAgent?.fullName ?? "Chưa gắn hồ sơ"}</Text>
+            <Text style={styles.summaryMeta}>Màn này chỉ lưu lịch sử các đơn đã xong.</Text>
+          </View>
+        </View>
+
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Yêu cầu ({filteredItems.length})</Text>
-          {filteredItems.slice(0, 25).map((item) => {
-            const status = getStatusStyle(item.status);
-            const isSelected = selectedRequestId === item.id;
-            return (
-              <Pressable
-                key={item.id}
-                style={[styles.requestRow, isSelected && styles.requestRowSelected]}
-                onPress={() => void loadLinkedData(item.id)}
-              >
-                <View style={styles.requestRowHeader}>
-                  <Text style={styles.requestDesc} numberOfLines={2}>{item.description}</Text>
-                  <View style={[styles.statusPill, { backgroundColor: status.bg }]}>
-                    <Text style={[styles.statusText, { color: status.text }]}>
-                      {formatRequestStatus(item.status)}
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.requestMeta}>
-                  <Text style={styles.metaText}>🆔 {formatShortId(item.id)}</Text>
-                  <Text style={styles.metaText}>🕐 {formatDateTime(item.createdAt)}</Text>
-                  {item.serviceDefinitionId ? (
-                    <Text style={styles.metaText}>
-                      🛠 {serviceNamesById[item.serviceDefinitionId] ?? formatShortId(item.serviceDefinitionId)}
-                    </Text>
-                  ) : null}
-                </View>
-              </Pressable>
-            );
-          })}
-          {!loading && filteredItems.length === 0 && (
-            <Text style={styles.emptyText}>Không có yêu cầu nào</Text>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardTitle}>Lịch sử hoàn thành ({items.length})</Text>
+            {loading ? <ActivityIndicator color={colors.primary} size="small" /> : null}
+          </View>
+
+          {items.length === 0 && !loading ? (
+            <View style={styles.emptyWrap}>
+              <MaterialIcons name="history" size={36} color="#94a3b8" />
+              <Text style={styles.emptyText}>Chưa có đơn hoàn thành nào để hiển thị</Text>
+            </View>
+          ) : (
+            <View style={styles.listWrap}>
+              {items.map((item) => {
+                const isSelected = selectedRequestId === item.request.id;
+                return (
+                  <Pressable
+                    key={item.assignment.id}
+                    style={[styles.historyRow, isSelected && styles.historyRowSelected]}
+                    onPress={() => setSelectedRequestId(item.request.id)}
+                  >
+                    <View style={styles.historyRowLeft}>
+                      <View style={styles.completedDot} />
+                      <View style={{ flex: 1, gap: 3 }}>
+                        <Text style={styles.historyTitle}>{item.serviceName}</Text>
+                        <Text style={styles.historyMeta}>
+                          <MaterialIcons name="event" size={13} color="#64748b" /> {formatDateTime(item.assignment.assignedAt)}
+                        </Text>
+                        <Text style={styles.historyMeta} numberOfLines={1}>{item.request.description}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.donePill}>
+                      <Text style={styles.donePillText}>Hoàn thành</Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
           )}
         </View>
 
-        {/* Detail panel */}
         <View style={styles.card}>
-          <View style={styles.detailHeader}>
-            <Text style={styles.cardTitle}>Chi tiết & Matching</Text>
-            {loading && selectedRequestId ? (
-              <ActivityIndicator color={colors.primary} size="small" />
-            ) : null}
-          </View>
+          <Text style={styles.cardTitle}>Chi tiết lịch sử</Text>
 
-          {selectedRequest ? (
-            <>
-              <View style={styles.detailInfo}>
-                <Text style={styles.detailDesc}>{selectedRequest.description}</Text>
-                <View style={styles.detailGrid}>
-                  <Text style={styles.metaText}>👤 {customerProfile?.fullName ?? "-"}</Text>
-                  <Text style={styles.metaText}>📞 {customerProfile?.phoneNumber || "-"}</Text>
-                  <Text style={styles.metaText}>
-                    📍 {selectedRequest.addressText || "Chưa nhập địa chỉ"}
-                  </Text>
-                  {selectedRequest.serviceDefinitionId ? (
-                    <Text style={styles.metaText}>
-                      🛠 {serviceNamesById[selectedRequest.serviceDefinitionId] ?? formatShortId(selectedRequest.serviceDefinitionId)}
-                    </Text>
-                  ) : null}
-                  <Text style={styles.metaText}>🕐 {formatDateTime(selectedRequest.createdAt)}</Text>
-                </View>
+          {selectedItem ? (
+            <View style={styles.detailBody}>
+              <View style={styles.statusRow}>
+                <Text style={styles.statusLabel}>Trạng thái:</Text>
+                <Text style={styles.statusValue}>{formatRequestStatus(selectedItem.request.status)}</Text>
               </View>
-              <View style={styles.countRow}>
-                <View style={styles.countBadge}>
-                  <Text style={styles.countNumber}>{assignments.length}</Text>
-                  <Text style={styles.countLabel}>Công việc</Text>
+
+              {[
+                { icon: "person-outline" as const, label: customerProfile?.fullName ?? formatShortId(selectedItem.request.customerId) },
+                { icon: "phone" as const, label: customerProfile?.phoneNumber || "-" },
+                { icon: "build" as const, label: selectedItem.serviceName },
+                { icon: "description" as const, label: selectedItem.request.description },
+                { icon: "schedule" as const, label: `Phân công lúc: ${formatDateTime(selectedItem.assignment.assignedAt)}` },
+                { icon: "flash-on" as const, label: `Độ phức tạp: ${selectedItem.request.complexity?.level ?? "Chưa đánh giá"}` },
+                {
+                  icon: "attach-money" as const,
+                  label: selectedItem.request.estimatedCost
+                    ? formatCurrency(selectedItem.request.estimatedCost.amount, selectedItem.request.estimatedCost.currency)
+                    : formatCurrency(selectedItem.assignment.estimatedCost.amount, selectedItem.assignment.estimatedCost.currency)
+                },
+                { icon: "place" as const, label: selectedItem.request.addressText || "Khách hàng chưa nhập địa chỉ" }
+              ].map(({ icon, label }, index) => (
+                <View key={index} style={styles.detailRow}>
+                  <MaterialIcons name={icon} size={16} color="#64748b" />
+                  <Text style={styles.detailText}>{label}</Text>
                 </View>
-                <View style={styles.countBadge}>
-                  <Text style={styles.countNumber}>{matches.length}</Text>
-                  <Text style={styles.countLabel}>Matching</Text>
-                </View>
+              ))}
+
+              <View style={styles.completedBadge}>
+                <Text style={styles.completedText}>
+                  <MaterialIcons name="check-circle" size={14} color="#16a34a" /> Đơn này đã hoàn thành
+                </Text>
               </View>
-            </>
+            </View>
           ) : (
-            <Text style={styles.emptyText}>Nhấn vào yêu cầu phía trên để xem chi tiết</Text>
+            <Text style={styles.emptyText}>Chọn một đơn hoàn thành để xem chi tiết</Text>
           )}
 
           <ActionButton
-            label={loading ? "Đang tải..." : "Tải dữ liệu liên kết"}
-            onPress={() => void loadLinkedData(selectedRequestId)}
-            disabled={loading || !selectedRequestId}
+            label={loading ? "Đang tải..." : "Tải lại lịch sử"}
+            onPress={() => void loadHistory()}
+            disabled={loading}
             variant="secondary"
           />
         </View>
@@ -330,39 +352,66 @@ export default function AgentRequestBoardScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#f0f4ff" },
   scroll: { flex: 1 },
-  content: { paddingTop: 16, paddingBottom: 20, gap: 14 },
+  content: { paddingTop: 16, paddingBottom: 20, paddingHorizontal: 20, gap: 14 },
 
-  header: { paddingHorizontal: 20, gap: 4 },
-  headerTitle: { fontSize: 22, fontWeight: "800", color: "#0f172a" },
-  headerSub: { fontSize: 13, color: "#64748b" },
+  header: {
+    flexDirection: "row",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderRadius: 28,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.55)",
+    gap: 14,
+    alignItems: "flex-start",
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
+    marginBottom: 8
+  },
+  headerLeft: { flexDirection: "row", gap: 12, flex: 1, alignItems: "flex-start" },
+  logoBox: { width: 50, height: 50, borderRadius: 14, overflow: "hidden", flexShrink: 0 },
+  headerTitle: { fontSize: 18, fontWeight: "700", color: "#0f172a" },
+  headerSub: { fontSize: 12, color: "#64748b", marginTop: 2 },
 
-  filterScroll: { paddingHorizontal: 20, gap: 8 },
-  filterChip: {
+  errorBox: { backgroundColor: "#fef2f2", borderWidth: 1, borderColor: "#fecaca", borderRadius: 12, padding: 12 },
+  errorText: { fontSize: 13, color: colors.danger },
+  infoBox: { backgroundColor: "#f0f4ff", borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, padding: 12 },
+  infoText: { fontSize: 13, color: "#64748b" },
+
+  summaryCard: {
+    backgroundColor: "#fff",
     borderWidth: 1,
     borderColor: "#e2e8f0",
     borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    backgroundColor: "#fff"
+    padding: 16,
+    gap: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2
   },
-  filterChipActive: { borderColor: colors.primary, backgroundColor: "#eff6ff" },
-  filterText: { fontSize: 12, color: "#64748b", fontWeight: "700" },
-  filterTextActive: { color: colors.primary },
-
-  errorBox: {
-    marginHorizontal: 20,
-    backgroundColor: "#fef2f2",
+  summaryMetric: {
+    width: 92,
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    backgroundColor: "#eff6ff",
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: "#fecaca",
-    borderRadius: 12,
-    padding: 12
+    borderColor: "#bfdbfe"
   },
-  errorText: { fontSize: 13, color: colors.danger },
-  loadingRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 8 },
-  loadingText: { fontSize: 13, color: "#64748b" },
+  summaryNumber: { fontSize: 28, fontWeight: "800", color: colors.primary },
+  summaryLabel: { fontSize: 11, color: "#64748b", marginTop: 2 },
+  summaryMetaWrap: { flex: 1, gap: 4 },
+  summaryMeta: { fontSize: 12, color: "#64748b" },
 
   card: {
-    marginHorizontal: 20,
     backgroundColor: "#fff",
     borderWidth: 1,
     borderColor: "#e2e8f0",
@@ -375,41 +424,46 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2
   },
+  cardHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   cardTitle: { fontSize: 15, fontWeight: "800", color: "#0f172a" },
 
-  requestRow: {
-    backgroundColor: "#f0f4ff",
+  emptyWrap: { alignItems: "center", paddingVertical: 24, gap: 8 },
+  emptyText: { color: "#94a3b8", fontSize: 13, textAlign: "center" },
+  listWrap: { gap: 8 },
+  historyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    backgroundColor: "#f8fafc",
     borderWidth: 1,
     borderColor: "#e2e8f0",
     borderRadius: 14,
-    padding: 12,
-    gap: 8
+    padding: 12
   },
-  requestRowSelected: { borderColor: colors.primary, backgroundColor: "#eff6ff" },
-  requestRowHeader: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
-  requestDesc: { flex: 1, fontSize: 13, fontWeight: "700", color: "#0f172a", lineHeight: 19 },
-  statusPill: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, flexShrink: 0 },
-  statusText: { fontSize: 10, fontWeight: "800" },
-  requestMeta: { gap: 3 },
-  metaText: { fontSize: 11, color: "#64748b" },
+  historyRowSelected: { borderColor: colors.primary, backgroundColor: "#eff6ff" },
+  historyRowLeft: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10 },
+  completedDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#16a34a" },
+  historyTitle: { fontSize: 13, fontWeight: "700", color: "#0f172a" },
+  historyMeta: { fontSize: 11, color: "#64748b" },
+  donePill: { backgroundColor: "#ecfdf3", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
+  donePillText: { fontSize: 10, fontWeight: "800", color: "#15803d" },
 
-  detailHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  detailInfo: { gap: 8 },
-  detailDesc: { fontSize: 14, fontWeight: "700", color: "#0f172a", lineHeight: 20 },
-  detailGrid: { gap: 4 },
-
-  countRow: { flexDirection: "row", gap: 12 },
-  countBadge: {
-    flex: 1,
-    backgroundColor: "#f0f4ff",
-    borderRadius: 14,
+  detailBody: { gap: 10 },
+  statusRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  statusLabel: { fontSize: 13, fontWeight: "700", color: "#64748b" },
+  statusValue: { fontSize: 13, fontWeight: "800", color: colors.primary },
+  detailRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  detailText: { flex: 1, fontSize: 13, color: "#374151", lineHeight: 19 },
+  completedBadge: {
+    backgroundColor: "#eff6ff",
+    borderRadius: 12,
     padding: 14,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#e2e8f0"
+    borderColor: "#bfdbfe",
+    marginTop: 6
   },
-  countNumber: { fontSize: 24, fontWeight: "800", color: colors.primary },
-  countLabel: { fontSize: 11, color: "#64748b", marginTop: 2 },
-
-  emptyText: { color: "#94a3b8", fontSize: 13, textAlign: "center", paddingVertical: 8 }
+  completedText: { color: "#1d4ed8", fontWeight: "800", fontSize: 14 }
 });
+

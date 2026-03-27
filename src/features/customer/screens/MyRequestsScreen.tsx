@@ -1,36 +1,41 @@
-import { useEffect, useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View, Linking, RefreshControl } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
+import QRCode from 'react-native-qrcode-svg';
+import { SafeAreaView } from "react-native-safe-area-context";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
-import { useNavigation } from "@react-navigation/native";
-import ScreenLayout from "../../../shared/ui/ScreenLayout";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { colors } from "../../../app/theme/colors";
+import BrandLogo from "../../../shared/ui/BrandLogo";
 import type { CustomerTabParamList } from "../../../app/navigation/types";
 import { useAuth } from "../../auth/AuthContext";
-import { cancelServiceRequest } from "../api/customerApi";
+import { cancelServiceRequest, createDepositLink, createFinalLink, syncPaymentStatus } from "../api/customerApi";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
 import { ApiError } from "../../../shared/api/httpClient";
 import {
-  ACTIVITY_LOGS_BY_REQUEST_QUERY,
-  FEEDBACK_BY_REQUEST_QUERY,
   MY_FEEDBACKS_QUERY,
   MY_REQUESTS_QUERY,
   REQUEST_BY_ID_QUERY,
   SERVICE_AGENTS_QUERY,
-  SERVICE_DEFINITIONS_QUERY
+  SERVICE_DEFINITIONS_QUERY,
+  USER_BY_ID_QUERY
 } from "../../../shared/api/graphqlDocuments";
 import {
   asErrorMessage,
   formatCurrency,
   formatDateTime,
   formatRequestStatus,
-  formatShortId
+  formatShortId,
+  normalizeRequestStatus,
+  normalizeServiceRequest,
+  normalizeServiceRequests
 } from "../../../shared/utils/format";
 import type {
-  ActivityLogItem,
   ServiceAgentItem,
   ServiceFeedbackItem,
   ServiceDefinition,
-  ServiceRequestItem
+  ServiceRequestItem,
+  UserProfile
 } from "../../../shared/types/domain";
 import ActionButton from "../../../shared/ui/ActionButton";
 
@@ -42,17 +47,8 @@ interface RequestByIdResponse {
   getServiceRequestById: ServiceRequestItem | null;
 }
 
-interface FeedbackByRequestResponse {
-  getFeedbackByServiceRequestId: ServiceFeedbackItem[];
-  getAverageRatingByServiceRequestId: number;
-}
-
 interface MyFeedbacksResponse {
   getMyServiceFeedbacks: ServiceFeedbackItem[];
-}
-
-interface ActivityByRequestResponse {
-  getActivityLogsByServiceRequestId: ActivityLogItem[];
 }
 
 interface ServiceDefinitionsResponse {
@@ -63,76 +59,101 @@ interface ServiceAgentsResponse {
   getServiceAgents: ServiceAgentItem[];
 }
 
-const filters = [
-  { label: "Tất cả", value: null },
+interface ServiceAgentByIdResponse {
+  getServiceAgentById: ServiceAgentItem | null;
+}
+
+interface UserByIdResponse {
+  getUserById: UserProfile | null;
+}
+
+const SERVICE_AGENT_BY_ID_QUERY = `
+  query ServiceAgentById($id: UUID!) {
+    getServiceAgentById(id: $id) {
+      id
+      userId
+      fullName
+    }
+  }
+`;
+const statusOptions = [
   { label: "Chờ AI", value: "AWAITING_ANALYSIS" },
   { label: "Mới tạo", value: "CREATED" },
-  { label: "Khẩn cấp", value: "URGENT_DISPATCH" },
   { label: "Chờ duyệt", value: "PENDING_REVIEW" },
-  { label: "Đã duyệt", value: "APPROVED" },
+  { label: "Chờ cọc", value: "AWAITING_DEPOSIT" },
+  { label: "Đã cọc", value: "DEPOSIT_PAID" },
   { label: "Đã phân công", value: "ASSIGNED" },
   { label: "Đang làm", value: "IN_PROGRESS" },
-  { label: "Hoàn thành", value: "COMPLETED" },
-  { label: "Đã hủy", value: "CANCELLED" }
+  { label: "Đang kiểm tra", value: "AWAITING_COMPLETION_REVIEW" },
+  { label: "Đã duyệt hoàn thành", value: "COMPLETION_APPROVED" },
+  { label: "Chờ thanh toán cuối", value: "AWAITING_FINAL_PAYMENT" },
+  { label: "Đã thanh toán đủ", value: "FINAL_PAYMENT_PAID" },
+  { label: "Hoàn tất", value: "PAYOUT_COMPLETED" }
 ] as const;
 
 const canCancelBeforeStaffConfirmation = (status?: string | null) =>
-  status === "AWAITING_ANALYSIS" || status === "CREATED" || status === "URGENT_DISPATCH";
+  normalizeRequestStatus(status) === "AWAITING_ANALYSIS" ||
+  normalizeRequestStatus(status) === "CREATED";
+
+const normalizeId = (value?: string | null) => value?.trim().toLowerCase() ?? "";
+
+const toStatusKey = (status?: string | null) => {
+  const normalizedStatus = normalizeRequestStatus(status) ?? "";
+  if (!normalizedStatus) return "";
+
+  return normalizedStatus
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/[\s-]+/g, "_")
+    .toUpperCase();
+};
+
+const isPaymentConfirmedForType = (status: string | null | undefined, type: "DEPOSIT" | "FINAL") => {
+  const statusKey = toStatusKey(status);
+
+  if (type === "DEPOSIT") {
+    return [
+      "DEPOSIT_PAID",
+      "ASSIGNED",
+      "IN_PROGRESS",
+      "AWAITING_COMPLETION_REVIEW",
+      "COMPLETION_APPROVED",
+      "AWAITING_FINAL_PAYMENT",
+      "FINAL_PAYMENT_PAID",
+      "PAYOUT_COMPLETED"
+    ].includes(statusKey);
+  }
+
+  return ["FINAL_PAYMENT_PAID", "PAYOUT_COMPLETED"].includes(statusKey);
+};
 
 export default function MyRequestsScreen() {
   const { session } = useAuth();
   const navigation = useNavigation<BottomTabNavigationProp<CustomerTabParamList>>();
-  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [items, setItems] = useState<ServiceRequestItem[]>([]);
   const [detailRequestId, setDetailRequestId] = useState("");
   const [detail, setDetail] = useState<ServiceRequestItem | null>(null);
-  const [detailFeedbacks, setDetailFeedbacks] = useState<ServiceFeedbackItem[]>([]);
-  const [activityLogs, setActivityLogs] = useState<ActivityLogItem[]>([]);
   const [serviceNamesById, setServiceNamesById] = useState<Record<string, string>>({});
   const [agentNamesById, setAgentNamesById] = useState<Record<string, string>>({});
   const [reviewedRequestIds, setReviewedRequestIds] = useState<string[]>([]);
-  const [averageRating, setAverageRating] = useState<number | null>(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState(0);
+  const [paymentType, setPaymentType] = useState<"DEPOSIT" | "FINAL">("DEPOSIT");
   const [loading, setLoading] = useState(false);
+  const [paymentUrl, setPaymentUrl] = useState("");
+  const [qrCodeData, setQrCodeData] = useState("");
+  const [paymentLinkCache, setPaymentLinkCache] = useState<Record<string, { checkoutUrl: string; qrCode: string }>>({});
   const [cancelingRequestId, setCancelingRequestId] = useState("");
   const [error, setError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
 
-  const getAgentName = (agentId?: string | null) =>
-    agentId ? agentNamesById[agentId] ?? formatShortId(agentId) : "Chưa phân công";
-
-  const formatActivityForCustomer = (log: ActivityLogItem) => {
-    const assignedMatch = /^Staff assigned provider ([\w-]+) with assignment ([\w-]+)$/i.exec(
-      log.action
-    );
-    if (assignedMatch) {
-      return `Nhân viên điều phối đã phân công thợ ${getAgentName(assignedMatch[1])}.`;
-    }
-
-    const matchingMatch = /^Staff created matching result ([\w-]+) for agent ([\w-]+)$/i.exec(
-      log.action
-    );
-    if (matchingMatch) {
-      return `Nhân viên điều phối đã ghép thợ ${getAgentName(matchingMatch[2])} cho yêu cầu.`;
-    }
-
-    const evaluatedMatch = /^Staff evaluated complexity (\d+) before dispatch$/i.exec(log.action);
-    if (evaluatedMatch) {
-      return `Nhân viên điều phối đã đánh giá độ phức tạp mức ${evaluatedMatch[1]}.`;
-    }
-
-    const agentStartedMatch = /^Agent ([\w-]+) started work$/i.exec(log.action);
-    if (agentStartedMatch) {
-      return `Thợ sửa chữa ${getAgentName(agentStartedMatch[1])} đã bắt đầu công việc.`;
-    }
-
-    const agentCompletedMatch = /^Agent ([\w-]+) completed work$/i.exec(log.action);
-    if (agentCompletedMatch) {
-      return `Thợ sửa chữa ${getAgentName(agentCompletedMatch[1])} đã hoàn thành công việc.`;
-    }
-
-    return log.action;
+  const getAgentName = (agentId?: string | null) => {
+    const key = normalizeId(agentId);
+    return key ? agentNamesById[key] ?? formatShortId(agentId) : "Chưa phân công";
   };
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!session) {
       return;
     }
@@ -142,7 +163,7 @@ export default function MyRequestsScreen() {
       const [requestData, serviceData, feedbackData, agentData] = await Promise.all([
         graphqlRequest<MyRequestsResponse, { status?: string | null }>(
           MY_REQUESTS_QUERY,
-          { status: statusFilter },
+          { status: null },
           session.accessToken
         ),
         graphqlRequest<ServiceDefinitionsResponse>(SERVICE_DEFINITIONS_QUERY),
@@ -158,13 +179,103 @@ export default function MyRequestsScreen() {
         )
       ]);
 
-      setItems(requestData.getMyServiceRequests);
+      const requests = normalizeServiceRequests(requestData.getMyServiceRequests);
+      const agentNameMap = Object.fromEntries(
+        agentData.getServiceAgents.flatMap((agent) => {
+          const entries: Array<[string, string]> = [];
+          const fullName = agent.fullName?.trim();
+          if (!fullName) {
+            return entries;
+          }
+
+          const serviceAgentIdKey = normalizeId(agent.id);
+          if (serviceAgentIdKey) {
+            entries.push([serviceAgentIdKey, fullName]);
+          }
+
+          const userIdKey = normalizeId(agent.userId);
+          if (userIdKey) {
+            entries.push([userIdKey, fullName]);
+          }
+
+          return entries;
+        })
+      );
+
+      const missingAssignedIds = Array.from(
+        new Set(
+          requests
+            .map((request) => normalizeId(request.assignedProviderId))
+            .filter((id) => !!id && !agentNameMap[id])
+        )
+      );
+
+      if (missingAssignedIds.length > 0) {
+        const resolvedEntries = await Promise.all(
+          missingAssignedIds.map(async (assignedId) => {
+            try {
+              const agentByIdData = await graphqlRequest<ServiceAgentByIdResponse, { id: string }>(
+                SERVICE_AGENT_BY_ID_QUERY,
+                { id: assignedId },
+                session.accessToken
+              );
+
+              const agent = agentByIdData.getServiceAgentById;
+              if (agent) {
+                let resolvedName = agent.fullName?.trim() ?? "";
+                if (!resolvedName && agent.userId) {
+                  try {
+                    const userByIdData = await graphqlRequest<UserByIdResponse, { id: string }>(
+                      USER_BY_ID_QUERY,
+                      { id: agent.userId },
+                      session.accessToken
+                    );
+                    resolvedName = userByIdData.getUserById?.fullName?.trim() ?? "";
+                  } catch {
+                    // Fallback below keeps UI usable when user lookup fails.
+                  }
+                }
+
+                if (resolvedName) {
+                  return [
+                    [normalizeId(agent.id), resolvedName] as [string, string],
+                    [normalizeId(agent.userId), resolvedName] as [string, string],
+                    [assignedId, resolvedName] as [string, string]
+                  ];
+                }
+              }
+            } catch {
+              // Continue to user lookup fallback below.
+            }
+
+            try {
+              const userByIdData = await graphqlRequest<UserByIdResponse, { id: string }>(
+                USER_BY_ID_QUERY,
+                { id: assignedId },
+                session.accessToken
+              );
+              const fallbackName = userByIdData.getUserById?.fullName?.trim();
+              return fallbackName ? ([[assignedId, fallbackName]] as Array<[string, string]>) : [];
+            } catch {
+              return [];
+            }
+          })
+        );
+
+        resolvedEntries.forEach((entries) => {
+          entries.forEach(([key, fullName]) => {
+            if (key && fullName) {
+              agentNameMap[key] = fullName;
+            }
+          });
+        });
+      }
+
+      setItems(requests);
       setServiceNamesById(
         Object.fromEntries(serviceData.getServiceDefinitions.map((service) => [service.id, service.name]))
       );
-      setAgentNamesById(
-        Object.fromEntries(agentData.getServiceAgents.map((agent) => [agent.id, agent.fullName]))
-      );
+      setAgentNamesById(agentNameMap);
       setReviewedRequestIds(
         Array.from(
           new Set(feedbackData.getMyServiceFeedbacks.map((feedback) => feedback.serviceRequestId))
@@ -174,8 +285,31 @@ export default function MyRequestsScreen() {
       setError(asErrorMessage(loadError));
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, [session]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    void load();
+  }, [load]);
+
+  const syncRequestPaymentStatus = useCallback(async (requestId: string) => {
+    if (!session) {
+      return;
+    }
+
+    try {
+      await syncPaymentStatus(session.accessToken, requestId);
+    } catch {
+      // Keep detail load resilient even if PayOS sync is temporarily unavailable.
+    }
+  }, [session]);
+
+  const filteredItems =
+    selectedStatuses.length === 0
+      ? items.filter((item) => item.status !== "CANCELLED")
+      : items.filter((item) => selectedStatuses.includes(item.status) && item.status !== "CANCELLED");
 
   const loadRequestDetail = async (requestedId?: string) => {
     if (!session) {
@@ -191,33 +325,52 @@ export default function MyRequestsScreen() {
     setLoading(true);
     setError("");
     try {
-      const [requestData, feedbackData, activityData] = await Promise.all([
-        graphqlRequest<RequestByIdResponse, { id: string }>(
-          REQUEST_BY_ID_QUERY,
-          { id: requestId.trim() },
-          session.accessToken
-        ),
-        graphqlRequest<FeedbackByRequestResponse, { serviceRequestId: string }>(
-          FEEDBACK_BY_REQUEST_QUERY,
-          { serviceRequestId: requestId.trim() },
-          session.accessToken
-        ),
-        graphqlRequest<ActivityByRequestResponse, { serviceRequestId: string }>(
-          ACTIVITY_LOGS_BY_REQUEST_QUERY,
-          { serviceRequestId: requestId.trim() },
-          session.accessToken
-        )
-      ]);
+      await syncRequestPaymentStatus(requestId.trim());
+      const requestData = await graphqlRequest<RequestByIdResponse, { id: string }>(
+        REQUEST_BY_ID_QUERY,
+        { id: requestId.trim() },
+        session.accessToken
+      );
 
       setDetailRequestId(requestId.trim());
-      setDetail(requestData.getServiceRequestById);
-      setDetailFeedbacks(feedbackData.getFeedbackByServiceRequestId);
-      setAverageRating(feedbackData.getAverageRatingByServiceRequestId);
-      setActivityLogs(activityData.getActivityLogsByServiceRequestId);
+      setDetail(
+        requestData.getServiceRequestById
+          ? normalizeServiceRequest(requestData.getServiceRequestById)
+          : null
+      );
     } catch (loadError) {
       setError(asErrorMessage(loadError));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSyncPaymentAfterTransfer = async () => {
+    if (!detailRequestId || !session) {
+      return;
+    }
+
+    try {
+      const syncResult = await syncPaymentStatus(session.accessToken, detailRequestId);
+      const isPaid = isPaymentConfirmedForType(syncResult.serviceRequestStatus, paymentType);
+
+      await loadRequestDetail(detailRequestId);
+      await load();
+
+      if (isPaid) {
+        setShowPaymentModal(false);
+        Alert.alert(
+          "Thanh toán thành công",
+          paymentType === "DEPOSIT"
+            ? "Hệ thống đã ghi nhận thanh toán tiền cọc."
+            : "Hệ thống đã ghi nhận thanh toán phần còn lại."
+        );
+        return;
+      }
+
+      Alert.alert("Chưa ghi nhận thanh toán", "Vui lòng đợi vài giây rồi kiểm tra lại.");
+    } catch (syncError) {
+      Alert.alert("Lỗi thanh toán", asErrorMessage(syncError));
     }
   };
 
@@ -266,112 +419,255 @@ export default function MyRequestsScreen() {
     );
   };
 
+  const toggleStatus = (value: string) => {
+    setSelectedStatuses((prev) =>
+      prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value]
+    );
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load])
+  );
+
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, session?.accessToken]);
+  }, [load]);
 
   useEffect(() => {
-    if (items.length === 0) {
+    if (filteredItems.length === 0) {
       setDetailRequestId("");
       setDetail(null);
-      setDetailFeedbacks([]);
-      setActivityLogs([]);
-      setAverageRating(null);
       return;
     }
 
-    const stillVisible = items.some((item) => item.id === detailRequestId);
+    const stillVisible = filteredItems.some((item) => item.id === detailRequestId);
     if (!stillVisible) {
-      void loadRequestDetail(items[0].id);
+      void loadRequestDetail(filteredItems[0].id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items]);
+  }, [filteredItems.length, selectedStatuses]);
+
+  // Fetch Payment Link when Modal Opens
+  useEffect(() => {
+    let active = true;
+    if (showPaymentModal && detailRequestId && session) {
+      const fetchPaymentUrl = async () => {
+        const cacheKey = `${detailRequestId}:${paymentType}`;
+        const cachedLink = paymentLinkCache[cacheKey];
+
+        if (cachedLink) {
+          setPaymentUrl(cachedLink.checkoutUrl);
+          setQrCodeData(cachedLink.qrCode);
+          return;
+        }
+
+        setPaymentUrl("");
+        try {
+          // URLs for redirection after PayOS payment
+          const returnUrl = "smartservice://payment-success";
+          const cancelUrl = "smartservice://payment-cancel";
+
+          const result = paymentType === "DEPOSIT"
+            ? await createDepositLink(session.accessToken, detailRequestId, returnUrl, cancelUrl)
+            : await createFinalLink(session.accessToken, detailRequestId, returnUrl, cancelUrl);
+
+          if (active) {
+            setPaymentUrl(result.checkoutUrl);
+            setQrCodeData(result.qrCode);
+            setPaymentLinkCache((prev) => ({
+              ...prev,
+              [cacheKey]: {
+                checkoutUrl: result.checkoutUrl,
+                qrCode: result.qrCode
+              }
+            }));
+          }
+        } catch (err) {
+          if (active) {
+            Alert.alert("Lỗi thanh toán", asErrorMessage(err));
+            setShowPaymentModal(false);
+          }
+        }
+      };
+
+      void fetchPaymentUrl();
+    }
+    return () => { active = false; };
+  }, [showPaymentModal, detailRequestId, paymentType, paymentLinkCache, session]);
+
+
+  useEffect(() => {
+    if (!showPaymentModal || !detailRequestId || !session) {
+      return;
+    }
+
+    let active = true;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const autoSyncPaymentStatus = async () => {
+      try {
+        const syncResult = await syncPaymentStatus(session.accessToken, detailRequestId);
+        if (!active) {
+          return;
+        }
+
+        const isPaid = isPaymentConfirmedForType(syncResult.serviceRequestStatus, paymentType);
+        if (!isPaid) {
+          return;
+        }
+
+        active = false;
+        if (intervalId) {
+          clearInterval(intervalId);
+        }
+
+        await loadRequestDetail(detailRequestId);
+        await load();
+        setShowPaymentModal(false);
+
+        Alert.alert(
+          "Thanh toán thành công",
+          paymentType === "DEPOSIT"
+            ? "Hệ thống đã ghi nhận thanh toán tiền cọc."
+            : "Hệ thống đã ghi nhận thanh toán phần còn lại."
+        );
+      } catch {
+        // Keep polling resilient if sync endpoint is temporarily unavailable.
+      }
+    };
+
+    const timeoutId = setTimeout(() => {
+      void autoSyncPaymentStatus();
+    }, 1800);
+
+    intervalId = setInterval(() => {
+      void autoSyncPaymentStatus();
+    }, 4000);
+
+    return () => {
+      active = false;
+      clearTimeout(timeoutId);
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [showPaymentModal, detailRequestId, session, paymentType, load]);
+
+  const dropdownLabel =
+    selectedStatuses.length === 0
+      ? "Tất cả trạng thái"
+      : `${selectedStatuses.length} trạng thái`;
 
   return (
-    <ScreenLayout
-      title="Yêu cầu của tôi"
-      subtitle="Theo dõi trạng thái, chi phí ước tính và xem chi tiết từng yêu cầu"
-    >
-      <View style={styles.filterRow}>
-        {filters.map((filter) => {
-          const active = filter.value === statusFilter;
-          return (
-            <Pressable
-              key={filter.label}
-              style={[styles.filterChip, active && styles.filterChipActive]}
-              onPress={() => setStatusFilter(filter.value)}
-            >
-              <Text
-                style={[styles.filterChipText, active && styles.filterChipTextActive]}
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} tintColor={colors.primary} />
+        }
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <View style={styles.logoBox}>
+              <BrandLogo size={40} />
+            </View>
+            <View>
+              <Text style={styles.headerTitle}>Yêu cầu của tôi</Text>
+              <Text style={styles.headerSub}>Theo dõi trạng thái & chi tiết</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Status dropdown button */}
+        <View style={styles.dropdownContainer}>
+        <Pressable
+          style={({ pressed }) => [styles.dropdownButton, pressed && styles.dropdownButtonPressed]}
+          onPress={() => setDropdownOpen((v) => !v)}
+        >
+          <Text style={styles.dropdownButtonText}><MaterialIcons name="filter-list" size={14} color="#0f172a" /> {dropdownLabel}</Text>
+          <MaterialIcons name={dropdownOpen ? "keyboard-arrow-up" : "keyboard-arrow-down"} size={18} color="#94a3b8" />
+        </Pressable>
+
+        {dropdownOpen && (
+          <View style={styles.dropdownMenu}>
+            {selectedStatuses.length > 0 && (
+              <Pressable
+                style={styles.dropdownClearRow}
+                onPress={() => setSelectedStatuses([])}
               >
-                {filter.label}
-              </Text>
-            </Pressable>
-          );
-        })}
+                <Text style={styles.dropdownClearText}><MaterialIcons name="close" size={12} color={colors.danger} /> Bỏ chọn tất cả</Text>
+              </Pressable>
+            )}
+            {statusOptions.map((opt) => {
+              const checked = selectedStatuses.includes(opt.value);
+              return (
+                <Pressable
+                  key={opt.value}
+                  style={[styles.dropdownItem, checked && styles.dropdownItemChecked]}
+                  onPress={() => toggleStatus(opt.value)}
+                >
+                  <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
+                    {checked && <MaterialIcons name="check" size={13} color="#fff" />}
+                  </View>
+                  <Text style={[styles.dropdownItemText, checked && styles.dropdownItemTextChecked]}>
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
       </View>
 
       {loading ? <Text style={styles.loading}>Đang tải dữ liệu...</Text> : null}
       {!!error ? <Text style={styles.error}>{error}</Text> : null}
 
-      {items.map((item) => (
+      {filteredItems.map((item) =>
         (() => {
           const isSelected = detailRequestId === item.id;
           const canCancel = canCancelBeforeStaffConfirmation(item.status);
+          const serviceName =
+            item.serviceDefinitionId
+              ? serviceNamesById[item.serviceDefinitionId] ?? "Dịch vụ"
+              : "Dịch vụ";
 
           return (
-            <Pressable
-              key={item.id}
-              style={[styles.card, isSelected && styles.cardSelected]}
-              onPress={() => void loadRequestDetail(item.id)}
-            >
-              <Text style={styles.cardTitle}>{item.description}</Text>
-              <Text style={styles.meta}>Trạng thái: {formatRequestStatus(item.status)}</Text>
-              {item.serviceDefinitionId ? (
-                <Text style={styles.meta}>
-                  Dịch vụ:{" "}
-                  {serviceNamesById[item.serviceDefinitionId] ??
-                    formatShortId(item.serviceDefinitionId)}
-                </Text>
-              ) : null}
+              <Pressable
+                key={item.id}
+                style={[styles.card, isSelected && styles.cardSelected]}
+                onPress={() => {
+                    if (isSelected) {
+                      setDetailRequestId("");
+                      setDetail(null);
+                    } else {
+                      setDetailRequestId(item.id);
+                      void loadRequestDetail(item.id);
+                    }
+                  }}
+              >
+              <Text style={styles.cardTitle}>{serviceName}</Text>
               <Text style={styles.meta}>Tạo lúc: {formatDateTime(item.createdAt)}</Text>
-              <Text style={styles.meta}>
-                Độ phức tạp: {item.complexity?.level ?? "Chưa đánh giá"}
-              </Text>
-              <Text style={styles.meta}>
-                Chi phí ước tính:{" "}
-                {item.estimatedCost
-                  ? formatCurrency(item.estimatedCost.amount, item.estimatedCost.currency)
-                  : "Chưa có"}
-              </Text>
-              {item.addressText ? (
-                <Text style={styles.meta}>Địa chỉ: {item.addressText}</Text>
-              ) : null}
-              {item.assignedProviderId ? (
-                <Text style={styles.meta}>
-                  Thợ sửa chữa: {getAgentName(item.assignedProviderId)}
-                </Text>
-              ) : null}
-              {canCancel ? (
+              {canCancel && isSelected ? (
                 <>
                   <Text style={styles.cancelHint}>
                     Có thể hủy trước khi staff xác nhận độ phức tạp
                   </Text>
-                  {isSelected ? (
-                    <ActionButton
-                      label={
-                        cancelingRequestId === item.id ? "Đang hủy..." : "Hủy yêu cầu này"
-                      }
-                      onPress={() => confirmCancelRequest(item.id)}
-                      disabled={loading || cancelingRequestId.length > 0}
-                      variant="danger"
-                    />
-                  ) : (
-                    <Text style={styles.tapHint}>Nhấn vào card này để hiện nút hủy</Text>
-                  )}
+                  <ActionButton
+                    label={
+                      cancelingRequestId === item.id ? "Đang hủy..." : "Hủy yêu cầu này"
+                    }
+                    onPress={() => confirmCancelRequest(item.id)}
+                    disabled={loading || cancelingRequestId.length > 0}
+                    variant="danger"
+                  />
                 </>
-              ) : item.status === "COMPLETED" ? (
+              ) : (item.status === "FINAL_PAYMENT_PAID" || item.status === "PAYOUT_COMPLETED") ? (
                 reviewedRequestIds.includes(item.id) ? (
                   <Text style={styles.feedbackDone}>Đã gửi đánh giá</Text>
                 ) : (
@@ -381,121 +677,283 @@ export default function MyRequestsScreen() {
                       navigation.navigate("Feedback", { requestId: item.id });
                     }}
                   >
-                    ★ Gửi đánh giá →
+                    <MaterialIcons name="star" size={14} color="#2563eb" /> Gửi đánh giá <MaterialIcons name="arrow-forward" size={14} color="#2563eb" />
                   </Text>
                 )
               ) : (
                 <Text style={styles.tapHint}>Nhấn để xem chi tiết</Text>
               )}
+
+              {isSelected && detail && detail.id === item.id ? (
+                <View style={styles.detailBox}>
+                  {detail.serviceDefinitionId ? (
+                    <Text style={styles.meta}>
+                      Loại dịch vụ: {serviceNamesById[detail.serviceDefinitionId] ?? formatShortId(detail.serviceDefinitionId)}
+                    </Text>
+                  ) : null}
+                  <Text style={styles.meta}>Trạng thái: {formatRequestStatus(detail.status)}</Text>
+                  <Text style={styles.meta}>Mô tả: {detail.description}</Text>
+                  <Text style={styles.meta}>Độ phức tạp: {detail.complexity?.level ?? "Chưa đánh giá"}</Text>
+                  <Text style={styles.meta}>
+                    {detail.finalPrice ? "Chi phí đã duyệt: " : "Chi phí ước tính: "}
+                      {detail.finalPrice || detail.estimatedCost 
+                        ? formatCurrency(detail.finalPrice?.amount ?? detail.estimatedCost?.amount ?? 0, detail.finalPrice?.currency ?? detail.estimatedCost?.currency ?? "VND") 
+                        : "Chưa có"}
+                      {" "}
+                      <MaterialIcons name="refresh" size={14} color={colors.primary} onPress={() => loadRequestDetail(detail.id)} />
+                    </Text>
+                  
+                  {detail.depositAmount && (
+                    <Text style={styles.meta}>
+                      {detail.isDepositPaid ? "Số tiền đã cọc" : "Số tiền cần cọc"}: {formatCurrency(detail.depositAmount.amount, detail.depositAmount.currency)}
+                    </Text>
+                  )}
+
+                  <Text style={styles.meta}>Thợ sửa chữa: {getAgentName(detail.assignedProviderId)}</Text>
+                  {detail.addressText ? <Text style={styles.meta}>Địa chỉ: {detail.addressText}</Text> : null}
+                  
+                  {(detail.status === "AWAITING_DEPOSIT" || detail.status === "AWAITING_FINAL_PAYMENT") && (
+                    <ActionButton
+                      label={detail.status === "AWAITING_DEPOSIT" ? "Thanh toán tiền cọc" : "Thanh toán phần còn lại"}
+                      onPress={() => {
+                        const amt = detail.status === "AWAITING_DEPOSIT" 
+                          ? detail.depositAmount?.amount ?? 0 
+                          : (detail.finalPrice?.amount ?? detail.estimatedCost?.amount ?? 0) - (detail.depositAmount?.amount ?? 0);
+                        setPaymentAmount(amt);
+                        setPaymentType(detail.status === "AWAITING_DEPOSIT" ? "DEPOSIT" : "FINAL");
+                        setShowPaymentModal(true);
+                      }}
+                      variant="primary"
+                    />
+                  )}
+
+                  {canCancelBeforeStaffConfirmation(detail.status) ? (
+                    <View style={styles.cancelBox}>
+                      <Text style={styles.meta}>Bạn có thể hủy ở bước này vì staff chưa xác nhận độ phức tạp.</Text>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
             </Pressable>
           );
         })()
-      ))}
+      )}
 
-      {!loading && items.length === 0 ? (
+      {!loading && filteredItems.length === 0 ? (
         <Text style={styles.empty}>Chưa có yêu cầu nào theo bộ lọc này</Text>
       ) : null}
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Chi tiết yêu cầu & đánh giá</Text>
-        {detailRequestId ? (
-          <Text style={styles.tapHint}>Đang xem: {formatShortId(detailRequestId)}</Text>
-        ) : (
-          <Text style={styles.meta}>Nhấn vào một yêu cầu phía trên để xem chi tiết.</Text>
-        )}
-        <ActionButton
-          label={loading ? "Đang tải..." : "Tải lại chi tiết đang chọn"}
-          onPress={() => void loadRequestDetail(detailRequestId)}
-          disabled={loading || !detailRequestId}
-          variant="secondary"
-        />
-        {detail ? (
-          <View style={styles.detailBox}>
-            <Text style={styles.meta}>Trạng thái: {formatRequestStatus(detail.status)}</Text>
-            {detail.serviceDefinitionId ? (
-              <Text style={styles.meta}>
-                Dịch vụ:{" "}
-                {serviceNamesById[detail.serviceDefinitionId] ??
-                  formatShortId(detail.serviceDefinitionId)}
+      
+      <Modal visible={showPaymentModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {paymentType === "DEPOSIT" ? "Thanh toán đặt cọc" : "Thanh toán tất toán"}
               </Text>
-            ) : null}
-            <Text style={styles.meta}>Mô tả: {detail.description}</Text>
-            <Text style={styles.meta}>
-              Độ phức tạp: {detail.complexity?.level ?? "Chưa đánh giá"}
-            </Text>
-            <Text style={styles.meta}>
-              Chi phí ước tính:{" "}
-              {detail.estimatedCost
-                ? formatCurrency(detail.estimatedCost.amount, detail.estimatedCost.currency)
-                : "Chưa có"}
-            </Text>
-            <Text style={styles.meta}>
-              Thợ sửa chữa: {getAgentName(detail.assignedProviderId)}
-            </Text>
-            {canCancelBeforeStaffConfirmation(detail.status) ? (
-              <View style={styles.cancelBox}>
-                <Text style={styles.meta}>
-                  Bạn có thể hủy ở bước này vì staff chưa xác nhận độ phức tạp.
-                </Text>
-                <ActionButton
-                  label={
-                    cancelingRequestId === detail.id ? "Đang hủy..." : "Hủy yêu cầu"
-                  }
-                  onPress={() => confirmCancelRequest(detail.id)}
-                  disabled={loading || cancelingRequestId.length > 0}
-                  variant="danger"
-                />
+              <Pressable onPress={() => setShowPaymentModal(false)}>
+                <MaterialIcons name="close" size={24} color="#64748b" />
+              </Pressable>
+            </View>
+            
+            <View style={styles.qrContainer}>
+              <View style={styles.qrShadow}>
+                {paymentUrl ? (
+                  <QRCode
+                    value={qrCodeData || paymentUrl}
+                    size={200}
+                    color={colors.primary}
+                    backgroundColor="white"
+                    quietZone={10}
+                  />
+                ) : (
+                  <ActivityIndicator color={colors.primary} />
+                )}
               </View>
-            ) : null}
-            {detail.ocrExtractedText ? (
-              <Text style={styles.meta}>OCR: {detail.ocrExtractedText}</Text>
-            ) : null}
-            <Text style={styles.meta}>Điểm trung bình: {averageRating ?? 0}</Text>
-            <Text style={styles.meta}>Số lượt đánh giá: {detailFeedbacks.length}</Text>
-            <View style={styles.logBox}>
-              <Text style={styles.metaStrong}>Nhật ký gần nhất</Text>
-              {activityLogs.slice(0, 4).map((log) => (
-                <Text key={log.id} style={styles.meta}>
-                  • {formatDateTime(log.createdAt)} · {formatActivityForCustomer(log)}
-                </Text>
-              ))}
-              {activityLogs.length === 0 ? (
-                <Text style={styles.meta}>Chưa có nhật ký nào cho yêu cầu này</Text>
-              ) : null}
+              <Text style={styles.qrAmountText}>{formatCurrency(paymentAmount, "VND")}</Text>
+              <Text style={styles.qrInstruction}>Vui lòng quét mã QR để thực hiện chuyển khoản</Text>
+            </View>
+
+            <View style={styles.modalActions}>
+              <ActionButton 
+                label="Mở trang thanh toán"
+                onPress={() => {
+                  if (paymentUrl) Linking.openURL(paymentUrl);
+                }} 
+              />
+              <ActionButton
+                label="Tôi đã thanh toán, kiểm tra lại"
+                variant="secondary"
+                onPress={() => {
+                  void handleSyncPaymentAfterTransfer();
+                }}
+              />
+              <ActionButton 
+                label="Đóng" 
+                variant="secondary" 
+                onPress={() => setShowPaymentModal(false)} 
+              />
             </View>
           </View>
-        ) : null}
-      </View>
-    </ScreenLayout>
+        </View>
+      </Modal>
+
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  filterRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8
+  safeArea: {
+    flex: 1,
+    backgroundColor: "#f0f4ff"
   },
-  filterChip: {
+  scroll: { flex: 1 },
+  content: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 20,
+    gap: 16
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.55)",
+    borderRadius: 28,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    gap: 14,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 1,
+    shadowRadius: 24,
+    elevation: 3,
+    marginBottom: 8
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1
+  },
+  logoBox: {
+    width: 50,
+    height: 50,
+    borderRadius: 14,
+    overflow: "hidden",
+    backgroundColor: colors.surfaceRaised
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0f172a"
+  },
+  headerSub: {
+    fontSize: 12,
+    color: "#64748b",
+    marginTop: 2
+  },
+
+  // Dropdown
+  dropdownContainer: {
+    zIndex: 10
+  },
+  dropdownButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#fff",
     borderWidth: 1,
     borderColor: "#e2e8f0",
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    backgroundColor: "#fff"
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2
   },
-  filterChipActive: {
-    borderColor: colors.primary,
+  dropdownButtonPressed: {
+    backgroundColor: "#f8fafc"
+  },
+  dropdownButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0f172a"
+  },
+  dropdownChevron: {
+    fontSize: 11,
+    color: "#94a3b8"
+  },
+  dropdownMenu: {
+    marginTop: 6,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 14,
+    padding: 6,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4
+  },
+  dropdownClearRow: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+    marginBottom: 2
+  },
+  dropdownClearText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.danger
+  },
+  dropdownItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 10
+  },
+  dropdownItemChecked: {
     backgroundColor: "#eff6ff"
   },
-  filterChipText: {
-    color: "#64748b",
-    fontSize: 12,
+  dropdownItemText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#64748b"
+  },
+  dropdownItemTextChecked: {
+    color: colors.primary,
     fontWeight: "700"
   },
-  filterChipTextActive: {
-    color: colors.primary
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: "#cbd5e1",
+    alignItems: "center",
+    justifyContent: "center"
   },
+  checkboxChecked: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary
+  },
+  checkMark: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "800"
+  },
+
+  // General
   loading: {
     color: "#64748b",
     fontSize: 13,
@@ -538,26 +996,39 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18
   },
+  detailHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between"
+  },
+  reloadBtn: {
+    backgroundColor: "#f0f4ff",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: "#e2e8f0"
+  },
+  reloadBtnPressed: {
+    backgroundColor: "#e0e7ff"
+  },
+  reloadBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.primary
+  },
+  reloadBtnDisabled: {
+    color: "#94a3b8"
+  },
   detailBox: {
     gap: 6,
     marginTop: 8
   },
+  
   cancelBox: {
     gap: 8,
     marginTop: 10,
     marginBottom: 4
-  },
-  logBox: {
-    gap: 6,
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#e2e8f0"
-  },
-  metaStrong: {
-    color: "#0f172a",
-    fontSize: 13,
-    fontWeight: "800"
   },
   tapHint: {
     color: colors.primary,
@@ -588,5 +1059,80 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 20,
     fontSize: 13
+  },
+  
+  // Modal & QR
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 28,
+    padding: 24,
+    width: "100%",
+    maxWidth: 400,
+    gap: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 5
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#0f172a"
+  },
+  qrContainer: {
+    alignItems: "center",
+    gap: 20,
+    paddingVertical: 10
+  },
+  qrShadow: {
+    padding: 12,
+    backgroundColor: "#fff",
+    borderRadius: 24,
+    shadowColor: "#2563eb",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 4
+  },
+  qrImage: {
+    width: 200,
+    height: 200,
+    borderRadius: 12,
+    backgroundColor: "#f8fafc"
+  },
+  qrAmountText: {
+    fontSize: 24,
+    fontWeight: "900",
+    color: colors.primary,
+    letterSpacing: 0.5
+  },
+  qrInstruction: {
+    fontSize: 14,
+    color: "#64748b",
+    textAlign: "center",
+    lineHeight: 20
+  },
+  modalActions: {
+    gap: 12,
+    marginTop: 10
   }
 });
+
+
+
+
+

@@ -117,6 +117,32 @@ export const MY_REQUESTS_QUERY = `
       estimatedDuration
       ocrExtractedText
       wasAnalyzedByAI
+      finalPrice {
+        amount
+        currency
+      }
+      depositAmount {
+        amount
+        currency
+      }
+      isDepositPaid
+      commissionRate
+      commissionAmount {
+        amount
+        currency
+      }
+      workerAmount {
+        amount
+        currency
+      }
+      completionEvidences {
+        id
+        workerId
+        imageUrl
+        notes
+        type
+        createdAt
+      }
     }
   }
 `;
@@ -144,6 +170,32 @@ export const REQUEST_BY_ID_QUERY = `
       estimatedDuration
       ocrExtractedText
       wasAnalyzedByAI
+      finalPrice {
+        amount
+        currency
+      }
+      depositAmount {
+        amount
+        currency
+      }
+      isDepositPaid
+      commissionRate
+      commissionAmount {
+        amount
+        currency
+      }
+      workerAmount {
+        amount
+        currency
+      }
+      completionEvidences {
+        id
+        workerId
+        imageUrl
+        notes
+        type
+        createdAt
+      }
     }
   }
 `;
@@ -171,6 +223,32 @@ export const REQUESTS_BY_STATUS_QUERY = `
       estimatedDuration
       ocrExtractedText
       wasAnalyzedByAI
+      finalPrice {
+        amount
+        currency
+      }
+      depositAmount {
+        amount
+        currency
+      }
+      isDepositPaid
+      commissionRate
+      commissionAmount {
+        amount
+        currency
+      }
+      workerAmount {
+        amount
+        currency
+      }
+      completionEvidences {
+        id
+        workerId
+        imageUrl
+        notes
+        type
+        createdAt
+      }
     }
   }
 `;
@@ -198,6 +276,32 @@ export const ALL_REQUESTS_QUERY = `
       estimatedDuration
       ocrExtractedText
       wasAnalyzedByAI
+      finalPrice {
+        amount
+        currency
+      }
+      depositAmount {
+        amount
+        currency
+      }
+      isDepositPaid
+      commissionRate
+      commissionAmount {
+        amount
+        currency
+      }
+      workerAmount {
+        amount
+        currency
+      }
+      completionEvidences {
+        id
+        workerId
+        imageUrl
+        notes
+        type
+        createdAt
+      }
     }
   }
 `;
@@ -212,6 +316,18 @@ export const AGENT_ASSIGNMENTS_QUERY = `
       estimatedCost {
         amount
         currency
+      }
+      request: serviceRequest {
+        id
+        status
+        customerId
+        serviceDefinitionId
+        description
+        addressText
+        finalPrice {
+          amount
+          currency
+        }
       }
     }
   }
@@ -239,6 +355,10 @@ export const SERVICE_AGENTS_QUERY = `
       userId
       fullName
       isActive
+      balance {
+        amount
+        currency
+      }
       capabilities {
         id
         categoryId
@@ -394,3 +514,27 @@ export const ACTIVITY_LOGS_BY_REQUEST_QUERY = `
     }
   }
 `;
+
+export const MY_SERVICE_AGENT_QUERY = `
+  query MyServiceAgent {
+    getMyServiceAgent {
+      id
+      userId
+      fullName
+      isActive
+      balance {
+        amount
+        currency
+      }
+      capabilities {
+        id
+        categoryId
+        maxComplexity {
+          level
+        }
+        serviceIds
+      }
+    }
+  }
+`;
+

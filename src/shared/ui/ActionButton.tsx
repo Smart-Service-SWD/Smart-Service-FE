@@ -1,27 +1,33 @@
-import { Pressable, StyleSheet, Text } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text } from "react-native";
 import { colors } from "../../app/theme/colors";
 
 interface ActionButtonProps {
   label: string;
   onPress: () => void;
   disabled?: boolean;
+  loading?: boolean;
   variant?: "primary" | "secondary" | "danger";
+  size?: "md" | "sm";
 }
 
 export default function ActionButton({
   label,
   onPress,
   disabled = false,
-  variant = "primary"
+  loading = false,
+  variant = "primary",
+  size = "md"
 }: ActionButtonProps) {
   const isPrimary = variant === "primary";
   const isDanger = variant === "danger";
   const isSecondary = variant === "secondary";
+  const isSmall = size === "sm";
 
   return (
     <Pressable
       style={({ pressed }) => [
         styles.button,
+        isSmall && styles.buttonSm,
         isPrimary && styles.primaryButton,
         isSecondary && styles.secondaryButton,
         isDanger && styles.dangerButton,
@@ -31,16 +37,22 @@ export default function ActionButton({
       onPress={onPress}
       disabled={disabled}
     >
-      <Text
-        style={[
-          styles.label,
-          isPrimary && styles.primaryLabel,
-          isSecondary && styles.secondaryLabel,
-          isDanger && styles.primaryLabel
-        ]}
-      >
-        {label}
-      </Text>
+      {loading ? (
+        <ActivityIndicator color={isSecondary ? colors.primary : "#fff"} size="small" />
+      ) : (
+        <Text
+          style={[
+            styles.label,
+            isSmall && styles.labelSm,
+            isPrimary && styles.primaryLabel,
+            isSecondary && styles.secondaryLabel,
+            isDanger && styles.primaryLabel
+          ]}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+      )}
     </Pressable>
   );
 }
@@ -62,6 +74,13 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 1
   },
+  buttonSm: {
+    minHeight: 42,
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12
+  },
+
   primaryButton: {
     backgroundColor: colors.primary
   },
@@ -73,16 +92,23 @@ const styles = StyleSheet.create({
   dangerButton: {
     backgroundColor: colors.danger
   },
+
   label: {
     fontSize: 15,
     fontWeight: "800"
   },
+  labelSm: {
+    fontSize: 12,
+    fontWeight: "800"
+  },
+
   primaryLabel: {
     color: "#fff"
   },
   secondaryLabel: {
     color: colors.primaryStrong
   },
+
   disabled: {
     opacity: 0.6
   },

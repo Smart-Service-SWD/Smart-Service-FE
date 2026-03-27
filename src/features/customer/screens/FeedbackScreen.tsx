@@ -11,18 +11,22 @@ import {
   TextInput,
   View
 } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "../../../app/theme/colors";
+import BrandLogo from "../../../shared/ui/BrandLogo";
 import { useAuth } from "../../auth/AuthContext";
 import { graphqlRequest } from "../../../shared/api/graphqlClient";
 import {
   MY_FEEDBACKS_QUERY,
   MY_REQUESTS_QUERY,
-  SERVICE_AGENTS_QUERY
+  SERVICE_AGENTS_QUERY,
+  SERVICE_DEFINITIONS_QUERY
 } from "../../../shared/api/graphqlDocuments";
 import { asErrorMessage, formatDateTime, formatShortId } from "../../../shared/utils/format";
 import type {
   ServiceAgentItem,
+  ServiceDefinition,
   ServiceFeedbackItem,
   ServiceRequestItem
 } from "../../../shared/types/domain";
@@ -41,6 +45,10 @@ interface ServiceAgentsResponse {
   getServiceAgents: ServiceAgentItem[];
 }
 
+interface ServiceDefinitionsResponse {
+  getServiceDefinitions: ServiceDefinition[];
+}
+
 const STARS = [1, 2, 3, 4, 5] as const;
 
 export default function FeedbackScreen() {
@@ -53,6 +61,7 @@ export default function FeedbackScreen() {
   const [items, setItems] = useState<ServiceFeedbackItem[]>([]);
   const [completedRequests, setCompletedRequests] = useState<ServiceRequestItem[]>([]);
   const [agentNamesById, setAgentNamesById] = useState<Record<string, string>>({});
+  const [serviceNamesById, setServiceNamesById] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -81,7 +90,7 @@ export default function FeedbackScreen() {
   const load = async () => {
     if (!session) return;
     try {
-      const [feedbackData, requestData, agentData] = await Promise.all([
+      const [feedbackData, requestData, agentData, serviceDefData] = await Promise.all([
         graphqlRequest<MyFeedbackResponse>(
           MY_FEEDBACKS_QUERY,
           undefined,
@@ -89,22 +98,33 @@ export default function FeedbackScreen() {
         ),
         graphqlRequest<CompletedRequestsResponse, { status?: string | null }>(
           MY_REQUESTS_QUERY,
-          { status: "COMPLETED" },
+          { status: null },
           session.accessToken
         ),
         graphqlRequest<ServiceAgentsResponse>(
           SERVICE_AGENTS_QUERY,
           undefined,
           session.accessToken
-        )
+        ),
+        graphqlRequest<ServiceDefinitionsResponse>(SERVICE_DEFINITIONS_QUERY)
       ]);
 
       setItems(feedbackData.getMyServiceFeedbacks);
-      setCompletedRequests(requestData.getMyServiceRequests);
+      
+      // Filter requests that are logically completed
+      const finishedRequests = requestData.getMyServiceRequests.filter(req => 
+        req.status === "FINAL_PAYMENT_PAID" || req.status === "PAYOUT_COMPLETED"
+      );
+      setCompletedRequests(finishedRequests);
       setAgentNamesById(
         Object.fromEntries(agentData.getServiceAgents.map((agent) => [agent.id, agent.fullName]))
       );
-      const availableIds = requestData.getMyServiceRequests
+      setServiceNamesById(
+        Object.fromEntries(
+          serviceDefData.getServiceDefinitions.map((service) => [service.id, service.name])
+        )
+      );
+      const availableIds = finishedRequests
         .filter(
           (req) =>
             !feedbackData.getMyServiceFeedbacks.some(
@@ -128,22 +148,6 @@ export default function FeedbackScreen() {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.accessToken]);
-
-  useEffect(() => {
-    if (route.params?.requestId) {
-      const nextId = route.params.requestId;
-      if (availableRequests.some((item) => item.id === nextId)) {
-        setRequestId(nextId);
-        setError("");
-      } else if (reviewedRequestIds.has(nextId)) {
-        setError("Yêu cầu này đã được đánh giá rồi.");
-      } else {
-        setError("Chỉ có thể đánh giá các yêu cầu đã hoàn thành.");
-      }
-      navigation.setParams({ requestId: undefined });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [availableRequests, navigation, reviewedRequestIds, route.params?.requestId]);
 
   const handleCreate = async () => {
     if (!session) return;
@@ -193,13 +197,20 @@ export default function FeedbackScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Đánh giá dịch vụ ⭐</Text>
-          <Text style={styles.headerSub}>Gửi phản hồi sau khi yêu cầu hoàn thành</Text>
+          <View style={styles.headerLeft}>
+            <View style={styles.logoBox}>
+              <BrandLogo size={40} />
+            </View>
+            <View>
+              <Text style={styles.headerTitle}>Đánh giá dịch vụ</Text>
+              <Text style={styles.headerSub}>Gửi phản hồi sau hoàn thành</Text>
+            </View>
+          </View>
         </View>
 
         {/* Note */}
         <View style={styles.noteCard}>
-          <Text style={styles.noteText}>💡 Chỉ đánh giá yêu cầu đã hoàn thành · 5 sao = Rất hài lòng</Text>
+          <Text style={styles.noteText}><MaterialIcons name="lightbulb-outline" size={14} color="#1e40af" /> Chỉ đánh giá yêu cầu đã hoàn thành · 5 sao = Rất hài lòng</Text>
         </View>
 
         {/* Create feedback card */}
@@ -215,13 +226,20 @@ export default function FeedbackScreen() {
                   <Pressable
                     key={item.id}
                     style={[styles.requestRow, active && styles.requestRowActive]}
-                    onPress={() => setRequestId(item.id)}
+                    onPress={() => {
+                      setRequestId(item.id);
+                      setError("");
+                      setSuccess("");
+                    }}
                   >
                     <View style={styles.requestRowLeft}>
                       <View style={[styles.radioOuter, active && styles.radioOuterActive]}>
                         {active && <View style={styles.radioInner} />}
                       </View>
                       <View style={{ flex: 1 }}>
+                        <Text style={styles.requestDesc} numberOfLines={1}>
+                          {item.serviceDefinitionId ? serviceNamesById[item.serviceDefinitionId] ?? "Dịch vụ" : "Dịch vụ"}
+                        </Text>
                         <Text style={styles.requestDesc} numberOfLines={1}>
                           {item.description}
                         </Text>
@@ -239,7 +257,7 @@ export default function FeedbackScreen() {
               <Text style={styles.emptyText}>
                 {completedRequests.length === 0
                   ? "Chưa có yêu cầu hoàn thành nào"
-                  : "Tất cả yêu cầu đã được đánh giá 🎉"}
+                  : <>Tất cả yêu cầu đã được đánh giá <MaterialIcons name="check-circle" size={14} color="#1d4ed8" /></>}
               </Text>
             </View>
           )}
@@ -247,7 +265,7 @@ export default function FeedbackScreen() {
           {selectedRequest && (
             <View style={styles.selectedBadge}>
               <Text style={styles.selectedBadgeText}>
-                ✅ Đang đánh giá: {selectedRequest.description}
+                <MaterialIcons name="check-circle" size={14} color="#1d4ed8" /> Đang đánh giá: {selectedRequest.description}
               </Text>
             </View>
           )}
@@ -263,7 +281,7 @@ export default function FeedbackScreen() {
                   style={styles.starBtn}
                 >
                   <Text style={[styles.starIcon, star <= ratingNum && styles.starActive]}>
-                    ★
+                    <MaterialIcons name={star <= ratingNum ? "star" : "star-border"} size={28} color={star <= ratingNum ? "#f59e0b" : "#e2e8f0"} />
                   </Text>
                 </Pressable>
               ))}
@@ -286,12 +304,12 @@ export default function FeedbackScreen() {
 
           {!!error && (
             <View style={styles.errorBox}>
-              <Text style={styles.errorText}>⚠️ {error}</Text>
+              <Text style={styles.errorText}><MaterialIcons name="warning-amber" size={14} color={colors.danger} /> {error}</Text>
             </View>
           )}
           {!!success && (
             <View style={styles.successBox}>
-              <Text style={styles.successText}>✅ {success}</Text>
+              <Text style={styles.successText}><MaterialIcons name="check-circle" size={14} color="#1d4ed8" /> {success}</Text>
             </View>
           )}
 
@@ -306,7 +324,7 @@ export default function FeedbackScreen() {
             {busy ? (
               <ActivityIndicator color="#fff" size="small" />
             ) : (
-              <Text style={styles.submitText}>Gửi đánh giá ✈️</Text>
+              <Text style={styles.submitText}>Gửi đánh giá <MaterialIcons name="send" size={14} color="#fff" /></Text>
             )}
           </Pressable>
         </View>
@@ -320,12 +338,17 @@ export default function FeedbackScreen() {
             <View style={styles.feedbackList}>
               {items.map((item) => (
                 <View key={item.id} style={styles.feedbackItem}>
+                  <Text style={styles.feedbackReqDesc} numberOfLines={1}>
+                    {completedRequests.find(r => r.id === item.serviceRequestId)?.serviceDefinitionId
+                      ? serviceNamesById[completedRequests.find(r => r.id === item.serviceRequestId)?.serviceDefinitionId ?? ""] ?? "Dịch vụ"
+                      : "Dịch vụ"}
+                  </Text>
                   <View style={styles.feedbackHeader}>
                     <Text style={styles.feedbackReqDesc} numberOfLines={1}>
                       {requestLabelsById[item.serviceRequestId] ?? formatShortId(item.serviceRequestId)}
                     </Text>
                     <View style={styles.ratingPill}>
-                      <Text style={styles.ratingPillText}>⭐ {item.rating}/5</Text>
+                      <Text style={styles.ratingPillText}><MaterialIcons name="star" size={11} color="#92400e" /> {item.rating}/5</Text>
                     </View>
                   </View>
                   <Text style={styles.feedbackMeta}>
@@ -354,9 +377,47 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   content: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20, gap: 16 },
 
-  header: { gap: 4 },
-  headerTitle: { fontSize: 22, fontWeight: "800", color: "#0f172a" },
-  headerSub: { fontSize: 13, color: "#64748b" },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.55)",
+    borderRadius: 28,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    gap: 14,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 1,
+    shadowRadius: 24,
+    elevation: 3,
+    marginBottom: 8
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1
+  },
+  logoBox: {
+    width: 50,
+    height: 50,
+    borderRadius: 14,
+    overflow: "hidden",
+    backgroundColor: colors.surfaceRaised
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0f172a"
+  },
+  headerSub: {
+    fontSize: 12,
+    color: "#64748b",
+    marginTop: 2
+  },
 
   noteCard: {
     backgroundColor: "#eff6ff",
@@ -496,7 +557,8 @@ const styles = StyleSheet.create({
   feedbackHeader: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between"
+    justifyContent: "space-between",
+    marginTop: 6
   },
   feedbackReqDesc: { flex: 1, fontSize: 13, fontWeight: "700", color: "#0f172a" },
   ratingPill: {

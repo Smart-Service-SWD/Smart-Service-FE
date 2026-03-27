@@ -62,6 +62,23 @@ export interface ServiceRequestItem {
   estimatedDuration?: string | null;
   ocrExtractedText?: string | null;
   wasAnalyzedByAI?: boolean;
+  finalPrice?: Money | null;
+  depositAmount?: Money | null;
+  isDepositPaid?: boolean;
+  commissionRate?: number;
+  commissionAmount?: Money | null;
+  workerAmount?: Money | null;
+  completionEvidences?: CompletionEvidenceItem[] | null;
+}
+
+export interface CompletionEvidenceItem {
+  id: string;
+  serviceRequestId: string;
+  workerId: string;
+  type: number;
+  imageUrl: string;
+  notes?: string | null;
+  createdAt: string;
 }
 
 export interface AssignmentItem {
@@ -70,6 +87,7 @@ export interface AssignmentItem {
   agentId?: string;
   assignedAt: string;
   estimatedCost: Money;
+  request?: ServiceRequestItem;
 }
 
 export interface MatchingResultItem {
@@ -86,6 +104,7 @@ export interface ServiceAgentItem {
   userId?: string | null;
   fullName: string;
   isActive: boolean;
+  balance?: Money | null;
   capabilities?: AgentCapabilityItem[] | null;
 }
 

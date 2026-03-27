@@ -7,9 +7,11 @@ import {
   TextInput,
   View
 } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { colors } from "../../../app/theme/colors";
+import BrandLogo from "../../../shared/ui/BrandLogo";
 import { useAuth } from "../AuthContext";
 import { asErrorMessage } from "../../../shared/utils/format";
 import type { AuthStackParamList } from "../../../app/navigation/types";
@@ -84,7 +86,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
           style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
           onPress={() => navigation.goBack()}
         >
-          <Text style={styles.backIcon}>←</Text>
+          <MaterialIcons name="arrow-back" size={20} color={colors.text} />
         </Pressable>
         <Text style={styles.headerTitle}>Tạo tài khoản mới</Text>
         <View style={styles.backButton} />
@@ -98,7 +100,10 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
       >
         {/* Welcome Section */}
         <View style={styles.welcomeSection}>
-          <Text style={styles.welcomeTitle}>Chào mừng bạn! 👋</Text>
+          <View style={styles.logoBubble}>
+            <BrandLogo size={48} />
+          </View>
+          <Text style={styles.welcomeTitle}>Chào mừng bạn!</Text>
           <Text style={styles.welcomeSubtitle}>
             Vui lòng điền thông tin bên dưới để bắt đầu sử dụng các dịch vụ của chúng tôi.
           </Text>
@@ -110,7 +115,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Họ và tên</Text>
             <View style={styles.inputWrap}>
-              <Text style={styles.inputIcon}>👤</Text>
+              <MaterialIcons name="person-outline" size={18} color="#64748b" />
               <TextInput
                 style={styles.input}
                 placeholder="Nhập họ và tên của bạn"
@@ -126,7 +131,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Email</Text>
             <View style={styles.inputWrap}>
-              <Text style={styles.inputIcon}>✉️</Text>
+              <MaterialIcons name="mail-outline" size={18} color="#64748b" />
               <TextInput
                 style={styles.input}
                 placeholder="example@gmail.com"
@@ -144,7 +149,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Số điện thoại</Text>
             <View style={styles.inputWrap}>
-              <Text style={styles.inputIcon}>📞</Text>
+              <MaterialIcons name="phone" size={18} color="#64748b" />
               <TextInput
                 style={styles.input}
                 placeholder="09xx xxx xxx"
@@ -161,7 +166,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Mật khẩu</Text>
             <View style={styles.inputWrap}>
-              <Text style={styles.inputIcon}>🔒</Text>
+              <MaterialIcons name="lock-outline" size={18} color="#64748b" />
               <TextInput
                 style={[styles.input, styles.inputWithAction]}
                 placeholder="••••••••"
@@ -175,7 +180,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
                 style={styles.eyeButton}
                 onPress={() => setShowPassword(v => !v)}
               >
-                <Text style={styles.eyeIcon}>{showPassword ? "🙈" : "👁️"}</Text>
+                <MaterialIcons name={showPassword ? "visibility-off" : "visibility"} size={18} color="#64748b" />
               </Pressable>
             </View>
           </View>
@@ -184,7 +189,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Xác nhận mật khẩu</Text>
             <View style={styles.inputWrap}>
-              <Text style={styles.inputIcon}>🔑</Text>
+              <MaterialIcons name="vpn-key" size={18} color="#64748b" />
               <TextInput
                 style={[styles.input, styles.inputWithAction]}
                 placeholder="••••••••"
@@ -198,7 +203,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
                 style={styles.eyeButton}
                 onPress={() => setShowConfirmPassword(v => !v)}
               >
-                <Text style={styles.eyeIcon}>{showConfirmPassword ? "🙈" : "👁️"}</Text>
+                <MaterialIcons name={showConfirmPassword ? "visibility-off" : "visibility"} size={18} color="#64748b" />
               </Pressable>
             </View>
           </View>
@@ -209,7 +214,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
             onPress={() => setTermsAccepted(v => !v)}
           >
             <View style={[styles.checkbox, termsAccepted && styles.checkboxChecked]}>
-              {termsAccepted && <Text style={styles.checkmark}>✓</Text>}
+              {termsAccepted && <MaterialIcons name="check" size={13} color="#fff" />}
             </View>
             <Text style={styles.termsText}>
               Tôi đồng ý với các{" "}
@@ -223,7 +228,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
           {/* Error */}
           {!!error && (
             <View style={styles.errorBox}>
-              <Text style={styles.errorText}>⚠️ {error}</Text>
+              <Text style={styles.errorText}><MaterialIcons name="warning-amber" size={14} color={colors.danger} /> {error}</Text>
             </View>
           )}
 
@@ -326,7 +331,17 @@ const styles = StyleSheet.create({
 
   // Welcome
   welcomeSection: {
+    alignItems: "center",
     gap: 6
+  },
+  logoBubble: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    marginBottom: 6
   },
   welcomeTitle: {
     fontSize: 26,
